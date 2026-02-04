@@ -1,0 +1,488 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* LIGHT MODE */
+:root {
+  --button-outline: rgba(0,0,0, .10);
+  --badge-outline: rgba(0,0,0, .05);
+
+  /* Automatic computation of border around primary / danger buttons */
+  --opaque-button-border-intensity: -8; /* In terms of percentages */
+
+  /* Backgrounds applied on top of other backgrounds when hovered/active */
+  --elevate-1: rgba(0,0,0, .03);
+  --elevate-2: rgba(0,0,0, .08);
+
+  --background: 0 0% 98%;
+
+  --foreground: 220 15% 15%;
+
+  --border: 220 10% 85%;
+
+  --card: 0 0% 96%;
+
+  --card-foreground: 220 15% 15%;
+
+  --card-border: 220 8% 88%;
+
+  --sidebar: 220 8% 94%;
+
+  --sidebar-foreground: 220 15% 15%;
+
+  --sidebar-border: 220 8% 86%;
+
+  --sidebar-primary: 220 85% 25%;
+
+  --sidebar-primary-foreground: 0 0% 98%;
+
+  --sidebar-accent: 220 12% 88%;
+
+  --sidebar-accent-foreground: 220 15% 20%;
+
+  --sidebar-ring: 215 100% 60%;
+
+  --popover: 220 10% 92%;
+
+  --popover-foreground: 220 15% 15%;
+
+  --popover-border: 220 8% 84%;
+
+  --primary: 220 85% 25%;
+
+  --primary-foreground: 0 0% 98%;
+
+  --secondary: 220 12% 90%;
+
+  --secondary-foreground: 220 15% 20%;
+
+  --muted: 220 15% 89%;
+
+  --muted-foreground: 220 15% 45%;
+
+  --accent: 215 20% 88%;
+
+  --accent-foreground: 220 15% 25%;
+
+  --destructive: 0 85% 35%;
+
+  --destructive-foreground: 0 0% 98%;
+
+  --input: 220 15% 75%;
+  --ring: 215 100% 60%;
+  --chart-1: 220 85% 25%;
+  --chart-2: 215 100% 60%;
+  --chart-3: 250 75% 65%;
+  --chart-4: 200 95% 45%;
+  --chart-5: 280 65% 55%;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-serif: Georgia, serif;
+  --font-mono: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
+  --radius: .5rem; /* 8px */
+  --shadow-2xs: 0px 1px 2px 0px hsl(220 10% 15% / 0.05);
+  --shadow-xs: 0px 1px 3px 0px hsl(220 10% 15% / 0.1);
+  --shadow-sm: 0px 1px 2px 0px hsl(220 10% 15% / 0.05), 0px 2px 4px -1px hsl(220 10% 15% / 0.1);
+  --shadow: 0px 1px 3px 0px hsl(220 10% 15% / 0.1), 0px 4px 6px -2px hsl(220 10% 15% / 0.1);
+  --shadow-md: 0px 4px 6px -1px hsl(220 10% 15% / 0.1), 0px 2px 4px -2px hsl(220 10% 15% / 0.1);
+  --shadow-lg: 0px 10px 15px -3px hsl(220 10% 15% / 0.1), 0px 4px 6px -4px hsl(220 10% 15% / 0.1);
+  --shadow-xl: 0px 20px 25px -5px hsl(220 10% 15% / 0.1), 0px 8px 10px -6px hsl(220 10% 15% / 0.1);
+  --shadow-2xl: 0px 25px 50px -12px hsl(220 10% 15% / 0.25);
+  --tracking-normal: 0em;
+  --spacing: 0.25rem;
+
+  /* Automatically computed borders - intensity can be controlled by the user by the --opaque-button-border-intensity setting */
+
+  /* Fallback for older browsers */
+  --sidebar-primary-border: hsl(var(--sidebar-primary));
+  --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  /* Fallback for older browsers */
+  --sidebar-accent-border: hsl(var(--sidebar-accent));
+  --sidebar-accent-border: hsl(from hsl(var(--sidebar-accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  /* Fallback for older browsers */
+  --primary-border: hsl(var(--primary));
+  --primary-border: hsl(from hsl(var(--primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  /* Fallback for older browsers */
+  --secondary-border: hsl(var(--secondary));
+  --secondary-border: hsl(from hsl(var(--secondary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  /* Fallback for older browsers */
+  --muted-border: hsl(var(--muted));
+  --muted-border: hsl(from hsl(var(--muted)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  /* Fallback for older browsers */
+  --accent-border: hsl(var(--accent));
+  --accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  /* Fallback for older browsers */
+  --destructive-border: hsl(var(--destructive));
+  --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+}
+
+.dark {
+  --button-outline: rgba(255,255,255, .10);
+  --badge-outline: rgba(255,255,255, .05);
+
+  --opaque-button-border-intensity: 9;  /* In terms of percentages */
+
+  /* Backgrounds applied on top of other backgrounds when hovered/active */
+  --elevate-1: rgba(255,255,255, .04);
+  --elevate-2: rgba(255,255,255, .09);
+
+  --background: 220 15% 8%;
+
+  --foreground: 220 10% 95%;
+
+  --border: 220 12% 18%;
+
+  --card: 220 12% 12%;
+
+  --card-foreground: 220 10% 95%;
+
+  --card-border: 220 12% 20%;
+
+  --sidebar: 220 15% 10%;
+
+  --sidebar-foreground: 220 10% 95%;
+
+  --sidebar-border: 220 12% 18%;
+
+  --sidebar-primary: 220 85% 25%;
+
+  --sidebar-primary-foreground: 0 0% 98%;
+
+  --sidebar-accent: 220 12% 15%;
+
+  --sidebar-accent-foreground: 220 10% 85%;
+
+  --sidebar-ring: 215 100% 60%;
+
+  --popover: 220 12% 16%;
+
+  --popover-foreground: 220 10% 90%;
+
+  --popover-border: 220 12% 24%;
+
+  --primary: 220 85% 25%;
+
+  --primary-foreground: 0 0% 98%;
+
+  --secondary: 220 12% 18%;
+
+  --secondary-foreground: 220 10% 85%;
+
+  --muted: 220 15% 14%;
+
+  --muted-foreground: 220 10% 70%;
+
+  --accent: 220 12% 16%;
+
+  --accent-foreground: 220 10% 85%;
+
+  --destructive: 0 85% 35%;
+
+  --destructive-foreground: 0 0% 98%;
+
+  --input: 220 12% 25%;
+  --ring: 215 100% 60%;
+  --chart-1: 215 100% 75%;
+  --chart-2: 250 75% 75%;
+  --chart-3: 200 95% 65%;
+  --chart-4: 280 65% 75%;
+  --chart-5: 160 75% 65%;
+
+  --shadow-2xs: 0px 1px 2px 0px hsl(220 15% 0% / 0.3);
+  --shadow-xs: 0px 1px 3px 0px hsl(220 15% 0% / 0.4);
+  --shadow-sm: 0px 1px 2px 0px hsl(220 15% 0% / 0.3), 0px 2px 4px -1px hsl(220 15% 0% / 0.4);
+  --shadow: 0px 1px 3px 0px hsl(220 15% 0% / 0.4), 0px 4px 6px -2px hsl(220 15% 0% / 0.4);
+  --shadow-md: 0px 4px 6px -1px hsl(220 15% 0% / 0.4), 0px 2px 4px -2px hsl(220 15% 0% / 0.4);
+  --shadow-lg: 0px 10px 15px -3px hsl(220 15% 0% / 0.4), 0px 4px 6px -4px hsl(220 15% 0% / 0.4);
+  --shadow-xl: 0px 20px 25px -5px hsl(220 15% 0% / 0.4), 0px 8px 10px -6px hsl(220 15% 0% / 0.4);
+  --shadow-2xl: 0px 25px 50px -12px hsl(220 15% 0% / 0.6);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+}
+
+/**
+ * Using the elevate system.
+ * Automatic contrast adjustment.
+ *
+ * <element className="hover-elevate" />
+ * <element className="active-elevate-2" />
+ *
+ * // Using the tailwind utility when a data attribute is "on"
+ * <element className="toggle-elevate data-[state=on]:toggle-elevated" />
+ * // Or manually controlling the toggle state
+ * <element className="toggle-elevate toggle-elevated" />
+ *
+ * Elevation systems have to handle many states.
+ * - not-hovered, vs. hovered vs. active  (three mutually exclusive states)
+ * - toggled or not
+ * - focused or not (this is not handled with these utilities)
+ *
+ * Even without handling focused or not, this is six possible combinations that
+ * need to be distinguished from eachother visually.
+ */
+@layer utilities {
+
+  /* Hide ugly search cancel button in Chrome until we can style it properly */
+  input[type="search"]::-webkit-search-cancel-button {
+    @apply hidden;
+  }
+
+  /* Placeholder styling for contentEditable div */
+  [contenteditable][data-placeholder]:empty::before {
+    content: attr(data-placeholder);
+    color: hsl(var(--muted-foreground));
+    pointer-events: none;
+  }
+
+  /* .no-default-hover-elevate/no-default-active-elevate is an escape hatch so consumers of
+   * buttons/badges can remove the automatic brightness adjustment on interactions
+   * and program their own. */
+  .no-default-hover-elevate {}
+
+  .no-default-active-elevate {}
+
+
+  /**
+   * Toggleable backgrounds go behind the content. Hoverable/active goes on top.
+   * This way they can stack/compound. Both will overlap the parent's borders!
+   * So borders will be automatically adjusted both on toggle, and hover/active,
+   * and they will be compounded.
+   */
+  .toggle-elevate::before,
+  .toggle-elevate-2::before {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: 0px;
+    /*border-radius: inherit;   match rounded corners */
+    border-radius: inherit;
+    z-index: -1;
+    /* sits behind content but above backdrop */
+  }
+
+  .toggle-elevate.toggle-elevated::before {
+    background-color: var(--elevate-2);
+  }
+
+  /* If there's a 1px border, adjust the inset so that it covers that parent's border */
+  .border.toggle-elevate::before {
+    inset: -1px;
+  }
+
+  /* Does not work on elements with overflow:hidden! */
+  .hover-elevate:not(.no-default-hover-elevate),
+  .active-elevate:not(.no-default-active-elevate),
+  .hover-elevate-2:not(.no-default-hover-elevate),
+  .active-elevate-2:not(.no-default-active-elevate) {
+    position: relative;
+    z-index: 0;
+  }
+
+  .hover-elevate:not(.no-default-hover-elevate)::after,
+  .active-elevate:not(.no-default-active-elevate)::after,
+  .hover-elevate-2:not(.no-default-hover-elevate)::after,
+  .active-elevate-2:not(.no-default-active-elevate)::after {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: 0px;
+    /*border-radius: inherit;   match rounded corners */
+    border-radius: inherit;
+    z-index: 999;
+    /* sits in front of content */
+  }
+
+  .hover-elevate:hover:not(.no-default-hover-elevate)::after,
+  .active-elevate:active:not(.no-default-active-elevate)::after {
+    background-color: var(--elevate-1);
+  }
+
+  .hover-elevate-2:hover:not(.no-default-hover-elevate)::after,
+  .active-elevate-2:active:not(.no-default-active-elevate)::after {
+    background-color: var(--elevate-2);
+  }
+
+  /* If there's a 1px border, adjust the inset so that it covers that parent's border */
+  .border.hover-elevate:not(.no-hover-interaction-elevate)::after,
+  .border.active-elevate:not(.no-active-interaction-elevate)::after,
+  .border.hover-elevate-2:not(.no-hover-interaction-elevate)::after,
+  .border.active-elevate-2:not(.no-active-interaction-elevate)::after,
+  .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
+    inset: -1px;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Apple-style animations */
+@keyframes element-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-right {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes testimonial-fade {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Animation utility classes */
+.animate-element {
+  animation: element-fade-in 0.6s ease-out forwards;
+  opacity: 0;
+}
+
+.animate-delay-100 {
+  animation-delay: 0.1s;
+}
+
+.animate-delay-200 {
+  animation-delay: 0.2s;
+}
+
+.animate-delay-250 {
+  animation-delay: 0.25s;
+}
+
+.animate-delay-300 {
+  animation-delay: 0.3s;
+}
+
+.animate-delay-400 {
+  animation-delay: 0.4s;
+}
+
+.animate-delay-500 {
+  animation-delay: 0.5s;
+}
+
+.animate-delay-600 {
+  animation-delay: 0.6s;
+}
+
+.animate-delay-650 {
+  animation-delay: 0.65s;
+}
+
+.animate-delay-700 {
+  animation-delay: 0.7s;
+}
+
+.animate-delay-800 {
+  animation-delay: 0.8s;
+}
+
+.animate-delay-900 {
+  animation-delay: 0.9s;
+}
+
+.animate-delay-1000 {
+  animation-delay: 1s;
+}
+
+.animate-delay-1200 {
+  animation-delay: 1.2s;
+}
+
+.animate-delay-1400 {
+  animation-delay: 1.4s;
+}
+
+.animate-slide-right {
+  animation: slide-right 0.8s ease-out forwards;
+  opacity: 0;
+}
+
+.animate-testimonial {
+  animation: testimonial-fade 0.6s ease-out forwards;
+  opacity: 0;
+}
+
+/* Custom checkbox styling */
+.custom-checkbox {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid hsl(var(--border));
+  border-radius: 4px;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.custom-checkbox:checked {
+  background-color: hsl(var(--primary));
+  border-color: hsl(var(--primary));
+}
+
+.custom-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* Font Geist (fallback for SignInPage) */
+.font-geist {
+  font-family: var(--font-sans);
+}
+
+/* Force visible default cursor on page and form fields (souris de base, pas I-beam) */
+html, body,
+input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="image"]),
+textarea,
+select,
+[contenteditable="true"] {
+  cursor: default !important;
+}
+button:not(:disabled), [role="button"]:not([aria-disabled="true"]), a[href] {
+  cursor: pointer !important;
+}
