@@ -148,11 +148,21 @@ export function InvoiceDetailDialog({
 
       const emailHtml = buildInvoiceEmailHtml({
         clientName: invoice.client_name ?? '',
+        clientEmail: invoice.client_email,
+        clientPhone: invoice.client_phone,
+        clientAddress: invoice.client_address,
         invoiceNumber: invoice.invoice_number ?? '',
+        items: invoice.items ?? [],
+        subtotalHt: invoice.subtotal_ht ?? 0,
+        tvaAmount: invoice.tva_amount ?? 0,
         total: invoice.total_ttc ?? 0,
         dueDate: invoice.due_date ?? new Date().toISOString(),
         paymentTerms: invoice.payment_terms ?? '',
         companyName: profile?.full_name ?? undefined,
+        companyAddress: profile?.company_address,
+        companyCityPostal: profile?.company_city_postal,
+        companyPhone: profile?.company_phone,
+        companyEmail: profile?.company_email,
         contactBlock: {
           contactName: profile?.full_name,
           phone: profile?.company_phone,
@@ -244,6 +254,7 @@ export function InvoiceDetailDialog({
 
   const canEdit = invoice.status === 'brouillon' || (invoice.status === 'envoyée' && (invoice.remainingAmount || invoice.total_ttc) > 0);
   const canCancel = invoice.status !== 'payée' && invoice.status !== 'annulée';
+  const isFullyPaid = invoice.status === 'payée' || (invoice.remainingAmount !== undefined && invoice.remainingAmount <= 0);
 
   return (
     <>
@@ -420,7 +431,7 @@ export function InvoiceDetailDialog({
                   {sendingEmail ? 'Envoi...' : 'Envoyer par email'}
                 </Button>
               )}
-              {(invoice.remainingAmount || invoice.total_ttc) > 0 && (
+              {!isFullyPaid && (invoice.remainingAmount || invoice.total_ttc) > 0 && (
                 <Button
                   variant="outline"
                   onClick={() => setIsPaymentDialogOpen(true)}

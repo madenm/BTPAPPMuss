@@ -1,6 +1,19 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
+import { appendFileSync, mkdirSync, existsSync } from "fs";
+import { join } from "path";
 import { storage } from "./storage";
+
+function debugLog(payload: Record<string, unknown>) {
+  try {
+    const dir = join(process.cwd(), ".cursor");
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    const logPath = join(dir, "debug.log");
+    appendFileSync(logPath, JSON.stringify({ ...payload, timestamp: Date.now(), sessionId: "debug-session" }) + "\n");
+  } catch {
+    /* ignore */
+  }
+}
 import { Resend } from "resend";
 import { GoogleGenAI } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
@@ -40,15 +53,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     autre: "Autre",
   };
 
+  const TYPE_CHANTIER_LABELS: Record<string, string> = {
+    piscine: "Piscine & Spa",
+    paysage: "Aménagement Paysager",
+    menuiserie: "Menuiserie Sur-Mesure",
+    renovation: "Rénovation",
+    plomberie: "Plomberie",
+    maconnerie: "Maçonnerie",
+    terrasse: "Terrasse & Patio",
+    chauffage: "Chauffage & Climatisation",
+    isolation: "Isolation de la charpente",
+    electricite: "Électricité",
+    peinture: "Peinture & Revêtements",
+    autre: "Autre",
+  };
+
   app.get("/api/ai-status", (_req: Request, res: Response) => {
     res.json({ available: !!getGeminiClient() });
   });
 
   app.post("/api/parse-quote-description", async (req: Request, res: Response) => {
-    const { description, projectType, localisation } = req.body as {
+    const { description, projectType, localisation, questionnaireAnswers } = req.body as {
       description?: unknown;
       projectType?: unknown;
       localisation?: unknown;
+      questionnaireAnswers?: Record<string, string>;
     };
     if (typeof description !== "string" || !description.trim()) {
       res.status(400).json({ message: "Le champ description (texte) est requis et ne doit pas être vide." });
@@ -64,12 +93,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? localisation.trim()
         : "France";
 
+    const formattedAnswers =
+      questionnaireAnswers &&
+      typeof questionnaireAnswers === "object" &&
+      Object.keys(questionnaireAnswers).length > 0
+        ? Object.entries(questionnaireAnswers)
+            .filter(([, v]) => v != null && String(v).trim() !== "")
+            .map(([k, v]) => `${k}: ${String(v).trim()}`)
+            .join("\n")
+        : "";
+
     const userMessage = [
       "Tu rédiges ce devis comme un expert en estimation de travaux de " + typeLabel + " avec 20 ans d'expérience.",
       "",
       "TYPE DE PROJET: " + typeLabel,
       "DESCRIPTION DÉTAILLÉE: " + trimmed,
       "LOCALISATION: " + locValue,
+      ...(formattedAnswers ? ["", "RÉPONSES AU QUESTIONNAIRE (optionnel):", formattedAnswers] : []),
       "",
       "INSTRUCTIONS - TRÈS IMPORTANT:",
       "1. ANALYSE tout le projet : utilise le TYPE DE PROJET et la DESCRIPTION pour générer UNIQUEMENT des lignes en lien direct avec ce projet. Adapte les postes au type : Aménagement paysager → terrassement, dallage, terrasse, plantation, gazon, haies, clôture, éclairage extérieur ; Piscine → coque, liner, filtration, terrassement bassin ; Rénovation → peinture, carrelage, plomberie, électricité, démolition/dépose ; Menuiserie → portes, fenêtres, parquet, pose.",
@@ -85,7 +125,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 Règles strictes :
 - Réponds UNIQUEMENT avec un JSON valide. Aucun texte avant ou après.
 - Format exact : { "lignes": [ { "description": "string détaillé", "quantite": number, "unite": "m²|m³|kg|m|jours|forfait|u|L|etc.", "prix_unitaire": number } ] }
-- Tu lis UNIQUEMENT la description du projet (et le type si fourni). Tu DÉCOMPOSES le travail en étapes et postes nécessaires pour obtenir exactement le résultat décrit.
+- Tu lis la description du projet, le type (si fourni) et les RÉPONSES AU QUESTIONNAIRE si présentes. Tu DÉCOMPOSES le travail en étapes et postes nécessaires. Si des réponses au questionnaire sont fournies, tiens-en compte pour affiner les lignes du devis (matériaux, dimensions, complexité, etc.).
 - Tu CALCULES les quantités (surfaces, longueurs, volumes, jours, etc.) à partir des informations explicites ou implicites dans la description. Chaque ligne doit être justifiable par la description.
 - Pas de modèle type template : pas de lignes génériques ou réutilisables. Chaque ligne doit être SPÉCIFIQUE au projet décrit (dimensions, matériaux mentionnés, travaux décrits). Prix unitaire HT réaliste France 2026.`;
 
@@ -173,6 +213,455 @@ Règles strictes :
             : status === 401 || status === 402 || status === 403
               ? "Clé Gemini invalide ou accès refusé. Vérifiez GEMINI_API_KEY sur https://aistudio.google.com/app/apikey."
               : "L'analyse IA est temporairement indisponible.";
+      res.status(503).json({ message });
+    }
+  });
+
+  app.post("/api/analyze-estimation-photo", async (req: Request, res: Response) => {
+    const { imageBase64, mimeType } = req.body as { imageBase64?: string; mimeType?: string };
+    if (typeof imageBase64 !== "string" || !imageBase64.trim()) {
+      res.status(400).json({ message: "imageBase64 (string) est requis." });
+      return;
+    }
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "").trim();
+    const mime = typeof mimeType === "string" && mimeType.trim() ? mimeType.trim() : "image/jpeg";
+    const geminiClient = getGeminiClient();
+    if (!geminiClient) {
+      res.status(503).json({
+        message:
+          "Analyse photo IA indisponible. Configurez GEMINI_API_KEY dans .env (https://aistudio.google.com/app/apikey) puis redémarrez le serveur.",
+      });
+      return;
+    }
+    const prompt =
+      "Vous êtes un expert en construction/rénovation français avec 20 ans d'expérience.\n\n" +
+      "ANALYSE DE PHOTO DE CHANTIER:\n\n" +
+      "Décrivez précisément cette zone selon les critères suivants:\n\n" +
+      "1. **Description de l'état actuel** (50-100 mots):\n" +
+      "   - État général (bon/moyen/mauvais)\n" +
+      "   - Matériaux identifiables\n" +
+      "   - Dimensions apparentes\n" +
+      "   - Obstacles visibles\n" +
+      "   - Accès (facile/moyen/difficile)\n\n" +
+      "2. **Type de projet probable** (une réponse parmi): Piscine & Spa, Rénovation, Plomberie, Électricité, Peinture & Revêtements, Maçonnerie, Terrasse & Patio, Menuiserie Sur-Mesure, Autre\n\n" +
+      "3. **Surface estimée** (en m²): Basée sur repères visibles (portes, fenêtres, etc.). Donnez un nombre ou une fourchette.\n\n" +
+      "4. **Points d'attention** (complexité): Accès difficile? Hauteur importante? Matériaux spéciaux? Risques identifiables?\n\n" +
+      "RÉPONDEZ EN JSON VALIDE, sans texte avant ou après:\n" +
+      JSON.stringify({
+        descriptionZone: "string (description précise avec état, matériaux, dimensions, accès)",
+        suggestions: {
+          typeProjet: "string (ex: Rénovation)",
+          typeProjetConfiance: 0.85,
+          surfaceEstimee: "string (ex: 25)",
+          etatGeneral: "bon | moyen | mauvais",
+          complexite: "simple | moyen | complexe",
+          acces: "facile | moyen | difficile",
+          pointsAttention: ["string", "string"],
+        },
+      });
+    try {
+      const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash"] as const;
+      let raw = "";
+      let lastErr: unknown = null;
+      for (const model of modelsToTry) {
+        try {
+          const response = await geminiClient.models.generateContent({
+            model,
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  { text: prompt },
+                  {
+                    inlineData: {
+                      mimeType: mime,
+                      data: base64Data,
+                    },
+                  },
+                ],
+              },
+            ],
+            config: {
+              responseMimeType: "application/json",
+            },
+          });
+          raw = response.text ?? "";
+          if (raw) break;
+        } catch (e) {
+          lastErr = e;
+          const status = e && typeof (e as { status?: number }).status === "number" ? (e as { status: number }).status : undefined;
+          if (status === 404) continue;
+          throw e;
+        }
+      }
+      if (!raw && lastErr) throw lastErr;
+      raw = raw || "";
+      if (!raw || typeof raw !== "string") {
+        res.status(502).json({ message: "Réponse vide de l'IA." });
+        return;
+      }
+      const jsonStr = extractJsonFromResponse(raw);
+      type AnalyzeSuggestionsRaw = {
+        typeProjet?: string | null;
+        typeProjetConfiance?: number | null;
+        surfaceEstimee?: string | null;
+        etatGeneral?: string | null;
+        complexite?: string | null;
+        acces?: string | null;
+        pointsAttention?: unknown;
+      };
+      type AnalyzeRaw = {
+        descriptionZone?: string;
+        suggestions?: AnalyzeSuggestionsRaw;
+      };
+      let parsed: AnalyzeRaw;
+      try {
+        parsed = JSON.parse(jsonStr) as AnalyzeRaw;
+      } catch {
+        res.status(502).json({ message: "Réponse IA invalide (JSON)." });
+        return;
+      }
+      const descriptionZone =
+        typeof parsed.descriptionZone === "string" && parsed.descriptionZone.trim()
+          ? parsed.descriptionZone.trim()
+          : "Zone non décrite.";
+      const sug = parsed.suggestions && typeof parsed.suggestions === "object" ? parsed.suggestions : undefined;
+      const pointsArr = Array.isArray(sug?.pointsAttention)
+        ? (sug.pointsAttention as unknown[]).filter((p): p is string => typeof p === "string").slice(0, 10)
+        : undefined;
+      const suggestions = sug
+        ? {
+            typeProjet: typeof sug.typeProjet === "string" ? sug.typeProjet.trim() || undefined : undefined,
+            typeProjetConfiance: typeof sug.typeProjetConfiance === "number" && sug.typeProjetConfiance >= 0 && sug.typeProjetConfiance <= 1 ? sug.typeProjetConfiance : undefined,
+            surfaceEstimee: typeof sug.surfaceEstimee === "string" ? sug.surfaceEstimee.trim() || undefined : undefined,
+            etatGeneral: typeof sug.etatGeneral === "string" ? sug.etatGeneral.trim() || undefined : undefined,
+            complexite: typeof sug.complexite === "string" ? sug.complexite.trim() || undefined : undefined,
+            acces: typeof sug.acces === "string" ? sug.acces.trim() || undefined : undefined,
+            pointsAttention: pointsArr && pointsArr.length > 0 ? pointsArr : undefined,
+          }
+        : undefined;
+      res.status(200).json({ descriptionZone, suggestions });
+    } catch (err: unknown) {
+      const status = err && typeof (err as { status?: number }).status === "number" ? (err as { status: number }).status : undefined;
+      const errMessage = err instanceof Error ? err.message : String(err ?? "");
+      const errLower = errMessage.toLowerCase();
+      const looksLikeInvalidKey =
+        status === 403 ||
+        status === 401 ||
+        errLower.includes("invalid") ||
+        errLower.includes("api key") ||
+        errLower.includes("permission") ||
+        errLower.includes("not enabled");
+      const message = looksLikeInvalidKey
+        ? "Clé Gemini invalide ou accès refusé. Vérifiez GEMINI_API_KEY."
+        : status === 404
+          ? "Modèle IA indisponible. Réessayez plus tard."
+          : status === 429
+            ? "Quota Gemini dépassé. Réessayez plus tard."
+            : "L'analyse photo IA est temporairement indisponible.";
+      res.status(503).json({ message });
+    }
+  });
+
+  app.post("/api/estimate-chantier", async (req: Request, res: Response) => {
+    // #region agent log
+    debugLog({ location: "server/routes.ts:estimate-chantier:entry", message: "POST body", hypothesisId: "H1", data: { hasChantierInfo: !!req.body?.chantierInfo, surface: req.body?.chantierInfo?.surface, metier: req.body?.chantierInfo?.metier, photoAnalysisLength: typeof req.body?.photoAnalysis === "string" ? req.body.photoAnalysis.length : 0, questionnaireKeys: req.body?.questionnaireAnswers ? Object.keys(req.body.questionnaireAnswers).length : 0 } });
+    // #endregion
+    const { client, chantierInfo, photoAnalysis, questionnaireAnswers } = req.body as {
+      client?: { name?: string; email?: string; phone?: string };
+      chantierInfo?: { surface?: string | number; materiaux?: string; localisation?: string; delai?: string; metier?: string };
+      photoAnalysis?: string;
+      questionnaireAnswers?: Record<string, string>;
+    };
+    const surface = chantierInfo?.surface != null ? String(chantierInfo.surface).trim() : "";
+    const metier = typeof chantierInfo?.metier === "string" ? chantierInfo.metier.trim() : "";
+    if (!surface || !metier) {
+      res.status(400).json({ message: "Surface et type de chantier sont requis." });
+      return;
+    }
+    const typeLabel = TYPE_CHANTIER_LABELS[metier] ?? metier;
+    const materiauxStr = typeof chantierInfo?.materiaux === "string" ? chantierInfo.materiaux.trim() : "";
+    const localisationStr = typeof chantierInfo?.localisation === "string" ? chantierInfo.localisation.trim() : "";
+    const delaiStr = typeof chantierInfo?.delai === "string" ? chantierInfo.delai.trim() : "";
+    const clientName = typeof client?.name === "string" ? client.name.trim() : "";
+    const clientEmail = typeof client?.email === "string" ? client.email.trim() : "";
+    const clientPhone = typeof client?.phone === "string" ? client.phone.trim() : "";
+    const photoAnalysisStr = typeof photoAnalysis === "string" ? photoAnalysis.trim() : "";
+    const questionnaireObj =
+      questionnaireAnswers && typeof questionnaireAnswers === "object" && !Array.isArray(questionnaireAnswers)
+        ? questionnaireAnswers
+        : {};
+    const questionnaireEntries = Object.entries(questionnaireObj)
+      .filter(([, v]) => typeof v === "string" && v.trim() !== "")
+      .map(([k, v]) => k + ": " + (v as string).trim());
+    const questionnaireStr =
+      questionnaireEntries.length > 0
+        ? "RÉPONSES AU QUESTIONNAIRE (détail du projet): " + questionnaireEntries.join(", ")
+        : "";
+
+    const userMessage = [
+      "Tu es un expert en estimation de chantiers BTP/rénovation en France. À partir des données ci-dessous, tu DOIS produire une estimation COMPLÈTE au format JSON.",
+      "",
+      "--- DONNÉES DU CHANTIER (utilise-les pour tout calculer) ---",
+      "Type de projet: " + typeLabel,
+      "Surface: " + surface + " m²",
+      "Localisation: " + (localisationStr || "France (non précisée)"),
+      "Délai souhaité: " + (delaiStr || "Flexible") + " (impact sur coût si délai court)",
+      clientName ? "Client: " + clientName + (clientEmail ? " " + clientEmail : "") + (clientPhone ? " " + clientPhone : "") : "",
+      materiauxStr ? "Matériaux / précisions: " + materiauxStr : "",
+      photoAnalysisStr ? "Analyse de la photo (état des lieux, accès, complexité): " + photoAnalysisStr : "",
+      questionnaireStr ? "Réponses au questionnaire: " + questionnaireStr : "",
+      "",
+      "--- INSTRUCTIONS OBLIGATOIRES ---",
+      "1. Utilise TOUTES les données ci-dessus (photo, questionnaire, localisation, surface, type) pour estimer.",
+      "2. La localisation peut influencer coûts (Paris/Île-de-France plus cher, zones rurales différences).",
+      "3. Règles: main-d'œuvre 150€/jour/ouvrier, marge 25%, frais généraux 20%, imprévus 15%. Accès difficile = +20-30% délai.",
+      "4. Tu DOIS remplir TOUS les champs du JSON ci-dessous. Aucun tableau vide, aucun 0 pour coutTotal/marge/benefice. Minimum 3 matériaux, 3 outils, 3 recommandations.",
+      "",
+      "Réponds UNIQUEMENT par un objet JSON valide (pas de texte avant ni après), avec exactement les clés suivantes. Utilise des nombres réalistes selon le type et la surface.",
+      JSON.stringify({
+        tempsRealisation: "ex: \"2 semaines\" ou \"3 semaines (15 jours ouvrables)\"",
+        materiaux: [{ nom: "string", quantite: "string", prix: 0 }],
+        outils: ["string", "string"],
+        nombreOuvriers: 1,
+        coutTotal: 0,
+        marge: 0,
+        benefice: 0,
+        repartitionCouts: { transport: 0, mainOeuvre: 0, materiaux: 0, autres: 0 },
+        recommandations: ["string", "string", "string"],
+      }),
+    ].filter(Boolean).join("\n");
+
+    const systemInstruction = `Tu es un expert en estimation de chantiers (BTP, rénovation) en France. Tu produis UNIQUEMENT un JSON valide, sans markdown ni texte autour.
+
+OBLIGATOIRE: le JSON doit contenir exactement:
+- tempsRealisation: string (ex "2 semaines", "1 mois")
+- materiaux: tableau d'au moins 3 objets avec nom, quantite (string), prix (number)
+- outils: tableau d'au moins 3 strings (noms d'outils/équipements)
+- nombreOuvriers: number >= 1
+- coutTotal: number > 0 (coût total en euros)
+- marge: number >= 0
+- benefice: number >= 0
+- repartitionCouts: objet avec transport, mainOeuvre, materiaux, autres (chacun number >= 0, la somme proche de coutTotal)
+- recommandations: tableau d'au moins 3 strings (conseils sécurité, préparation, bonnes pratiques)
+
+Calcule les montants à partir du type de chantier, de la surface, de la localisation et des réponses au questionnaire. Ne renvoie jamais de tableaux vides ni coutTotal à 0.`;
+
+    const geminiClient = getGeminiClient();
+    if (!geminiClient) {
+      res.status(503).json({
+        message:
+          "Estimation IA indisponible. Configurez GEMINI_API_KEY dans .env (https://aistudio.google.com/app/apikey) puis redémarrez le serveur.",
+      });
+      return;
+    }
+    try {
+      const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash"] as const;
+      let raw = "";
+      let lastErr: unknown = null;
+      for (const model of modelsToTry) {
+        try {
+          const response = await geminiClient.models.generateContent({
+            model,
+            contents: userMessage,
+            config: {
+              systemInstruction,
+              responseMimeType: "application/json",
+            },
+          });
+          raw = response.text ?? "";
+          if (raw) break;
+        } catch (e) {
+          lastErr = e;
+          const status = e && typeof (e as { status?: number }).status === "number" ? (e as { status: number }).status : undefined;
+          if (status === 404) continue;
+          throw e;
+        }
+      }
+      if (!raw && lastErr) throw lastErr;
+      raw = raw || "";
+      // #region agent log
+      debugLog({ location: "server/routes.ts:estimate-chantier:raw", message: "Raw AI response", hypothesisId: "H2", data: { rawLength: raw?.length ?? 0, rawPreview: typeof raw === "string" ? raw.slice(0, 250) : "" } });
+      // #endregion
+      if (!raw || typeof raw !== "string") {
+        res.status(502).json({ message: "Réponse vide de l'IA." });
+        return;
+      }
+      const jsonStr = extractJsonFromResponse(raw);
+      // #region agent log
+      debugLog({ location: "server/routes.ts:estimate-chantier:jsonStr", message: "Extracted JSON", hypothesisId: "H2", data: { jsonStrLength: jsonStr?.length ?? 0, jsonStrPreview: (jsonStr || "").slice(0, 350) } });
+      // #endregion
+      type MatRaw = { nom?: string; quantite?: string; prix?: number; prixUnitaire?: number; notes?: string };
+      type RepRaw = { transport?: number; mainOeuvre?: number; materiaux?: number; autres?: number };
+      type OutilLouer = { nom?: string; duree?: string; coutLocation?: number };
+      type TempsRaw = string | { dureeEstimee?: string; decomposition?: { preparation?: string; travauxPrincipaux?: string; finitions?: string; imprevu?: string } };
+      type OutilsRaw = string[] | { aLouer?: OutilLouer[]; fourniParArtisan?: string[]; estimationLocationTotal?: number };
+      type CoutsRaw = { materiaux?: number; mainOeuvre?: number; transportLivraison?: number; locationEquipements?: number; sousTotal?: number; imprevu?: number; coutDeBase?: number; fraisGeneraux?: number; margeBrute?: number; prixTTC?: number };
+      type EstimateRaw = {
+        tempsRealisation?: TempsRaw;
+        materiaux?: MatRaw[];
+        outils?: OutilsRaw;
+        nombreOuvriers?: number;
+        equipe?: { composition?: string; joursPresence?: number; productivite?: string };
+        coutTotal?: number;
+        marge?: number;
+        benefice?: number;
+        couts?: CoutsRaw;
+        repartitionCouts?: RepRaw;
+        recommandations?: string[];
+        hypotheses?: string[];
+        confiance?: number;
+        confiance_explication?: string;
+      };
+      let parsed: EstimateRaw;
+      try {
+        parsed = JSON.parse(jsonStr) as EstimateRaw;
+      } catch (parseErr) {
+        // #region agent log
+        debugLog({ location: "server/routes.ts:estimate-chantier:parseErr", message: "JSON parse failed", hypothesisId: "H3", data: { error: String(parseErr) } });
+        // #endregion
+        res.status(502).json({ message: "Réponse IA invalide (JSON)." });
+        return;
+      }
+      // #region agent log
+      debugLog({ location: "server/routes.ts:estimate-chantier:parsed", message: "Parsed AI response", hypothesisId: "H3", data: { parsedKeys: Object.keys(parsed || {}), materiauxLength: Array.isArray(parsed?.materiaux) ? parsed.materiaux.length : "notArray", coutTotal: parsed?.coutTotal, tempsRealisation: typeof parsed?.tempsRealisation === "string" ? parsed.tempsRealisation : (parsed?.tempsRealisation as { dureeEstimee?: string })?.dureeEstimee } });
+      // #endregion
+      const tempsRaw = parsed.tempsRealisation;
+      let tempsRealisation = "Non estimé";
+      let tempsRealisationDecomposition: { preparation?: string; travauxPrincipaux?: string; finitions?: string; imprevu?: string } | undefined;
+      if (typeof tempsRaw === "string" && tempsRaw.trim()) {
+        tempsRealisation = tempsRaw.trim();
+      } else if (tempsRaw && typeof tempsRaw === "object" && typeof (tempsRaw as { dureeEstimee?: string }).dureeEstimee === "string") {
+        const tr = tempsRaw as { dureeEstimee: string; decomposition?: { preparation?: string; travauxPrincipaux?: string; finitions?: string; imprevu?: string } };
+        tempsRealisation = tr.dureeEstimee.trim();
+        if (tr.decomposition && typeof tr.decomposition === "object") tempsRealisationDecomposition = tr.decomposition;
+      }
+      const materiaux = Array.isArray(parsed.materiaux)
+        ? parsed.materiaux.map((m) => ({
+            nom: typeof m.nom === "string" ? m.nom.trim() : "Matériau",
+            quantite: typeof m.quantite === "string" ? m.quantite.trim() : "1",
+            prix: typeof m.prix === "number" && m.prix >= 0 ? m.prix : (typeof m.prixUnitaire === "number" ? m.prixUnitaire : 0),
+            prixUnitaire: typeof m.prixUnitaire === "number" && m.prixUnitaire >= 0 ? m.prixUnitaire : undefined,
+            notes: typeof m.notes === "string" ? m.notes.trim() || undefined : undefined,
+          }))
+        : [];
+      const rep = parsed.repartitionCouts ?? {};
+      const repartitionCouts = {
+        transport: Math.round(Number(rep.transport) || 0),
+        mainOeuvre: Math.round(Number(rep.mainOeuvre) || 0),
+        materiaux: Math.round(Number(rep.materiaux) || 0),
+        autres: Math.round(Number(rep.autres) || 0),
+      };
+      const coutsObj = parsed.couts && typeof parsed.couts === "object" ? parsed.couts : undefined;
+      const coutTotal = Math.round(Number(parsed.coutTotal) ?? Number(coutsObj?.coutDeBase) ?? Number(coutsObj?.prixTTC) ?? 0);
+      let outils: string[] = [];
+      let outilsaLouer: { nom: string; duree?: string; coutLocation?: number }[] | undefined;
+      let outilsFournis: string[] | undefined;
+      let estimationLocationTotal: number | undefined;
+      const out = parsed.outils;
+      if (Array.isArray(out)) {
+        outils = out.filter((o): o is string => typeof o === "string").slice(0, 15);
+      } else if (out && typeof out === "object") {
+        const aLouer = Array.isArray((out as { aLouer?: OutilLouer[] }).aLouer) ? (out as { aLouer: OutilLouer[] }).aLouer : [];
+        const fournis = Array.isArray((out as { fourniParArtisan?: string[] }).fourniParArtisan) ? (out as { fourniParArtisan: string[] }).fourniParArtisan : [];
+        outilsaLouer = aLouer.map((x) => ({ nom: typeof x.nom === "string" ? x.nom : "Équipement", duree: typeof x.duree === "string" ? x.duree : undefined, coutLocation: typeof x.coutLocation === "number" ? x.coutLocation : undefined }));
+        outilsFournis = fournis.filter((s): s is string => typeof s === "string").slice(0, 20);
+        estimationLocationTotal = typeof (out as { estimationLocationTotal?: number }).estimationLocationTotal === "number" ? (out as { estimationLocationTotal: number }).estimationLocationTotal : undefined;
+        outils = [...outilsaLouer.map((o) => o.nom), ...outilsFournis];
+      }
+      const equipe = parsed.equipe && typeof parsed.equipe === "object" ? parsed.equipe : undefined;
+      const hypotheses = Array.isArray(parsed.hypotheses) ? parsed.hypotheses.filter((h): h is string => typeof h === "string").slice(0, 15) : undefined;
+      const confiance = typeof parsed.confiance === "number" && parsed.confiance >= 0 && parsed.confiance <= 1 ? parsed.confiance : undefined;
+      const confiance_explication = typeof parsed.confiance_explication === "string" ? parsed.confiance_explication.trim() || undefined : undefined;
+      let finalMateriaux = materiaux;
+      let finalOutils = outils;
+      let finalRecommandations = Array.isArray(parsed.recommandations) ? parsed.recommandations.filter((r): r is string => typeof r === "string").slice(0, 10) : [];
+      let finalTemps = tempsRealisation;
+      let finalCoutTotal = coutTotal;
+      let finalMarge = Math.round(Number(parsed.marge) || 0);
+      let finalBenefice = Math.round(Number(parsed.benefice) || 0);
+      let finalRepartition = repartitionCouts;
+      const surfaceNum = Math.max(1, Math.min(1000, Math.round(Number(surface) || 20)));
+      if (finalMateriaux.length === 0) {
+        finalMateriaux = [
+          { nom: "Matériaux principaux (à détailler selon devis)", quantite: "lot", prix: Math.round(surfaceNum * 25), prixUnitaire: undefined, notes: undefined },
+          { nom: "Fournitures et consommables", quantite: "lot", prix: Math.round(surfaceNum * 8), prixUnitaire: undefined, notes: undefined },
+          { nom: "Équipements de protection", quantite: "lot", prix: Math.round(80 + surfaceNum * 2), prixUnitaire: undefined, notes: undefined },
+        ];
+      }
+      if (finalOutils.length === 0) {
+        finalOutils = ["Échelle ou échafaudage", "Niveau à bulle", "Perceuse / visseuse", "Outillage à main", "EPI (gants, lunettes, masque)"];
+      }
+      if (finalRecommandations.length === 0) {
+        finalRecommandations = [
+          "Prévoir une marge d'imprévus d'environ 15% sur le délai et le budget.",
+          "Vérifier les accès et le stockage des matériaux sur le chantier.",
+          "Sécuriser la zone de travail et informer les occupants des nuisances.",
+        ];
+      }
+      if (!finalTemps || finalTemps === "Non estimé") {
+        const jours = Math.max(3, Math.min(60, Math.round(surfaceNum * 1.2)));
+        finalTemps = jours <= 5 ? "environ " + jours + " jours" : "environ " + Math.ceil(jours / 5) + " semaines";
+      }
+      if (finalCoutTotal <= 0) {
+        const base = surfaceNum * (metier === "piscine" ? 400 : metier === "renovation" ? 120 : metier === "peinture" ? 45 : 80);
+        finalCoutTotal = Math.round(base * (localisationStr && /paris|île-de-france|idf|75|92|93|94|78|91|77/i.test(localisationStr) ? 1.15 : 1));
+        finalMarge = Math.round(finalCoutTotal * 0.25);
+        finalBenefice = Math.round(finalMarge * 0.7);
+        finalRepartition = {
+          transport: Math.round(finalCoutTotal * 0.05),
+          mainOeuvre: Math.round(finalCoutTotal * 0.45),
+          materiaux: Math.round(finalCoutTotal * 0.35),
+          autres: Math.round(finalCoutTotal * 0.15),
+        };
+      }
+      const analysisResults: Record<string, unknown> = {
+        tempsRealisation: finalTemps,
+        materiaux: finalMateriaux,
+        outils: finalOutils,
+        nombreOuvriers: Math.max(1, Math.round(Number(parsed.nombreOuvriers) || 1)),
+        coutTotal: finalCoutTotal,
+        marge: finalMarge,
+        benefice: finalBenefice,
+        repartitionCouts: finalRepartition,
+        recommandations: finalRecommandations,
+      };
+      if (tempsRealisationDecomposition) analysisResults.tempsRealisationDecomposition = tempsRealisationDecomposition;
+      if (outilsaLouer?.length) analysisResults.outilsaLouer = outilsaLouer;
+      if (outilsFournis?.length) analysisResults.outilsFournis = outilsFournis;
+      if (estimationLocationTotal != null) analysisResults.estimationLocationTotal = estimationLocationTotal;
+      if (equipe) analysisResults.equipe = equipe;
+      if (coutsObj) analysisResults.couts = coutsObj;
+      if (hypotheses?.length) analysisResults.hypotheses = hypotheses;
+      if (confiance != null) analysisResults.confiance = confiance;
+      if (confiance_explication) analysisResults.confiance_explication = confiance_explication;
+      // #region agent log
+      debugLog({ location: "server/routes.ts:estimate-chantier:beforeSend", message: "analysisResults before send", hypothesisId: "H4", data: { tempsRealisation: analysisResults.tempsRealisation, materiauxLength: (analysisResults.materiaux as unknown[])?.length, outilsLength: (analysisResults.outils as unknown[])?.length, coutTotal: analysisResults.coutTotal, recommandationsLength: (analysisResults.recommandations as unknown[])?.length } });
+      // #endregion
+      res.status(200).json(analysisResults);
+    } catch (err: unknown) {
+      // #region agent log
+      debugLog({ location: "server/routes.ts:estimate-chantier:catch", message: "Exception", hypothesisId: "H4", data: { errMessage: err instanceof Error ? err.message : String(err) } });
+      // #endregion
+      const status = err && typeof (err as { status?: number }).status === "number" ? (err as { status: number }).status : undefined;
+      const errMessage = err instanceof Error ? err.message : String(err ?? "");
+      const errLower = errMessage.toLowerCase();
+      const looksLikeInvalidKey =
+        status === 403 ||
+        status === 401 ||
+        errLower.includes("invalid") ||
+        errLower.includes("api key") ||
+        errLower.includes("permission") ||
+        errLower.includes("not enabled");
+      const message = looksLikeInvalidKey
+        ? "Clé Gemini invalide ou accès refusé. Vérifiez GEMINI_API_KEY sur https://aistudio.google.com/app/apikey."
+        : status === 404
+          ? "Modèle IA indisponible. Réessayez plus tard."
+          : status === 429
+            ? "Quota Gemini dépassé. Réessayez plus tard."
+            : status === 401 || status === 402 || status === 403
+              ? "Clé Gemini invalide ou accès refusé. Vérifiez GEMINI_API_KEY sur https://aistudio.google.com/app/apikey."
+              : "L'estimation IA est temporairement indisponible.";
       res.status(503).json({ message });
     }
   });

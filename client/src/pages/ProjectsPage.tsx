@@ -8,8 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { UserAccountButton } from '@/components/UserAccountButton';
-import { Building, Plus, Calendar as CalendarIcon, Clock, User, Image as ImageIcon, X, ChevronLeft, ChevronRight, FileText, Pencil, Eye } from 'lucide-react';
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { Building, Plus, Calendar as CalendarIcon, Clock, User, Image as ImageIcon, X, ChevronLeft, ChevronRight, FileText, Pencil, Eye, Download } from 'lucide-react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/context/AuthContext';
 import { useChantiers, Client, Chantier } from '@/context/ChantiersContext';
@@ -19,13 +19,16 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { fetchTeamMembers, fetchChantierAssignmentsByChantier, addChantierAssignment, removeChantierAssignment, type TeamMember } from '@/lib/supabase';
-import { fetchQuotesByChantierId, updateQuoteStatus, deleteQuote, type SupabaseQuote } from '@/lib/supabaseQuotes';
+import { fetchQuotesByChantierId, fetchQuotesForUser, getQuoteDisplayNumber, updateQuoteStatus, deleteQuote, type SupabaseQuote } from '@/lib/supabaseQuotes';
+import { downloadQuotePdf, fetchLogoDataUrl, type QuotePdfParams } from '@/lib/quotePdf';
 import { QuotePreview } from '@/components/QuotePreview';
+import { useUserSettings } from '@/context/UserSettingsContext';
 import { VoiceInputButton } from '@/components/VoiceInputButton';
 import { fetchInvoicesForUser, type InvoiceWithPayments } from '@/lib/supabaseInvoices';
 import { InvoiceDialog } from '@/components/InvoiceDialog';
-import { Receipt, Check, Trash2 } from 'lucide-react';
+import { Receipt, Check, Trash2, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { DeleteChantierConfirmDialog } from '@/components/DeleteChantierConfirmDialog';
 
 // Format montant en euros (FR)
 function formatMontantEuro(value?: number | null): string {
@@ -43,6 +46,14 @@ function isQuoteExpired(quote: SupabaseQuote): boolean {
   
   const now = new Date();
   return now > expirationDate;
+}
+
+// Chantier en retard si date_fin < aujourd'hui et statut !== terminé
+function isChantierEnRetard(chantier: Chantier): boolean {
+  if (!chantier.dateFin || chantier.statut === 'terminé') return false;
+  const fin = chantier.dateFin.slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
+  return fin < today;
 }
 
 // Format ISO (YYYY-MM-DD) en DD/MM/YYYY pour affichage et saisie
@@ -103,16 +114,58 @@ const TYPE_CHANTIER_LABELS: Record<string, string> = {
   paysage: 'Aménagement Paysager',
   menuiserie: 'Menuiserie Sur-Mesure',
   renovation: 'Rénovation',
+  plomberie: 'Plomberie',
+  maconnerie: 'Maçonnerie',
+  terrasse: 'Terrasse & Patio',
+  chauffage: 'Chauffage & Climatisation',
+  isolation: 'Isolation de la charpente',
+  electricite: 'Électricité',
+  peinture: 'Peinture & Revêtements',
   autre: 'Autre',
 };
 
+function quoteToPdfParams(quote: SupabaseQuote): QuotePdfParams {
+  const items = (quote.items ?? []).map((i) => ({
+    description: i.description,
+    quantity: i.quantity,
+    unitPrice: i.unitPrice,
+    total: i.total,
+    subItems: i.subItems?.map((s) => ({
+      description: s.description,
+      quantity: s.quantity,
+      unitPrice: s.unitPrice,
+      total: s.total,
+    })),
+  }));
+  return {
+    clientInfo: {
+      name: quote.client_name ?? '',
+      email: quote.client_email ?? '',
+      phone: quote.client_phone ?? '',
+      address: quote.client_address ?? '',
+    },
+    projectType: quote.project_type ?? '',
+    projectDescription: quote.project_description ?? '',
+    validityDays: String(quote.validity_days ?? 30),
+    items,
+    subtotal: quote.total_ht,
+    tva: quote.total_ttc - quote.total_ht,
+    total: quote.total_ttc,
+  };
+}
+
+const PAGE_SIZE = 12;
+type SortOption = 'date_desc' | 'date_asc' | 'montant_desc' | 'montant_asc' | 'statut' | 'nom';
+
 export default function ProjectsPage() {
   const { user } = useAuth();
-  const { chantiers, clients, addChantier, addClient, updateChantier, loading } = useChantiers();
+  const { chantiers, clients, addChantier, addClient, updateChantier, deleteChantier, loading } = useChantiers();
+  const { logoUrl, themeColor, profile } = useUserSettings();
   const { toast } = useToast();
   const [location, setLocation] = useLocation();
   const [quoteValidatingLoading, setQuoteValidatingLoading] = useState(false);
   const [quoteDeletingId, setQuoteDeletingId] = useState<string | null>(null);
+  const [quoteDownloadingId, setQuoteDownloadingId] = useState<string | null>(null);
   const [selectedQuoteForPreview, setSelectedQuoteForPreview] = useState<SupabaseQuote | null>(null);
   const newChantierUploadFolder = useRef<string>(crypto.randomUUID());
   const [uploadingImages, setUploadingImages] = useState(false);
@@ -130,12 +183,14 @@ export default function ProjectsPage() {
     nom: '',
     clientId: '',
     dateDebut: '',
+    dateFin: '',
     duree: '',
     images: [] as string[],
     statut: 'planifié' as 'planifié' | 'en cours' | 'terminé',
     notes: '',
     notesAvancement: '',
     typeChantier: '' as string,
+    montantDevis: undefined as number | undefined,
   });
   const [newChantierMemberIds, setNewChantierMemberIds] = useState<string[]>([]);
   const [newChantierLoadingMembers, setNewChantierLoadingMembers] = useState(false);
@@ -161,6 +216,77 @@ export default function ProjectsPage() {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loadingAssignments, setLoadingAssignments] = useState(false);
   const [editAssignedMemberIds, setEditAssignedMemberIds] = useState<string[]>([]);
+  // Search, filters, sort, pagination
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [filterStatut, setFilterStatut] = useState<string>('tous');
+  const [filterType, setFilterType] = useState<string>('tous');
+  const [filterClient, setFilterClient] = useState<string>('tous');
+  const [sortBy, setSortBy] = useState<SortOption>('date_desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [assigneesByChantierId, setAssigneesByChantierId] = useState<Record<string, TeamMember[]>>({});
+  const [chantierToDelete, setChantierToDelete] = useState<Chantier | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Debounce search 300ms
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
+  // Filter + sort + paginate (client-side)
+  const filteredSortedChantiers = useMemo(() => {
+    const term = debouncedSearch.trim().toLowerCase();
+    let list = chantiers.filter((c) => {
+      if (term && !c.nom.toLowerCase().includes(term) && !c.clientName.toLowerCase().includes(term) && !(c.typeChantier ?? '').toLowerCase().includes(term)) return false;
+      if (filterStatut !== 'tous' && c.statut !== filterStatut) return false;
+      if (filterType !== 'tous' && c.typeChantier !== filterType) return false;
+      if (filterClient !== 'tous' && c.clientId !== filterClient) return false;
+      return true;
+    });
+    const statutOrder = { planifié: 0, 'en cours': 1, terminé: 2 };
+    list = [...list].sort((a, b) => {
+      if (sortBy === 'date_desc') return new Date(b.dateDebut).getTime() - new Date(a.dateDebut).getTime();
+      if (sortBy === 'date_asc') return new Date(a.dateDebut).getTime() - new Date(b.dateDebut).getTime();
+      if (sortBy === 'montant_desc') return (b.montantDevis ?? 0) - (a.montantDevis ?? 0);
+      if (sortBy === 'montant_asc') return (a.montantDevis ?? 0) - (b.montantDevis ?? 0);
+      if (sortBy === 'statut') return (statutOrder[a.statut] ?? 0) - (statutOrder[b.statut] ?? 0);
+      if (sortBy === 'nom') return a.nom.localeCompare(b.nom);
+      return 0;
+    });
+    return list;
+  }, [chantiers, debouncedSearch, filterStatut, filterType, filterClient, sortBy]);
+
+  const totalFiltered = filteredSortedChantiers.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / PAGE_SIZE));
+  const paginatedChantiers = useMemo(
+    () => filteredSortedChantiers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filteredSortedChantiers, currentPage]
+  );
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, filterStatut, filterType, filterClient, sortBy]);
+
+  // Load assignees for visible chantiers
+  useEffect(() => {
+    if (paginatedChantiers.length === 0 || !user) {
+      setAssigneesByChantierId({});
+      return;
+    }
+    const load = async () => {
+      const map: Record<string, TeamMember[]> = {};
+      await Promise.all(
+        paginatedChantiers.map(async (c) => {
+          const members = await fetchChantierAssignmentsByChantier(c.id);
+          map[c.id] = members;
+        })
+      );
+      setAssigneesByChantierId(map);
+    };
+    load();
+  }, [paginatedChantiers.map((c) => c.id).join(','), user?.id]);
 
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (!user?.id || !e.target.files || e.target.files.length === 0) {
@@ -259,12 +385,14 @@ export default function ProjectsPage() {
         clientId: newChantier.clientId,
         clientName: client.name,
         dateDebut: dateDebutIso,
+        dateFin: newChantier.dateFin?.trim() ? dateInputToISO(newChantier.dateFin) : undefined,
         duree: newChantier.duree,
         images: newChantier.images,
         statut: newChantier.statut,
         notes: newChantier.notes || undefined,
         notesAvancement: newChantier.notesAvancement || undefined,
         typeChantier: newChantier.typeChantier || undefined,
+        montantDevis: newChantier.montantDevis != null && !isNaN(Number(newChantier.montantDevis)) ? Number(newChantier.montantDevis) : undefined,
       });
       
       // Assigner les membres d'équipe
@@ -277,7 +405,7 @@ export default function ProjectsPage() {
       }
       
       // Réinitialiser le formulaire
-      setNewChantier({ nom: '', clientId: '', dateDebut: '', duree: '', images: [], statut: 'planifié', notes: '', notesAvancement: '', typeChantier: '' });
+      setNewChantier({ nom: '', clientId: '', dateDebut: '', dateFin: '', duree: '', images: [], statut: 'planifié', notes: '', notesAvancement: '', typeChantier: '', montantDevis: undefined });
       setNewChantierMemberIds([]);
       setUploadedImages([]);
       newChantierUploadFolder.current = crypto.randomUUID();
@@ -314,12 +442,14 @@ export default function ProjectsPage() {
       clientId: chantier.clientId,
       clientName: chantier.clientName,
       dateDebut: chantier.dateDebut,
+      dateFin: chantier.dateFin ?? '',
       duree: chantier.duree,
       images: [...chantier.images],
       statut: chantier.statut,
       notes: chantier.notes || '',
       notesAvancement: chantier.notesAvancement || '',
       typeChantier: chantier.typeChantier,
+      montantDevis: chantier.montantDevis,
     });
     setEditUploadedImages([]);
     setIsEditDialogOpen(true);
@@ -412,12 +542,14 @@ export default function ProjectsPage() {
         clientId: editChantier.clientId,
         clientName: client?.name || editChantier.clientName || 'Client inconnu',
         dateDebut: dateDebutIso,
+        dateFin: editChantier.dateFin?.trim() ? dateInputToISO(editChantier.dateFin) : undefined,
         duree: editChantier.duree,
         images: editChantier.images || [],
         statut: editChantier.statut || 'planifié',
         notes: editChantier.notes || undefined,
         notesAvancement: editChantier.notesAvancement || undefined,
         typeChantier: editChantier.typeChantier || undefined,
+        montantDevis: editChantier.montantDevis,
       });
 
       const currentAssigned = await fetchChantierAssignmentsByChantier(selectedChantier.id);
@@ -436,12 +568,14 @@ export default function ProjectsPage() {
       clientId: '',
       clientName: '',
       dateDebut: '',
+      dateFin: '',
       duree: '',
       images: [],
       statut: 'planifié',
       notes: '',
       notesAvancement: '',
       typeChantier: undefined,
+      montantDevis: undefined,
     });
     setEditUploadedImages([]);
     setEditAssignedMemberIds([]);
@@ -451,16 +585,39 @@ export default function ProjectsPage() {
     }
   };
 
-  // Ouvrir la popup si le paramètre openDialog est présent dans l'URL (ex. depuis ClientsPage avec clientId)
+  // Ouvrir la popup si le paramètre openDialog est présent dans l'URL (ex. depuis ClientsPage avec clientId, ou depuis Estimation avec fromEstimation)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('openDialog') === 'true') {
       const clientId = params.get('clientId');
       if (clientId) pendingClientIdRef.current = clientId;
+      const fromEstimation = params.get('fromEstimation') === '1';
+      if (fromEstimation) {
+        try {
+          const raw = sessionStorage.getItem('estimationForChantier');
+          if (raw) {
+            const data = JSON.parse(raw) as { clientName?: string; clientEmail?: string; clientPhone?: string; typeChantier?: string; duree?: string; notes?: string; montantDevis?: number };
+            sessionStorage.removeItem('estimationForChantier');
+            setNewChantier((prev) => ({
+              ...prev,
+              typeChantier: data.typeChantier ?? prev.typeChantier,
+              duree: data.duree ?? prev.duree,
+              notes: data.notes ?? prev.notes,
+              montantDevis: data.montantDevis ?? prev.montantDevis,
+            }));
+            if (data.clientName && clients.length > 0) {
+              const match = clients.find((c) => c.name.trim().toLowerCase() === (data.clientName ?? '').trim().toLowerCase());
+              if (match) pendingClientIdRef.current = match.id;
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
       setIsDialogOpen(true);
       window.history.replaceState({}, '', '/dashboard/projects');
     }
-  }, [location]);
+  }, [location, clients]);
 
   // Pré-remplir le client dans le formulaire "Nouveau chantier" quand le dialog s'ouvre avec clientId (depuis ClientsPage)
   useEffect(() => {
@@ -558,7 +715,7 @@ export default function ProjectsPage() {
               open={isDialogOpen}
               onOpenChange={(open) => {
                 if (!open) {
-                  setNewChantier({ nom: '', clientId: '', dateDebut: '', duree: '', images: [], statut: 'planifié', notes: '', notesAvancement: '', typeChantier: '' });
+                  setNewChantier({ nom: '', clientId: '', dateDebut: '', dateFin: '', duree: '', images: [], statut: 'planifié', notes: '', notesAvancement: '', typeChantier: '', montantDevis: undefined });
                   setNewChantierMemberIds([]);
                 }
                 setIsDialogOpen(open);
@@ -631,6 +788,13 @@ export default function ProjectsPage() {
                         <SelectItem value="paysage" className="text-white">Aménagement Paysager</SelectItem>
                         <SelectItem value="menuiserie" className="text-white">Menuiserie Sur-Mesure</SelectItem>
                         <SelectItem value="renovation" className="text-white">Rénovation</SelectItem>
+                        <SelectItem value="plomberie" className="text-white">Plomberie</SelectItem>
+                        <SelectItem value="maconnerie" className="text-white">Maçonnerie</SelectItem>
+                        <SelectItem value="terrasse" className="text-white">Terrasse & Patio</SelectItem>
+                        <SelectItem value="chauffage" className="text-white">Chauffage & Climatisation</SelectItem>
+                        <SelectItem value="isolation" className="text-white">Isolation de la charpente</SelectItem>
+                        <SelectItem value="electricite" className="text-white">Électricité</SelectItem>
+                        <SelectItem value="peinture" className="text-white">Peinture & Revêtements</SelectItem>
                         <SelectItem value="autre" className="text-white">Autre</SelectItem>
                       </SelectContent>
                     </Select>
@@ -685,6 +849,38 @@ export default function ProjectsPage() {
                   </div>
 
                   <div>
+                    <Label className="text-white">Date de fin (optionnel)</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full justify-start text-left font-normal h-9 bg-black/20 backdrop-blur-md border-white/10 text-white hover:bg-black/30"
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4 opacity-70" />
+                          {dateInputValue(newChantier.dateFin) || 'JJ/MM/AAAA'}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0 bg-black/90 border-white/10" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={isoToDate(dateInputToISO(newChantier.dateFin)) ?? undefined}
+                          onSelect={(d) => d && setNewChantier({ ...newChantier, dateFin: dateToISO(d) })}
+                          classNames={{
+                            day: 'text-white hover:bg-white/20',
+                            caption_label: 'text-white',
+                            nav_button: 'text-white',
+                            head_cell: 'text-white/70',
+                            day_outside: 'text-white/40',
+                            day_today: 'bg-white/20 text-white',
+                            day_selected: 'bg-violet-500 text-white',
+                          }}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  <div>
                     <Label className="text-white">Statut</Label>
                     <Select
                       value={newChantier.statut}
@@ -696,9 +892,25 @@ export default function ProjectsPage() {
                       <SelectContent className="bg-black/20 backdrop-blur-xl border-white/10">
                         <SelectItem value="planifié" className="text-white">Planifié</SelectItem>
                         <SelectItem value="en cours" className="text-white">En cours</SelectItem>
-                        <SelectItem value="terminé" className="text-white">Terminé</SelectItem>
-                      </SelectContent>
-                    </Select>
+                      <SelectItem value="terminé" className="text-white">Terminé</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                  <div>
+                    <Label className="text-white">Montant devis (optionnel)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      value={newChantier.montantDevis ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setNewChantier({ ...newChantier, montantDevis: v === '' ? undefined : Number(v) });
+                      }}
+                      placeholder="Ex: 15500"
+                      className="bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+                    />
                   </div>
 
                   <div>
@@ -820,6 +1032,69 @@ export default function ProjectsPage() {
         </div>
       </header>
 
+      {/* Barre recherche + filtres + tri */}
+      {chantiers.length > 0 && (
+        <div className="px-6 pt-4 pb-2 ml-20 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[200px] max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
+              <Input
+                placeholder="Rechercher par nom ou client..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 bg-black/20 border-white/10 text-white placeholder:text-white/50 h-9"
+              />
+            </div>
+            <Select value={filterStatut} onValueChange={setFilterStatut}>
+              <SelectTrigger className="w-[140px] h-9 bg-black/20 border-white/10 text-white">
+                <SelectValue placeholder="Statut" />
+              </SelectTrigger>
+              <SelectContent className="bg-black/20 border-white/10">
+                <SelectItem value="tous" className="text-white">Tous</SelectItem>
+                <SelectItem value="planifié" className="text-white">Planifié</SelectItem>
+                <SelectItem value="en cours" className="text-white">En cours</SelectItem>
+                <SelectItem value="terminé" className="text-white">Terminé</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filterType} onValueChange={setFilterType}>
+              <SelectTrigger className="w-[160px] h-9 bg-black/20 border-white/10 text-white">
+                <SelectValue placeholder="Type" />
+              </SelectTrigger>
+              <SelectContent className="bg-black/20 border-white/10">
+                <SelectItem value="tous" className="text-white">Tous</SelectItem>
+                {Object.entries(TYPE_CHANTIER_LABELS).map(([k, v]) => (
+                  <SelectItem key={k} value={k} className="text-white">{v}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterClient} onValueChange={setFilterClient}>
+              <SelectTrigger className="w-[160px] h-9 bg-black/20 border-white/10 text-white">
+                <SelectValue placeholder="Client" />
+              </SelectTrigger>
+              <SelectContent className="bg-black/20 border-white/10">
+                <SelectItem value="tous" className="text-white">Tous</SelectItem>
+                {clients.map((c) => (
+                  <SelectItem key={c.id} value={c.id} className="text-white">{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+              <SelectTrigger className="w-[160px] h-9 bg-black/20 border-white/10 text-white">
+                <SelectValue placeholder="Tri" />
+              </SelectTrigger>
+              <SelectContent className="bg-black/20 border-white/10">
+                <SelectItem value="date_desc" className="text-white">Date récente ↓</SelectItem>
+                <SelectItem value="date_asc" className="text-white">Date ancienne ↑</SelectItem>
+                <SelectItem value="montant_desc" className="text-white">Montant ↓</SelectItem>
+                <SelectItem value="montant_asc" className="text-white">Montant ↑</SelectItem>
+                <SelectItem value="statut" className="text-white">Statut</SelectItem>
+                <SelectItem value="nom" className="text-white">Nom A-Z</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
+
       {/* Dialog d'édition de chantier */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="bg-black/20 backdrop-blur-xl border border-white/10 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -921,6 +1196,38 @@ export default function ProjectsPage() {
             </div>
 
             <div>
+              <Label className="text-white">Date de fin (optionnel)</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start text-left font-normal h-9 bg-black/20 backdrop-blur-md border-white/10 text-white"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4 opacity-70" />
+                    {dateInputValue(editChantier.dateFin || '') || 'JJ/MM/AAAA'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 bg-black/90 border-white/10" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={isoToDate(dateInputToISO(editChantier.dateFin || '')) ?? undefined}
+                    onSelect={(d) => d && setEditChantier({ ...editChantier, dateFin: dateToISO(d) })}
+                    classNames={{
+                      day: 'text-white hover:bg-white/20',
+                      caption_label: 'text-white',
+                      nav_button: 'text-white',
+                      head_cell: 'text-white/70',
+                      day_outside: 'text-white/40',
+                      day_today: 'bg-white/20 text-white',
+                      day_selected: 'bg-violet-500 text-white',
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div>
               <Label className="text-white">Type de chantier</Label>
               <Select
                 value={editChantier.typeChantier ?? ''}
@@ -934,6 +1241,13 @@ export default function ProjectsPage() {
                   <SelectItem value="paysage" className="text-white">Aménagement Paysager</SelectItem>
                   <SelectItem value="menuiserie" className="text-white">Menuiserie Sur-Mesure</SelectItem>
                   <SelectItem value="renovation" className="text-white">Rénovation</SelectItem>
+                  <SelectItem value="plomberie" className="text-white">Plomberie</SelectItem>
+                  <SelectItem value="maconnerie" className="text-white">Maçonnerie</SelectItem>
+                  <SelectItem value="terrasse" className="text-white">Terrasse & Patio</SelectItem>
+                  <SelectItem value="chauffage" className="text-white">Chauffage & Climatisation</SelectItem>
+                  <SelectItem value="isolation" className="text-white">Isolation de la charpente</SelectItem>
+                  <SelectItem value="electricite" className="text-white">Électricité</SelectItem>
+                  <SelectItem value="peinture" className="text-white">Peinture & Revêtements</SelectItem>
                   <SelectItem value="autre" className="text-white">Autre</SelectItem>
                 </SelectContent>
               </Select>
@@ -951,9 +1265,25 @@ export default function ProjectsPage() {
                 <SelectContent className="bg-black/20 backdrop-blur-xl border-white/10">
                   <SelectItem value="planifié" className="text-white">Planifié</SelectItem>
                   <SelectItem value="en cours" className="text-white">En cours</SelectItem>
-                  <SelectItem value="terminé" className="text-white">Terminé</SelectItem>
-                </SelectContent>
-              </Select>
+                <SelectItem value="terminé" className="text-white">Terminé</SelectItem>
+              </SelectContent>
+            </Select>
+            </div>
+
+            <div>
+              <Label className="text-white">Montant devis (optionnel)</Label>
+              <Input
+                type="number"
+                min={0}
+                step={0.01}
+                value={editChantier.montantDevis ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setEditChantier({ ...editChantier, montantDevis: v === '' ? undefined : Number(v) });
+                }}
+                placeholder="Ex: 15500"
+                className="bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+              />
             </div>
 
             <div>
@@ -1152,6 +1482,50 @@ export default function ProjectsPage() {
                           >
                             <Eye className="h-3 w-3 mr-1" />
                             Prévisualiser
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={quoteDownloadingId !== null}
+                            className="text-white border-white/20 hover:bg-white/10 text-xs"
+                            onClick={async () => {
+                              setQuoteDownloadingId(q.id);
+                              try {
+                                const params = quoteToPdfParams(q);
+                                if (user?.id) {
+                                  const allQuotes = await fetchQuotesForUser(user.id);
+                                  params.quoteNumber = getQuoteDisplayNumber(allQuotes, q.id);
+                                }
+                                params.companyName = profile?.full_name ?? undefined;
+                                params.companyAddress = profile?.company_address ?? undefined;
+                                params.companyCityPostal = profile?.company_city_postal ?? undefined;
+                                params.companyPhone = profile?.company_phone ?? undefined;
+                                params.companyEmail = profile?.company_email ?? undefined;
+                                params.companySiret = profile?.company_siret ?? undefined;
+                                params.themeColor = themeColor ?? undefined;
+                                if (logoUrl) {
+                                  const logoDataUrl = await fetchLogoDataUrl(logoUrl);
+                                  if (logoDataUrl) params.logoDataUrl = logoDataUrl;
+                                }
+                                downloadQuotePdf(params);
+                                toast({ title: 'Devis téléchargé', description: 'Le PDF a été téléchargé.' });
+                              } catch (err) {
+                                console.error(err);
+                                toast({ title: 'Erreur', description: err instanceof Error ? err.message : 'Impossible de télécharger le PDF.', variant: 'destructive' });
+                              } finally {
+                                setQuoteDownloadingId(null);
+                              }
+                            }}
+                          >
+                            {quoteDownloadingId === q.id ? (
+                              <>Téléchargement...</>
+                            ) : (
+                              <>
+                                <Download className="h-3 w-3 mr-1" />
+                                Télécharger
+                              </>
+                            )}
                           </Button>
                           {q.status !== 'validé' && (
                             <Button
@@ -1376,107 +1750,196 @@ export default function ProjectsPage() {
             </Card>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {chantiers.map((chantier) => {
-              const imageIndex = currentImageIndex[chantier.id] || 0;
-              const hasMultipleImages = chantier.images.length > 1;
-              const canGoLeft = hasMultipleImages && imageIndex > 0;
-              const canGoRight = hasMultipleImages && imageIndex < chantier.images.length - 1;
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {paginatedChantiers.map((chantier) => {
+                const imageIndex = currentImageIndex[chantier.id] || 0;
+                const hasMultipleImages = chantier.images.length > 1;
+                const canGoLeft = hasMultipleImages && imageIndex > 0;
+                const canGoRight = hasMultipleImages && imageIndex < chantier.images.length - 1;
+                const assignees = assigneesByChantierId[chantier.id] ?? [];
+                const enRetard = isChantierEnRetard(chantier);
 
-              return (
-                <Card
-                  key={chantier.id}
-                  onClick={() => handleEditChantier(chantier)}
-                  className="bg-black/20 backdrop-blur-xl border border-white/10 text-white hover:shadow-lg transition-shadow cursor-pointer"
-                >
-                  {chantier.images.length > 0 && (
-                    <div className="relative h-48 overflow-hidden rounded-t-lg group">
-                      <img
-                        src={chantier.images[imageIndex]}
-                        alt={chantier.nom}
-                        className="w-full h-full object-cover"
-                      />
-                      {hasMultipleImages && (
-                        <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm text-white px-2 py-1 rounded text-xs flex items-center gap-1">
-                          <ImageIcon className="h-3 w-3" />
-                          {imageIndex + 1} / {chantier.images.length}
+                return (
+                  <Card
+                    key={chantier.id}
+                    className="bg-black/20 backdrop-blur-xl border border-white/10 text-white hover:shadow-lg hover:scale-[1.01] transition-all duration-200 cursor-pointer rounded-lg overflow-hidden"
+                  >
+                    <div onClick={() => handleEditChantier(chantier)}>
+                      {chantier.images.length > 0 && (
+                        <div className="relative h-48 overflow-hidden rounded-t-lg group">
+                          <img
+                            src={chantier.images[imageIndex]}
+                            alt={chantier.nom}
+                            className="w-full h-full object-cover"
+                          />
+                          {hasMultipleImages && (
+                            <>
+                              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+                                {chantier.images.slice(0, 5).map((_, i) => (
+                                  <span
+                                    key={i}
+                                    className={`w-1.5 h-1.5 rounded-full ${i === imageIndex ? 'bg-white' : 'bg-white/40'}`}
+                                  />
+                                ))}
+                              </div>
+                              <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm text-white px-2 py-1 rounded text-xs flex items-center gap-1">
+                                {imageIndex + 1} / {chantier.images.length}
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCurrentImageIndex(prev => ({ ...prev, [chantier.id]: Math.max(0, imageIndex - 1) }));
+                                }}
+                                className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full p-2 transition-opacity"
+                                aria-label="Photo précédente"
+                              >
+                                <ChevronLeft className="h-5 w-5" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCurrentImageIndex(prev => ({ ...prev, [chantier.id]: Math.min(chantier.images.length - 1, imageIndex + 1) }));
+                                }}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full p-2 transition-opacity"
+                                aria-label="Photo suivante"
+                              >
+                                <ChevronRight className="h-5 w-5" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       )}
-                      {canGoLeft && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCurrentImageIndex(prev => ({
-                              ...prev,
-                              [chantier.id]: imageIndex - 1
-                            }));
-                          }}
-                          className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 backdrop-blur-sm text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                          aria-label="Photo précédente"
-                        >
-                          <ChevronLeft className="h-5 w-5" />
-                        </button>
-                      )}
-                      {canGoRight && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCurrentImageIndex(prev => ({
-                              ...prev,
-                              [chantier.id]: imageIndex + 1
-                            }));
-                          }}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 backdrop-blur-sm text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                          aria-label="Photo suivante"
-                        >
-                          <ChevronRight className="h-5 w-5" />
-                        </button>
-                      )}
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-lg font-semibold">{chantier.nom}</CardTitle>
+                        <div className="flex items-center gap-2 text-sm text-white/70">
+                          <User className="h-4 w-4 shrink-0" />
+                          {chantier.clientName}
+                        </div>
+                        {chantier.typeChantier && (
+                          <div className="text-xs text-white/50 mt-0.5">
+                            {TYPE_CHANTIER_LABELS[chantier.typeChantier] ?? chantier.typeChantier}
+                          </div>
+                        )}
+                      </CardHeader>
+                      <CardContent className="space-y-2 pt-0">
+                        <div className="flex items-center gap-2 text-sm text-white/70">
+                          <CalendarIcon className="h-4 w-4 shrink-0" />
+                          {formatDateToDDMMYYYY(chantier.dateDebut)}
+                          {chantier.dateFin && (
+                            <span className="text-white/50"> → {formatDateToDDMMYYYY(chantier.dateFin)}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-white/70">
+                          <Clock className="h-4 w-4 shrink-0" />
+                          {chantier.duree}
+                        </div>
+                        {chantier.montantDevis != null && chantier.montantDevis > 0 && (
+                          <div className="flex items-center gap-2 text-sm text-white/80">
+                            <FileText className="h-4 w-4 shrink-0" />
+                            {formatMontantEuro(chantier.montantDevis)}
+                          </div>
+                        )}
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            chantier.statut === 'planifié' ? 'bg-blue-500/20 text-blue-300' :
+                            chantier.statut === 'en cours' ? 'bg-yellow-500/20 text-yellow-300' :
+                            'bg-green-500/20 text-green-300'
+                          }`}>
+                            {chantier.statut}
+                          </span>
+                          {enRetard && (
+                            <span className="px-2 py-1 rounded text-xs bg-red-500/20 text-red-300">
+                              En retard
+                            </span>
+                          )}
+                        </div>
+                        {assignees.length > 0 && (
+                          <div className="flex items-center gap-1.5 text-xs text-white/60 mt-2">
+                            <User className="h-3.5 w-3.5 shrink-0" />
+                            {assignees.slice(0, 2).map((m) => m.name).join(', ')}
+                            {assignees.length > 2 && ` +${assignees.length - 2}`}
+                          </div>
+                        )}
+                        <div className="flex gap-2 mt-3 pt-3 border-t border-white/10" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 h-8 text-white border-white/20 hover:bg-white/10"
+                            onClick={() => handleEditChantier(chantier)}
+                          >
+                            <Pencil className="h-3.5 w-3.5 mr-1" />
+                            Modifier
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-red-300 border-red-500/50 hover:bg-red-500/20"
+                            onClick={() => setChantierToDelete(chantier)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 mr-1" />
+                            Supprimer
+                          </Button>
+                        </div>
+                      </CardContent>
                     </div>
-                  )}
-                  <CardHeader>
-                    <CardTitle className="text-lg">{chantier.nom}</CardTitle>
-                    <div className="flex items-center gap-2 text-sm text-white/70">
-                      <User className="h-4 w-4" />
-                      {chantier.clientName}
-                    </div>
-                    {chantier.typeChantier && (
-                      <div className="text-xs text-white/50 capitalize mt-0.5">
-                        {TYPE_CHANTIER_LABELS[chantier.typeChantier] ?? chantier.typeChantier}
-                      </div>
-                    )}
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm text-white/70">
-                      <CalendarIcon className="h-4 w-4" />
-                      {formatDateToDDMMYYYY(chantier.dateDebut)}
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-white/70">
-                      <Clock className="h-4 w-4" />
-                      {chantier.duree}
-                    </div>
-                    {chantier.montantDevis != null && chantier.montantDevis > 0 && (
-                      <div className="flex items-center gap-2 text-sm text-white/80">
-                        <FileText className="h-4 w-4" />
-                        Devis : {formatMontantEuro(chantier.montantDevis)}
-                      </div>
-                    )}
-                    <div className="mt-4">
-                      <span className={`px-2 py-1 rounded text-xs ${
-                        chantier.statut === 'planifié' ? 'bg-blue-500/20 text-blue-300' :
-                        chantier.statut === 'en cours' ? 'bg-yellow-500/20 text-yellow-300' :
-                        'bg-green-500/20 text-green-300'
-                      }`}>
-                        {chantier.statut}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+                  </Card>
+                );
+              })}
+            </div>
+            {totalFiltered > PAGE_SIZE && (
+              <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 px-2">
+                <p className="text-sm text-white/70">
+                  Afficher {((currentPage - 1) * PAGE_SIZE) + 1}-{Math.min(currentPage * PAGE_SIZE, totalFiltered)} de {totalFiltered} chantiers
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-white border-white/20 hover:bg-white/10"
+                    disabled={currentPage <= 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  >
+                    Précédent
+                  </Button>
+                  <span className="text-sm text-white/70 px-2">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-white border-white/20 hover:bg-white/10"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    Suivant
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </main>
+
+      <DeleteChantierConfirmDialog
+        open={!!chantierToDelete}
+        onOpenChange={(open) => !open && setChantierToDelete(null)}
+        chantierName={chantierToDelete?.nom ?? ''}
+        loading={deleteLoading}
+        onConfirm={async () => {
+          if (!chantierToDelete) return;
+          setDeleteLoading(true);
+          try {
+            await deleteChantier(chantierToDelete.id);
+            toast({ title: 'Chantier supprimé', description: 'Le chantier a été masqué.' });
+            setChantierToDelete(null);
+          } catch (err) {
+            toast({ title: 'Erreur', description: err instanceof Error ? err.message : 'Impossible de supprimer.', variant: 'destructive' });
+          } finally {
+            setDeleteLoading(false);
+          }
+        }}
+      />
 
       <InvoiceDialog
         open={isInvoiceDialogOpen}

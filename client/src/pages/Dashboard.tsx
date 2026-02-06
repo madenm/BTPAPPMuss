@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,12 +10,53 @@ import {
   Wand2, 
   Euro,
   TrendingUp,
-  Plus
+  Plus,
+  Users,
+  User,
+  Clock,
+  Calendar
 } from 'lucide-react'
 import { UserAccountButton } from '@/components/UserAccountButton'
 import { Link, useLocation } from 'wouter'
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useDashboardMetrics } from '@/hooks/useDashboardMetrics'
+import { useChantiers } from '@/context/ChantiersContext'
+import { fetchChantierAssignmentsByChantier, type TeamMember } from '@/lib/supabase'
+
+// Parse "YYYY-MM-DD" (ou ISO avec time) en date locale pour éviter le décalage UTC
+function parseLocalDate(dateStr: string): Date {
+  const datePart = dateStr.slice(0, 10);
+  const [y, m, d] = datePart.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+// Fonction pour parser la durée et calculer la date de fin
+function calculateEndDate(dateDebut: string, duree: string): Date {
+  const startDate = parseLocalDate(dateDebut);
+  const dureeLower = duree.toLowerCase().trim();
+  
+  // Parser différentes formats de durée
+  let daysToAdd = 0;
+  
+  if (dureeLower.includes('semaine') || dureeLower.includes('sem')) {
+    const weeks = parseInt(dureeLower.match(/\d+/)?.[0] || '1');
+    daysToAdd = weeks * 7;
+  } else if (dureeLower.includes('mois')) {
+    const months = parseInt(dureeLower.match(/\d+/)?.[0] || '1');
+    daysToAdd = months * 30; // Approximation
+  } else if (dureeLower.includes('jour') || dureeLower.includes('j')) {
+    const days = parseInt(dureeLower.match(/\d+/)?.[0] || '1');
+    daysToAdd = days;
+  } else {
+    // Si c'est juste un nombre, on assume des jours
+    const days = parseInt(dureeLower.match(/\d+/)?.[0] || '1');
+    daysToAdd = days;
+  }
+  
+  const endDate = new Date(startDate);
+  endDate.setDate(endDate.getDate() + daysToAdd);
+  return endDate;
+}
 
 export default function Dashboard() {
   const [location, setLocation] = useLocation();
@@ -69,6 +110,10 @@ export default function Dashboard() {
 // Overview Tab Component
 function OverviewTab() {
   const [, setLocation] = useLocation();
+  const { chantiers } = useChantiers();
+  const [assignmentsByChantierId, setAssignmentsByChantierId] = useState<Record<string, TeamMember[]>>({});
+  const [loadingAssignments, setLoadingAssignments] = useState(false);
+  
   const {
     totalRevenue,
     activeChantiers,
@@ -79,6 +124,59 @@ function OverviewTab() {
     loading,
     error,
   } = useDashboardMetrics();
+
+  // Filtrer les chantiers actifs aujourd'hui
+  const chantiersToday = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return chantiers.filter(chantier => {
+      const startDate = parseLocalDate(chantier.dateDebut);
+      const endDate = calculateEndDate(chantier.dateDebut, chantier.duree);
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      return today >= start && today <= end;
+    });
+  }, [chantiers]);
+
+  // Charger les affectations d'équipe pour les chantiers du jour
+  useEffect(() => {
+    if (chantiersToday.length === 0) {
+      setAssignmentsByChantierId({});
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingAssignments(true);
+    
+    const loadAssignments = async () => {
+      try {
+        const results = await Promise.all(
+          chantiersToday.map(c => fetchChantierAssignmentsByChantier(c.id))
+        );
+        
+        if (cancelled) return;
+        
+        const map: Record<string, TeamMember[]> = {};
+        chantiersToday.forEach((c, i) => {
+          map[c.id] = results[i] ?? [];
+        });
+        setAssignmentsByChantierId(map);
+      } catch (error) {
+        console.error('Error loading assignments:', error);
+      } finally {
+        if (!cancelled) {
+          setLoadingAssignments(false);
+        }
+      }
+    };
+
+    loadAssignments();
+    return () => {
+      cancelled = true;
+    };
+  }, [chantiersToday]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("fr-FR", {
@@ -199,29 +297,80 @@ function OverviewTab() {
 
         <Card className="bg-black/20 backdrop-blur-xl border border-white/10 shadow-xl rounded-2xl text-white">
           <CardHeader>
-            <CardTitle className="text-white font-light">Taux de Conversion</CardTitle>
+            <CardTitle className="text-white font-light flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Chantiers du Jour
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            {conversionEvolution.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={conversionEvolution}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
-                  <XAxis dataKey="name" stroke="rgba(255, 255, 255, 0.7)" />
-                  <YAxis stroke="rgba(255, 255, 255, 0.7)" />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      borderRadius: '12px',
-                      color: '#fff'
-                    }}
-                  />
-                  <Line type="monotone" dataKey="taux" stroke="#a78bfa" strokeWidth={2} dot={{ fill: '#a78bfa', r: 4 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
+          <CardContent className="p-6 pt-0">
+            {loadingAssignments ? (
               <div className="flex items-center justify-center h-64 text-white/60">
-                Aucune donnée de conversion disponible
+                <div className="text-center">
+                  <div className="text-sm mb-2">Chargement des affectations...</div>
+                </div>
+              </div>
+            ) : chantiersToday.length === 0 ? (
+              <div className="flex items-center justify-center h-64 text-white/60">
+                <div className="text-center">
+                  <Building className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <div className="text-sm">Aucun chantier aujourd'hui</div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {chantiersToday.map(chantier => {
+                  const startDate = parseLocalDate(chantier.dateDebut);
+                  const endDate = calculateEndDate(chantier.dateDebut, chantier.duree);
+                  const members = assignmentsByChantierId[chantier.id] ?? [];
+                  
+                  return (
+                    <div
+                      key={chantier.id}
+                      className="p-4 rounded-lg bg-black/20 border border-white/10 hover:bg-black/30 transition-colors"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Building className="h-4 w-4 text-white/70" />
+                            <span className="font-semibold text-white">{chantier.nom}</span>
+                            <Badge className={
+                              chantier.statut === 'planifié'
+                                ? 'bg-blue-500/20 text-blue-300 border-blue-500/50'
+                                : chantier.statut === 'en cours'
+                                ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/50'
+                                : 'bg-green-500/20 text-green-300 border-green-500/50'
+                            }>
+                              {chantier.statut}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-4 text-sm text-white/70 mb-2">
+                            <div className="flex items-center gap-1">
+                              <User className="h-3 w-3" />
+                              {chantier.clientName}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {startDate.toLocaleDateString('fr-FR')} - {endDate.toLocaleDateString('fr-FR')}
+                            </div>
+                          </div>
+                          {members.length > 0 && (
+                            <div className="flex items-center gap-2 text-sm text-white/80 mt-2 pt-2 border-t border-white/10">
+                              <Users className="h-4 w-4 text-white/70 shrink-0" />
+                              <span className="text-white/70">Équipe :</span>
+                              <span className="text-white">{members.map(m => m.name).join(', ')}</span>
+                            </div>
+                          )}
+                          {members.length === 0 && (
+                            <div className="flex items-center gap-2 text-sm text-white/50 mt-2 pt-2 border-t border-white/10">
+                              <Users className="h-4 w-4 shrink-0" />
+                              <span>Aucun membre assigné</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </CardContent>

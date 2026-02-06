@@ -50,11 +50,13 @@ export default function LoginPage() {
     
     if (loginMode === 'team') {
       // Vérifier le code avec Supabase
+      // verifyTeamMemberCode fusionne déjà les permissions depuis localStorage
       const member = await verifyTeamMemberCode(code.trim())
       if (member) {
-        // Stocker les infos du membre dans le localStorage
         localStorage.setItem('teamMember', JSON.stringify(member))
         localStorage.setItem('userType', 'team')
+        // Stocker le code en session pour rafraîchir les permissions au chargement du dashboard
+        sessionStorage.setItem('teamMemberLoginCode', code.trim())
         setLocation("/team-dashboard")
       } else {
         alert("Code invalide ou membre inactif")

@@ -13,7 +13,7 @@ export function ProtectedTeamRoute({ children }: ProtectedTeamRouteProps) {
     // Vérifier si l'utilisateur est un membre d'équipe authentifié
     const storedMember = localStorage.getItem('teamMember');
     const userType = localStorage.getItem('userType');
-    
+
     if (!storedMember || userType !== 'team') {
       // Rediriger vers la page de connexion si pas authentifié
       setLocation('/login');

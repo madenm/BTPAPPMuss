@@ -113,6 +113,14 @@ export default {
           from: { opacity: "0", transform: "translateY(10px) scale(0.95)" },
           to: { opacity: "1", transform: "translateY(0) scale(1)" },
         },
+        "text-shimmer": {
+          "0%": { backgroundPosition: "100% 50%" },
+          "100%": { backgroundPosition: "0% 50%" },
+        },
+        "bounce-dot": {
+          "0%, 80%, 100%": { transform: "scale(0.6)", opacity: "0.5" },
+          "40%": { transform: "scale(1.2)", opacity: "1" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -120,6 +128,8 @@ export default {
         "element-fade-in": "element-fade-in 0.6s ease-out forwards",
         "slide-right": "slide-right 0.8s ease-out forwards",
         "testimonial-fade": "testimonial-fade 0.6s ease-out forwards",
+        "text-shimmer": "text-shimmer var(--shimmer-duration, 1.5s) linear infinite",
+        "bounce-dot": "bounce-dot 1.4s ease-in-out infinite both",
       },
     },
   },

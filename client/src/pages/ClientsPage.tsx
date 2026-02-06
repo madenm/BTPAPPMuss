@@ -1,339 +1,427 @@
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { PageWrapper } from '@/components/PageWrapper';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { UserAccountButton } from '@/components/UserAccountButton';
-import { User, Plus, Building, Mail, Phone, Image as ImageIcon, Link2 } from 'lucide-react';
-import { useState } from 'react';
-import { Link } from 'wouter';
-import { useChantiers, Client, Chantier } from '@/context/ChantiersContext';
+import { useChantiers, type Client } from '@/context/ChantiersContext';
 import { useToast } from '@/hooks/use-toast';
+import { Search, Plus, Pencil, Trash2, Mail, Phone } from 'lucide-react';
 
-export default function ClientsPage() {
-  const { clients, chantiers, addClient, updateChantier } = useChantiers();
-  const { toast } = useToast();
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isAssignChantierDialogOpen, setIsAssignChantierDialogOpen] = useState(false);
-  const [newClient, setNewClient] = useState({ name: '', email: '', phone: '' });
-  const [isAdding, setIsAdding] = useState(false);
-  const [assigningChantierId, setAssigningChantierId] = useState<string | null>(null);
+function useDebouncedValue<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debouncedValue;
+}
 
-  // Filtrer les chantiers du client sélectionné
-  const clientChantiers = selectedClient
-    ? chantiers.filter(c => c.clientId === selectedClient.id)
-    : [];
+type FilterStatus = 'all' | 'actifs' | 'terminés';
 
-  // Chantiers pouvant être attribués à ce client (pas déjà attribués à ce client)
-  const chantiersToAssign = selectedClient
-    ? chantiers.filter(c => c.clientId !== selectedClient.id)
-    : [];
+function formatCreatedAt(created_at?: string): string {
+  if (!created_at) return '—';
+  return new Date(created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
-  const handleAssignChantierToClient = async (chantier: Chantier) => {
-    if (!selectedClient) return;
-    setAssigningChantierId(chantier.id);
-    try {
-      await updateChantier(chantier.id, {
-        clientId: selectedClient.id,
-        clientName: selectedClient.name,
-      });
-      toast({
-        title: 'Chantier attribué',
-        description: `${chantier.nom} a été attribué à ${selectedClient.name}.`,
-      });
-      setIsAssignChantierDialogOpen(false);
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : 'Erreur lors de l\'attribution';
-      toast({ title: message, variant: 'destructive' });
-    } finally {
-      setAssigningChantierId(null);
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_REGEX = /^0[67]\s?\d{2}\s?\d{2}\s?\d{2}\s?\d{2}$/;
+
+function normalizePhone(s: string): string {
+  return s.replace(/\s/g, '');
+}
+
+interface ClientFormModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  client?: Client | null;
+  onSave: (payload: { name: string; email: string; phone: string; street_address?: string; postal_code?: string; city?: string }) => Promise<void>;
+  isSaving: boolean;
+}
+
+function ClientFormModal({ open, onOpenChange, client, onSave, isSaving }: ClientFormModalProps) {
+  const isEdit = !!client;
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [streetAddress, setStreetAddress] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [city, setCity] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (open) {
+      if (client) {
+        setName(client.name);
+        setEmail(client.email);
+        setPhone(client.phone);
+        setStreetAddress(client.street_address ?? '');
+        setPostalCode(client.postal_code ?? '');
+        setCity(client.city ?? '');
+      } else {
+        setName('');
+        setEmail('');
+        setPhone('');
+        setStreetAddress('');
+        setPostalCode('');
+        setCity('');
+      }
+      setErrors({});
     }
+  }, [open, client]);
+
+  const validate = (): boolean => {
+    const err: Record<string, string> = {};
+    if (!name.trim()) err.name = 'Nom requis';
+    if (!email.trim()) err.email = 'Email requis';
+    else if (!EMAIL_REGEX.test(email)) err.email = 'Format email invalide';
+    if (!phone.trim()) err.phone = 'Téléphone requis';
+    else if (!PHONE_REGEX.test(normalizePhone(phone))) err.phone = 'Format 06/07 XX XX XX XX';
+    if (postalCode.trim() && !/^\d{5}$/.test(postalCode)) err.postalCode = '5 chiffres';
+    setErrors(err);
+    return Object.keys(err).length === 0;
   };
 
-  const handleAddClient = async () => {
-    if (!newClient.name || !newClient.email || !newClient.phone) return;
-    setIsAdding(true);
-    try {
-      await addClient({ name: newClient.name, email: newClient.email, phone: newClient.phone });
-      setNewClient({ name: '', email: '', phone: '' });
-      setIsDialogOpen(false);
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : 'Erreur lors de l\'ajout du client';
-      alert(message);
-    } finally {
-      setIsAdding(false);
-    }
+  const handleSave = async () => {
+    if (!validate()) return;
+    await onSave({
+      name: name.trim(),
+      email: email.trim(),
+      phone: phone.trim(),
+      street_address: streetAddress.trim() || undefined,
+      postal_code: postalCode.trim() || undefined,
+      city: city.trim() || undefined,
+    });
+    onOpenChange(false);
   };
 
   return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-[400px] bg-white border border-[#E5E7EB] rounded-lg shadow-lg p-6">
+        <DialogHeader>
+          <DialogTitle className="text-gray-900">
+            {isEdit ? `Modifier : ${client.name}` : 'Ajouter un nouveau client'}
+          </DialogTitle>
+          <DialogDescription className="text-gray-600">
+            {isEdit ? 'Modifiez les informations du client.' : 'Remplissez les champs pour créer un client.'}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 mt-4">
+          <div>
+            <Label className="text-gray-700">Nom complet *</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Paul Dupont"
+              className={`mt-1 border-[#E5E7EB] ${errors.name ? 'border-red-500' : ''}`}
+            />
+            {errors.name && <p className="text-xs text-red-500 mt-0.5">{errors.name}</p>}
+          </div>
+          <div>
+            <Label className="text-gray-700">Email *</Label>
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="dupont@email.com"
+              className={`mt-1 border-[#E5E7EB] ${errors.email ? 'border-red-500' : ''}`}
+            />
+            {errors.email && <p className="text-xs text-red-500 mt-0.5">{errors.email}</p>}
+          </div>
+          <div>
+            <Label className="text-gray-700">Téléphone *</Label>
+            <Input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="06 12 34 56 78"
+              className={`mt-1 border-[#E5E7EB] ${errors.phone ? 'border-red-500' : ''}`}
+            />
+            {errors.phone && <p className="text-xs text-red-500 mt-0.5">{errors.phone}</p>}
+          </div>
+          <div>
+            <Label className="text-gray-700">Adresse</Label>
+            <Input
+              value={streetAddress}
+              onChange={(e) => setStreetAddress(e.target.value)}
+              placeholder="15 rue de la Paix..."
+              className="mt-1 border-[#E5E7EB]"
+            />
+          </div>
+          <div>
+            <Label className="text-gray-700">Code postal</Label>
+            <Input
+              value={postalCode}
+              onChange={(e) => setPostalCode(e.target.value)}
+              placeholder="75000"
+              maxLength={10}
+              className={`mt-1 border-[#E5E7EB] ${errors.postalCode ? 'border-red-500' : ''}`}
+            />
+            {errors.postalCode && <p className="text-xs text-red-500 mt-0.5">{errors.postalCode}</p>}
+          </div>
+          <div>
+            <Label className="text-gray-700">Ville</Label>
+            <Input
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder="Paris"
+              className="mt-1 border-[#E5E7EB]"
+            />
+          </div>
+        </div>
+        <DialogFooter className="gap-2 mt-6">
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="border-[#E5E7EB]">
+            Annuler
+          </Button>
+          <Button onClick={handleSave} disabled={isSaving} className="bg-[#3B82F6] hover:bg-[#2563EB]">
+            {isSaving ? 'Enregistrement...' : 'Sauvegarder'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export default function ClientsPage() {
+  const { clients, chantiers, addClient, updateClient, deleteClient } = useChantiers();
+  const { toast } = useToast();
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const debouncedSearch = useDebouncedValue(searchTerm, 300);
+
+  const filteredClients = useMemo(() => {
+    let list = clients;
+
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.toLowerCase();
+      list = list.filter(
+        (c) => c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q)
+      );
+    }
+
+    if (filterStatus === 'actifs') {
+      list = list.filter((c) =>
+        chantiers.some((ch) => ch.clientId === c.id && ch.statut === 'en cours')
+      );
+    } else if (filterStatus === 'terminés') {
+      list = list.filter((c) => {
+        const clientChantiers = chantiers.filter((ch) => ch.clientId === c.id);
+        return clientChantiers.length > 0 && clientChantiers.every((ch) => ch.statut === 'terminé');
+      });
+    }
+
+    return list;
+  }, [clients, debouncedSearch, filterStatus, chantiers]);
+
+  const handleSave = useCallback(
+    async (payload: { name: string; email: string; phone: string; street_address?: string; postal_code?: string; city?: string }) => {
+      setIsSaving(true);
+      try {
+        if (editingClient) {
+          await updateClient(editingClient.id, payload);
+          toast({ title: 'Client modifié avec succès' });
+        } else {
+          await addClient(payload);
+          toast({ title: 'Client créé avec succès' });
+        }
+        setIsModalOpen(false);
+        setEditingClient(null);
+      } catch (e) {
+        toast({ title: e instanceof Error ? e.message : 'Erreur', variant: 'destructive' });
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [editingClient, updateClient, addClient, toast]
+  );
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteTarget) return false;
+    setIsDeleting(true);
+    try {
+      await deleteClient(deleteTarget.id);
+      toast({ title: 'Client supprimé' });
+      setDeleteTarget(null);
+      return true;
+    } catch (e) {
+      toast({ title: e instanceof Error ? e.message : 'Erreur', variant: 'destructive' });
+      return false;
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [deleteTarget, deleteClient, toast]);
+
+  return (
     <PageWrapper>
-      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-6 py-4 rounded-tl-3xl ml-20">
+      <header className="bg-white border-b border-[#E5E7EB] px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white">
-              Clients
-            </h1>
-            <p className="text-sm text-white/70">
-              {selectedClient ? `Chantiers de ${selectedClient.name}` : 'Gérez vos clients et leurs chantiers'}
-            </p>
+            <h1 className="text-2xl font-bold text-gray-900">Gestion des clients</h1>
+            <p className="text-sm text-gray-600">Recherchez, éditez et gérez vos clients</p>
           </div>
-          <div className="flex items-center gap-3">
-            {!selectedClient && (
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Ajouter un Client
-                  </Button>
-                </DialogTrigger>
-              <DialogContent className="bg-black/20 backdrop-blur-xl border border-white/10 text-white">
-                <DialogHeader>
-                  <DialogTitle className="text-white">Nouveau Client</DialogTitle>
-                  <DialogDescription className="text-white/70">
-                    Ajoutez un nouveau client à votre liste
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <Label className="text-white">Nom</Label>
-                    <Input
-                      value={newClient.name}
-                      onChange={(e) => setNewClient({ ...newClient, name: e.target.value })}
-                      placeholder="Nom du client"
-                      className="bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-white">Email</Label>
-                    <Input
-                      type="email"
-                      value={newClient.email}
-                      onChange={(e) => setNewClient({ ...newClient, email: e.target.value })}
-                      placeholder="email@example.com"
-                      className="bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-white">Téléphone</Label>
-                    <Input
-                      type="tel"
-                      value={newClient.phone}
-                      onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })}
-                      placeholder="06 12 34 56 78"
-                      className="bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => setIsDialogOpen(false)}
-                      className="text-white border-white/20 hover:bg-white/10"
-                    >
-                      Annuler
-                    </Button>
-                    <Button
-                      onClick={handleAddClient}
-                      disabled={isAdding}
-                      className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30 disabled:opacity-50"
-                    >
-                      {isAdding ? 'Ajout...' : 'Ajouter'}
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-            )}
-            <UserAccountButton variant="inline" />
-          </div>
-          {selectedClient && (
-            <Button
-              variant="outline"
-              onClick={() => setSelectedClient(null)}
-              className="text-white border-white/20 hover:bg-white/10"
-            >
-              Retour à la liste
-            </Button>
-          )}
+          <UserAccountButton variant="inline" />
         </div>
       </header>
 
-      <main className="flex-1 p-6 ml-20">
-        {!selectedClient ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {clients.map((client) => (
+      <main className="flex-1 p-6 bg-[#FAFBFC]">
+        <div className="space-y-4 mb-6">
+          <Input
+            placeholder="Rechercher par nom ou email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-md border-[#E5E7EB] bg-white"
+          />
+          <div className="flex flex-wrap items-center gap-3">
+            <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as FilterStatus)}>
+              <SelectTrigger className="w-[160px] border-[#E5E7EB] bg-white">
+                <SelectValue placeholder="Filtre" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous</SelectItem>
+                <SelectItem value="actifs">Actifs</SelectItem>
+                <SelectItem value="terminés">Terminés</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              onClick={() => {
+                setEditingClient(null);
+                setIsModalOpen(true);
+              }}
+              className="bg-[#3B82F6] hover:bg-[#2563EB]"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Ajouter client
+            </Button>
+          </div>
+        </div>
+
+        {filteredClients.length === 0 ? (
+          <Card className="bg-white border border-[#E5E7EB] p-12 text-center">
+            <p className="text-gray-600">Aucun client trouvé.</p>
+            <Button className="mt-4 bg-[#3B82F6] hover:bg-[#2563EB]" onClick={() => setIsModalOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Ajouter un client
+            </Button>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filteredClients.map((client) => (
               <Card
                 key={client.id}
-                className="bg-black/20 backdrop-blur-xl border border-white/10 text-white hover:shadow-lg transition-shadow cursor-pointer"
-                onClick={() => setSelectedClient(client)}
+                className="bg-white border border-[#E5E7EB] rounded-lg p-4 transition-all duration-200 hover:bg-gray-50 hover:shadow-[0_1px_3px_rgba(0,0,0,0.05)]"
               >
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center">
-                      <User className="h-6 w-6 text-white/70" />
+                <CardContent className="p-0">
+                  <p className="font-semibold text-base text-gray-900 truncate">{client.name}</p>
+                  <div className="mt-2 space-y-1">
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <Mail className="h-4 w-4 shrink-0 text-gray-500" />
+                      <span className="truncate">{client.email}</span>
                     </div>
-                    <div>
-                      <CardTitle className="text-lg">{client.name}</CardTitle>
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <Phone className="h-4 w-4 shrink-0 text-gray-500" />
+                      <span>{client.phone}</span>
                     </div>
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm text-white/70">
-                    <Mail className="h-4 w-4" />
-                    {client.email}
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-white/70">
-                    <Phone className="h-4 w-4" />
-                    {client.phone}
-                  </div>
-                  <div className="mt-4 pt-4 border-t border-white/10">
-                    <div className="flex items-center gap-2 text-sm text-white/70">
-                      <Building className="h-4 w-4" />
-                      {chantiers.filter(c => c.clientId === client.id).length} chantier(s)
-                    </div>
+                  <p className="mt-2 text-xs text-gray-500">Créé : {formatCreatedAt(client.created_at)}</p>
+                  <div className="mt-4 flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingClient(client);
+                        setIsModalOpen(true);
+                      }}
+                      className="border-[#E5E7EB] bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded"
+                    >
+                      <Pencil className="h-3.5 w-3.5 mr-1" />
+                      Modifier
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteTarget(client);
+                      }}
+                      className="border-[#E5E7EB] bg-gray-100 hover:bg-red-50 hover:text-red-600 hover:border-red-200 text-gray-700 px-3 py-1.5 rounded"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                      Supprimer
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
             ))}
           </div>
-        ) : (
-          <div>
-            <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white mb-6">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center">
-                    <User className="h-6 w-6 text-white/70" />
-                  </div>
-                  <div>
-                    <div className="text-xl">{selectedClient.name}</div>
-                    <div className="text-sm font-normal text-white/70">{selectedClient.email}</div>
-                    <div className="text-sm font-normal text-white/70">{selectedClient.phone}</div>
-                  </div>
-                </CardTitle>
-              </CardHeader>
-            </Card>
-
-            <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
-              <h2 className="text-xl font-semibold text-white">Chantiers de {selectedClient.name}</h2>
-              <div className="flex gap-2">
-                <Dialog open={isAssignChantierDialogOpen} onOpenChange={setIsAssignChantierDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" className="text-white border-white/20 hover:bg-white/10">
-                      <Link2 className="h-4 w-4 mr-2" />
-                      Attribuer un chantier existant
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="bg-black/20 backdrop-blur-xl border border-white/10 text-white max-h-[80vh] flex flex-col">
-                    <DialogHeader>
-                      <DialogTitle className="text-white">Attribuer un chantier à {selectedClient.name}</DialogTitle>
-                      <DialogDescription className="text-white/70">
-                        Choisissez un chantier à attribuer à ce client. La liste affiche les chantiers non encore attribués à ce client.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="flex-1 overflow-y-auto space-y-2 py-4">
-                      {chantiersToAssign.length === 0 ? (
-                        <p className="text-sm text-white/70 text-center py-8">
-                          Aucun autre chantier à attribuer. Tous vos chantiers sont déjà attribués à ce client, ou créez-en un nouveau.
-                        </p>
-                      ) : (
-                        chantiersToAssign.map((chantier) => {
-                          const currentClientName = chantier.clientId
-                            ? (clients.find(c => c.id === chantier.clientId)?.name ?? chantier.clientName ?? '—')
-                            : 'Non attribué';
-                          const isAssigning = assigningChantierId === chantier.id;
-                          return (
-                            <div
-                              key={chantier.id}
-                              className="flex items-center justify-between gap-4 p-3 rounded-lg bg-black/20 border border-white/10"
-                            >
-                              <div className="min-w-0 flex-1">
-                                <p className="font-medium text-white truncate">{chantier.nom}</p>
-                                <p className="text-xs text-white/60">
-                                  Actuellement : {currentClientName} · {new Date(chantier.dateDebut).toLocaleDateString('fr-FR')}
-                                </p>
-                              </div>
-                              <Button
-                                size="sm"
-                                onClick={() => handleAssignChantierToClient(chantier)}
-                                disabled={!!assigningChantierId}
-                                className="shrink-0 bg-white/20 text-white border border-white/10 hover:bg-white/30 disabled:opacity-50"
-                              >
-                                {isAssigning ? 'Attribution...' : 'Attribuer à ce client'}
-                              </Button>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </DialogContent>
-                </Dialog>
-                <Link href={`/dashboard/projects?openDialog=true&clientId=${selectedClient.id}`}>
-                  <Button className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Ajouter un chantier
-                  </Button>
-                </Link>
-              </div>
-            </div>
-
-            {clientChantiers.length === 0 ? (
-              <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white">
-                <CardContent className="py-12 text-center">
-                  <Building className="h-12 w-12 mx-auto mb-4 text-white/50" />
-                  <p className="text-white/70">Aucun chantier pour ce client</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {clientChantiers.map((chantier) => (
-                  <Card
-                    key={chantier.id}
-                    className="bg-black/20 backdrop-blur-xl border border-white/10 text-white hover:shadow-lg transition-shadow"
-                  >
-                    {chantier.images.length > 0 && (
-                      <div className="relative h-48 overflow-hidden rounded-t-lg">
-                        <img
-                          src={chantier.images[0]}
-                          alt={chantier.nom}
-                          className="w-full h-full object-cover"
-                        />
-                        {chantier.images.length > 1 && (
-                          <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm text-white px-2 py-1 rounded text-xs flex items-center gap-1">
-                            <ImageIcon className="h-3 w-3" />
-                            {chantier.images.length}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    <CardHeader>
-                      <CardTitle className="text-lg">{chantier.nom}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      <div className="text-sm text-white/70">
-                        Date: {new Date(chantier.dateDebut).toLocaleDateString('fr-FR')}
-                      </div>
-                      <div className="text-sm text-white/70">
-                        Durée: {chantier.duree}
-                      </div>
-                      <div className="mt-4">
-                        <span className={`px-2 py-1 rounded text-xs ${
-                          chantier.statut === 'planifié' ? 'bg-blue-500/20 text-blue-300' :
-                          chantier.statut === 'en cours' ? 'bg-yellow-500/20 text-yellow-300' :
-                          'bg-green-500/20 text-green-300'
-                        }`}>
-                          {chantier.statut}
-                        </span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
         )}
       </main>
+
+      <ClientFormModal
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        client={editingClient}
+        onSave={handleSave}
+        isSaving={isSaving}
+      />
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent className="max-w-[380px] bg-white border border-[#E5E7EB]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer ce client ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Êtes-vous sûr de supprimer &quot;{deleteTarget?.name}&quot; ? Cette action est définitive.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-[#E5E7EB]">Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async (e) => {
+                e.preventDefault();
+                const ok = await handleDeleteConfirm();
+                if (ok) setDeleteTarget(null);
+              }}
+              disabled={isDeleting}
+              className="bg-[#EF4444] hover:bg-[#DC2626]"
+            >
+              {isDeleting ? 'Suppression...' : 'Supprimer'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageWrapper>
   );
 }
-

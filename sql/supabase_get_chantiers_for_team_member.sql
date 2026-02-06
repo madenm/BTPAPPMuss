@@ -12,6 +12,7 @@ AS $$
   FROM chantiers c
   JOIN chantier_assignments a ON a.chantier_id = c.id
   WHERE a.team_member_id = p_team_member_id
+    AND (c.is_deleted IS NULL OR c.is_deleted = false)
   ORDER BY c.created_at DESC;
 $$;
 

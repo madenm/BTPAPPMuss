@@ -17,16 +17,19 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
+import { DevisGeneratingLoader } from '@/components/ui/devis-generating-loader';
 import { useAuth } from '@/context/AuthContext';
 import { useChantiers } from '@/context/ChantiersContext';
 import { useUserSettings } from '@/context/UserSettingsContext';
 import { useToast } from '@/hooks/use-toast';
 import { UserAccountButton } from '@/components/UserAccountButton';
 import { VoiceInputButton } from '@/components/VoiceInputButton';
-import { insertQuote, updateQuote, fetchQuoteById, type QuoteItem, type QuoteSubItem } from '@/lib/supabaseQuotes';
+import { insertQuote, updateQuote, fetchQuoteById, fetchQuotesForUser, getQuoteDisplayNumber, type QuoteItem, type QuoteSubItem } from '@/lib/supabaseQuotes';
 import { downloadQuotePdf, fetchLogoDataUrl } from '@/lib/quotePdf';
 import { QuotePreview } from '@/components/QuotePreview';
 import { InvoiceDialog } from '@/components/InvoiceDialog';
+import { QuotesQuestionnaire } from '@/components/QuotesQuestionnaire';
+import { hasQuestionsForType } from '@/lib/estimationQuestionnaire';
 import { 
   FileText, 
   Plus, 
@@ -45,7 +48,8 @@ import {
   Calendar,
   Loader2,
   Receipt,
-  Save
+  Save,
+  Search
 } from 'lucide-react';
 
 interface ClientInfo {
@@ -68,6 +72,7 @@ export default function QuotesPage() {
   const [isAiParsing, setIsAiParsing] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [selectClientOpen, setSelectClientOpen] = useState(false);
+  const [clientSearchQuery, setClientSearchQuery] = useState('');
   const [selectChantierOpen, setSelectChantierOpen] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [selectedChantierId, setSelectedChantierId] = useState<string | null>(null);
@@ -83,6 +88,7 @@ export default function QuotesPage() {
 
   const [projectType, setProjectType] = useState('');
   const [projectDescription, setProjectDescription] = useState('');
+  const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<string, string>>({});
   const [useAiForPrefill, setUseAiForPrefill] = useState(true);
   const [validityDays, setValidityDays] = useState('30');
   const [items, setItems] = useState<QuoteItem[]>([
@@ -165,7 +171,7 @@ export default function QuotesPage() {
     
     // Préremplir les informations du chantier
     setSelectedChantierId(chantier.id);
-    const validTypes = ['piscine', 'paysage', 'menuiserie', 'renovation', 'autre'];
+    const validTypes = ['piscine', 'paysage', 'menuiserie', 'renovation', 'plomberie', 'maconnerie', 'terrasse', 'chauffage', 'isolation', 'electricite', 'peinture', 'autre'];
     const valueToSet = chantier.typeChantier && validTypes.includes(chantier.typeChantier) ? chantier.typeChantier : 'autre';
     setProjectType(valueToSet);
     // Description du projet = nom + notes (champ "Description du projet" de la fiche chantier)
@@ -325,7 +331,11 @@ export default function QuotesPage() {
     if (needPrefill && useAiForPrefill) {
       setIsAiParsing(true);
       try {
-        const payload = { description: projectDescription, projectType: projectType?.trim() || undefined };
+        const payload = {
+          description: projectDescription,
+          projectType: projectType?.trim() || undefined,
+          questionnaireAnswers: Object.keys(questionnaireAnswers).length > 0 ? questionnaireAnswers : undefined,
+        };
         const res = await fetch('/api/parse-quote-description', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -420,6 +430,7 @@ export default function QuotesPage() {
     setClientInfo({ name: '', email: '', phone: '', address: '' });
     setProjectType('');
     setProjectDescription('');
+    setQuestionnaireAnswers({});
     setValidityDays('30');
     setItems([{ id: '1', description: '', quantity: 1, unitPrice: 0, total: 0 }]);
     setQuoteLoadState('idle');
@@ -615,27 +626,45 @@ export default function QuotesPage() {
       // Permettre le téléchargement du PDF même si le devis est validé (pas de sauvegarde)
       setIsGenerating(true);
       try {
-        // Télécharger directement le PDF sans sauvegarder
         const pdfItems = items.map((i) => ({
           description: i.description,
           quantity: i.quantity,
           unitPrice: i.unitPrice,
           total: getItemTotal(i),
-          subItems: i.subItems,
+          subItems: i.subItems?.map((s) => ({
+            description: s.description,
+            quantity: s.quantity,
+            unitPrice: s.unitPrice,
+            total: s.total,
+          })),
         }));
-        await downloadQuotePdf({
+        let quoteNum: string | undefined;
+        const allQuotes = await fetchQuotesForUser(user.id);
+        quoteNum = getQuoteDisplayNumber(allQuotes, editingQuoteId);
+        const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : undefined;
+        downloadQuotePdf({
+          clientInfo: {
+            name: clientInfo.name,
+            email: clientInfo.email,
+            phone: clientInfo.phone,
+            address: clientInfo.address,
+          },
+          projectType,
+          projectDescription,
+          validityDays: String(parseInt(validityDays) || 30),
           items: pdfItems,
-          clientName: clientInfo.name,
-          clientEmail: clientInfo.email,
-          clientPhone: clientInfo.phone,
-          clientAddress: clientInfo.address,
-          projectType: projectType,
-          projectDescription: projectDescription,
-          validityDays: parseInt(validityDays) || 30,
-          totalHT: subtotal,
-          totalTTC: total,
-          logoUrl: logoUrl || undefined,
+          subtotal,
+          tva: total - subtotal,
+          total,
+          quoteNumber: quoteNum,
           themeColor: accentColor,
+          companyName: profile?.full_name ?? undefined,
+          companyAddress: profile?.company_address ?? undefined,
+          companyCityPostal: profile?.company_city_postal ?? undefined,
+          companyPhone: profile?.company_phone ?? undefined,
+          companyEmail: profile?.company_email ?? undefined,
+          companySiret: profile?.company_siret ?? undefined,
+          ...(logoDataUrl && { logoDataUrl }),
         });
         setIsGenerating(false);
         return;
@@ -724,11 +753,11 @@ export default function QuotesPage() {
           })),
         }));
         const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : null;
-        const now = new Date();
-        const quoteNum =
-          quoteIdToUse
-            ? `DEVIS-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${quoteIdToUse.slice(0, 8).toUpperCase()}`
-            : undefined;
+        let quoteNum: string | undefined;
+        if (quoteIdToUse && user?.id) {
+          const allQuotes = await fetchQuotesForUser(user.id);
+          quoteNum = getQuoteDisplayNumber(allQuotes, quoteIdToUse);
+        }
         downloadQuotePdf({
           clientInfo,
           projectType,
@@ -876,21 +905,49 @@ export default function QuotesPage() {
         }}
       />
 
-      <Dialog open={selectClientOpen} onOpenChange={setSelectClientOpen}>
+      <Dialog open={selectClientOpen} onOpenChange={(open) => {
+        setSelectClientOpen(open);
+        if (!open) setClientSearchQuery('');
+      }}>
         <DialogContent className="max-w-2xl rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
           <DialogHeader>
             <DialogTitle className="text-xl font-semibold text-gray-900 dark:text-white">
               Choisir un client
             </DialogTitle>
           </DialogHeader>
+          {clients.length > 0 && (
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Rechercher un client (nom, email, téléphone)..."
+                value={clientSearchQuery}
+                onChange={(e) => setClientSearchQuery(e.target.value)}
+                className="pl-9 rounded-xl border-gray-200 dark:border-gray-700"
+              />
+            </div>
+          )}
           <div className="overflow-y-auto max-h-[60vh] pr-2">
             {clients.length === 0 ? (
               <p className="text-sm text-gray-600 dark:text-gray-400 py-4">
                 Aucun client enregistré. Ajoutez des clients depuis la page Clients.
               </p>
-            ) : (
+            ) : (() => {
+              const q = clientSearchQuery.trim().toLowerCase();
+              const filtered = q
+                ? clients.filter(
+                    (c) =>
+                      c.name?.toLowerCase().includes(q) ||
+                      c.email?.toLowerCase().includes(q) ||
+                      (c.phone ?? '').includes(q)
+                  )
+                : clients;
+              return filtered.length === 0 ? (
+                <p className="text-sm text-gray-600 dark:text-gray-400 py-4">
+                  Aucun client trouvé pour &quot;{clientSearchQuery}&quot;.
+                </p>
+              ) : (
               <ul className="space-y-2">
-                {clients.map((client) => (
+                {filtered.map((client) => (
                   <li key={client.id}>
                     <button
                       type="button"
@@ -922,7 +979,8 @@ export default function QuotesPage() {
                   </li>
                 ))}
               </ul>
-            )}
+              );
+            })()}
           </div>
         </DialogContent>
       </Dialog>
@@ -955,7 +1013,7 @@ export default function QuotesPage() {
                           <button
                             type="button"
                             onClick={() => {
-                              const validTypes = ['piscine', 'paysage', 'menuiserie', 'renovation', 'autre'];
+                              const validTypes = ['piscine', 'paysage', 'menuiserie', 'renovation', 'plomberie', 'maconnerie', 'terrasse', 'chauffage', 'isolation', 'electricite', 'peinture', 'autre'];
                               const valueToSet = (chantier.typeChantier && validTypes.includes(chantier.typeChantier)) ? chantier.typeChantier : 'autre';
                               const desc = chantier.notes
                                 ? `${chantier.nom}\n${chantier.notes}`
@@ -1178,6 +1236,13 @@ export default function QuotesPage() {
                             <SelectItem value="paysage">Aménagement Paysager</SelectItem>
                             <SelectItem value="menuiserie">Menuiserie Sur-Mesure</SelectItem>
                             <SelectItem value="renovation">Rénovation</SelectItem>
+                            <SelectItem value="plomberie">Plomberie</SelectItem>
+                            <SelectItem value="maconnerie">Maçonnerie</SelectItem>
+                            <SelectItem value="terrasse">Terrasse & Patio</SelectItem>
+                            <SelectItem value="chauffage">Chauffage & Climatisation</SelectItem>
+                            <SelectItem value="isolation">Isolation de la charpente</SelectItem>
+                            <SelectItem value="electricite">Électricité</SelectItem>
+                            <SelectItem value="peinture">Peinture & Revêtements</SelectItem>
                             <SelectItem value="autre">Autre</SelectItem>
                           </SelectContent>
                         </Select>
@@ -1217,7 +1282,15 @@ export default function QuotesPage() {
                           className="self-start mt-1"
                         />
                       </div>
-                      
+
+                      {projectType && hasQuestionsForType(projectType) && (
+                        <QuotesQuestionnaire
+                          projectType={projectType}
+                          answers={questionnaireAnswers}
+                          onChange={(id, value) => setQuestionnaireAnswers((prev) => ({ ...prev, [id]: value }))}
+                        />
+                      )}
+
                       <div className="flex items-start gap-3 pt-2">
                         <Checkbox
                           id="use-ai-prefill"
@@ -1240,12 +1313,7 @@ export default function QuotesPage() {
                 </Card>
                 <div className="flex justify-between items-center">
                   <div className="min-h-8 flex items-center">
-                    {isAiParsing && (
-                      <div className="flex items-center gap-2 text-sm text-white">
-                        <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                        <span>Votre devis est en train d'être généré, veuillez patienter.</span>
-                      </div>
-                    )}
+                    {isAiParsing && <DevisGeneratingLoader />}
                   </div>
                   <div className="flex gap-2 shrink-0">
                     <Button

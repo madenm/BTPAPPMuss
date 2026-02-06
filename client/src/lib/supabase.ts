@@ -21,6 +21,19 @@ export interface TeamMember {
   status: 'actif' | 'inactif';
   login_code: string;
   user_id: string | null;
+  // Permissions complètes pour toutes les fonctionnalités
+  can_view_dashboard?: boolean;
+  can_use_estimation?: boolean;
+  can_view_all_chantiers?: boolean;
+  can_manage_chantiers?: boolean;
+  can_view_planning?: boolean;
+  can_manage_planning?: boolean;
+  can_access_crm?: boolean;
+  can_create_quotes?: boolean;
+  can_manage_invoices?: boolean;
+  can_use_ai_visualization?: boolean;
+  can_manage_team?: boolean;
+  can_manage_clients?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -34,6 +47,51 @@ function isTeamMembersTableMissing(error: unknown): boolean {
       e.message.includes('team_members') &&
       (e.message.includes('schema cache') || e.message.includes('not find')))
   );
+}
+
+/** Récupère tous les membres (actifs + inactifs) pour la page Gestion équipe */
+export async function fetchAllTeamMembers(): Promise<TeamMember[]> {
+  try {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+
+    const { data, error } = await supabase
+      .from('team_members')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    if (typeof window !== 'undefined') sessionStorage.removeItem(TEAM_MEMBERS_TABLE_MISSING_KEY);
+
+    const membersWithPermissions = (data || []).map(member => {
+      try {
+        const stored = localStorage.getItem(`team_member_permissions_${member.id}`);
+        if (stored) {
+          const permissions = JSON.parse(stored);
+          return { ...member, ...permissions };
+        }
+      } catch (e) {
+        console.warn(`Could not load permissions for member ${member.id}:`, e);
+      }
+      return member;
+    });
+
+    return membersWithPermissions;
+  } catch (error: unknown) {
+    if (isTeamMembersTableMissing(error)) {
+      const alreadyWarned = typeof window !== 'undefined' && sessionStorage.getItem(TEAM_MEMBERS_TABLE_MISSING_KEY) === '1';
+      if (typeof window !== 'undefined') sessionStorage.setItem(TEAM_MEMBERS_TABLE_MISSING_KEY, '1');
+      if (!alreadyWarned) {
+        console.warn(
+          "Table 'team_members' introuvable. Exécutez le script SQL 'supabase-team-and-assignments.sql' dans le SQL Editor de votre projet Supabase pour activer la gestion d'équipe."
+        );
+      }
+      return [];
+    }
+    console.error('Error fetching team members:', error);
+    return [];
+  }
 }
 
 export async function fetchTeamMembers(): Promise<TeamMember[]> {
@@ -50,7 +108,23 @@ export async function fetchTeamMembers(): Promise<TeamMember[]> {
 
     if (error) throw error;
     if (typeof window !== 'undefined') sessionStorage.removeItem(TEAM_MEMBERS_TABLE_MISSING_KEY);
-    return data || [];
+    
+    // Fusionner les permissions depuis localStorage pour chaque membre (solution temporaire
+    // jusqu'à ce que la migration SQL soit exécutée)
+    const membersWithPermissions = (data || []).map(member => {
+      try {
+        const stored = localStorage.getItem(`team_member_permissions_${member.id}`);
+        if (stored) {
+          const permissions = JSON.parse(stored);
+          return { ...member, ...permissions };
+        }
+      } catch (e) {
+        console.warn(`Could not load permissions for member ${member.id}:`, e);
+      }
+      return member;
+    });
+    
+    return membersWithPermissions;
   } catch (error: unknown) {
     if (isTeamMembersTableMissing(error)) {
       const alreadyWarned = typeof window !== 'undefined' && sessionStorage.getItem(TEAM_MEMBERS_TABLE_MISSING_KEY) === '1';
@@ -98,16 +172,89 @@ export async function updateTeamMember(id: string, updates: Partial<TeamMember>)
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('User not authenticated');
 
+    // Filtrer les colonnes de permissions si elles causent des erreurs (colonnes n'existant pas encore dans la DB)
+    // On garde seulement les colonnes de base qui existent toujours
+    const baseUpdates: Partial<TeamMember> = {
+      name: updates.name,
+      role: updates.role,
+      email: updates.email,
+      phone: updates.phone,
+      status: updates.status,
+      login_code: updates.login_code,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Liste des colonnes de permissions qui pourraient ne pas exister
+    const permissionColumns = [
+      'can_view_dashboard',
+      'can_use_estimation',
+      'can_view_all_chantiers',
+      'can_manage_chantiers',
+      'can_view_planning',
+      'can_manage_planning',
+      'can_access_crm',
+      'can_create_quotes',
+      'can_manage_invoices',
+      'can_use_ai_visualization',
+      'can_manage_team',
+      'can_manage_clients',
+    ];
+
+    // Essayer d'abord avec toutes les colonnes
+    let updatePayload = { ...baseUpdates, ...updates, updated_at: new Date().toISOString() };
+    
     const { data, error } = await supabase
       .from('team_members')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('id', id)
       .eq('user_id', userId)
       .select()
       .single();
+
+    // Si erreur liée à une colonne manquante, réessayer sans les colonnes de permissions
+    if (error && error.code === 'PGRST204' && error.message?.includes('column')) {
+      // Stocker les permissions dans localStorage comme solution temporaire
+      // jusqu'à ce que la migration SQL soit exécutée
+      const permissions: Partial<TeamMember> = {};
+      permissionColumns.forEach(col => {
+        if (updates[col as keyof TeamMember] !== undefined) {
+          permissions[col as keyof TeamMember] = updates[col as keyof TeamMember];
+        }
+      });
+      if (Object.keys(permissions).length > 0) {
+        try {
+          localStorage.setItem(`team_member_permissions_${id}`, JSON.stringify(permissions));
+        } catch (e) {
+          console.warn('Could not save permissions to localStorage:', e);
+        }
+      }
+      
+      // Réessayer avec seulement les colonnes de base
+      const { data: retryData, error: retryError } = await supabase
+        .from('team_members')
+        .update(baseUpdates)
+        .eq('id', id)
+        .eq('user_id', userId)
+        .select()
+        .single();
+
+      if (retryError) throw retryError;
+      
+      // Fusionner les permissions depuis localStorage avec les données retournées
+      if (retryData) {
+        try {
+          const storedPermissions = localStorage.getItem(`team_member_permissions_${id}`);
+          if (storedPermissions) {
+            const parsed = JSON.parse(storedPermissions);
+            return { ...retryData, ...parsed };
+          }
+        } catch (e) {
+          console.warn('Could not load permissions from localStorage:', e);
+        }
+      }
+      
+      return retryData;
+    }
 
     if (error) throw error;
     return data;
@@ -137,6 +284,8 @@ export async function deleteTeamMember(id: string): Promise<boolean> {
 
 export async function verifyTeamMemberCode(code: string, invitationToken?: string): Promise<TeamMember | null> {
   try {
+    let member: TeamMember | null = null;
+    
     // Si un token d'invitation est fourni, utiliser la RPC (fonction SECURITY DEFINER) pour éviter la RLS
     if (invitationToken) {
       const { data, error } = await supabase.rpc('verify_invite_code', {
@@ -145,25 +294,122 @@ export async function verifyTeamMemberCode(code: string, invitationToken?: strin
       });
 
       if (error || data == null) return null;
-      return data as TeamMember;
+      member = data as TeamMember;
+    } else {
+      // Sinon, vérification normale avec auth
+      const userId = await getCurrentUserId();
+      if (!userId) throw new Error('User not authenticated');
+
+      const { data, error } = await supabase
+        .from('team_members')
+        .select('*')
+        .eq('login_code', code)
+        .eq('status', 'actif')
+        .eq('user_id', userId)
+        .single();
+
+      if (error || !data) return null;
+      member = data;
     }
-
-    // Sinon, vérification normale avec auth
-    const userId = await getCurrentUserId();
-    if (!userId) throw new Error('User not authenticated');
-
-    const { data, error } = await supabase
-      .from('team_members')
-      .select('*')
-      .eq('login_code', code)
-      .eq('status', 'actif')
-      .eq('user_id', userId)
-      .single();
-
-    if (error || !data) return null;
-    return data;
+    
+    // Charger les permissions depuis localStorage si elles existent
+    // (solution temporaire jusqu'à ce que la migration SQL soit exécutée)
+    // Les permissions stockées dans team_member_permissions_${id} ont la priorité
+    if (member) {
+      try {
+        const storedPermissions = localStorage.getItem(`team_member_permissions_${member.id}`);
+        if (storedPermissions) {
+          const permissions = JSON.parse(storedPermissions);
+          // Fusionner les permissions avec le membre
+          // Donner la priorité aux permissions stockées dans localStorage car c'est là que l'admin les a définies
+          return {
+            ...member,
+            // Si les permissions sont stockées dans localStorage, les utiliser en priorité
+            // Sinon, utiliser celles du membre (qui peuvent venir de la DB)
+            can_view_dashboard: permissions.can_view_dashboard !== undefined 
+              ? permissions.can_view_dashboard 
+              : (member.can_view_dashboard ?? false),
+            can_use_estimation: permissions.can_use_estimation !== undefined 
+              ? permissions.can_use_estimation 
+              : (member.can_use_estimation ?? false),
+            can_view_all_chantiers: permissions.can_view_all_chantiers !== undefined 
+              ? permissions.can_view_all_chantiers 
+              : (member.can_view_all_chantiers ?? false),
+            can_manage_chantiers: permissions.can_manage_chantiers !== undefined 
+              ? permissions.can_manage_chantiers 
+              : (member.can_manage_chantiers ?? false),
+            can_view_planning: permissions.can_view_planning !== undefined 
+              ? permissions.can_view_planning 
+              : (member.can_view_planning ?? false),
+            can_manage_planning: permissions.can_manage_planning !== undefined 
+              ? permissions.can_manage_planning 
+              : (member.can_manage_planning ?? false),
+            can_access_crm: permissions.can_access_crm !== undefined 
+              ? permissions.can_access_crm 
+              : (member.can_access_crm ?? false),
+            can_create_quotes: permissions.can_create_quotes !== undefined 
+              ? permissions.can_create_quotes 
+              : (member.can_create_quotes ?? false),
+            can_manage_invoices: permissions.can_manage_invoices !== undefined 
+              ? permissions.can_manage_invoices 
+              : (member.can_manage_invoices ?? false),
+            can_use_ai_visualization: permissions.can_use_ai_visualization !== undefined 
+              ? permissions.can_use_ai_visualization 
+              : (member.can_use_ai_visualization ?? false),
+            can_manage_team: permissions.can_manage_team !== undefined 
+              ? permissions.can_manage_team 
+              : (member.can_manage_team ?? false),
+            can_manage_clients: permissions.can_manage_clients !== undefined 
+              ? permissions.can_manage_clients 
+              : (member.can_manage_clients ?? false),
+          };
+        }
+      } catch (e) {
+        console.warn('Could not load permissions from localStorage:', e);
+      }
+    }
+    
+    return member;
   } catch (error) {
     console.error('Error verifying code:', error);
+    return null;
+  }
+}
+
+/** Normalise les permissions d'un membre (toujours des booléens). */
+function normalizeMemberPermissions(m: Record<string, unknown>): TeamMember {
+  const b = (v: unknown) => v === true || v === 'true';
+  return {
+    ...m,
+    can_view_dashboard: b(m.can_view_dashboard),
+    can_use_estimation: b(m.can_use_estimation),
+    can_view_all_chantiers: b(m.can_view_all_chantiers),
+    can_manage_chantiers: b(m.can_manage_chantiers),
+    can_view_planning: b(m.can_view_planning),
+    can_manage_planning: b(m.can_manage_planning),
+    can_access_crm: b(m.can_access_crm),
+    can_create_quotes: b(m.can_create_quotes),
+    can_manage_invoices: b(m.can_manage_invoices),
+    can_use_ai_visualization: b(m.can_use_ai_visualization),
+    can_manage_team: b(m.can_manage_team),
+    can_manage_clients: b(m.can_manage_clients),
+  } as TeamMember;
+}
+
+/**
+ * Rafraîchit les données du membre (dont les permissions) depuis la base.
+ * Utiliser au chargement du dashboard pour avoir les dernières permissions.
+ */
+export async function refreshTeamMember(memberId: string, loginCode: string): Promise<TeamMember | null> {
+  try {
+    const { data, error } = await supabase.rpc('get_team_member_refresh', {
+      p_member_id: memberId,
+      p_login_code: loginCode,
+    });
+    if (error || data == null) return null;
+    return normalizeMemberPermissions(data as Record<string, unknown>);
+  } catch (error) {
+    console.error('Error refreshing team member:', error);
     return null;
   }
 }
@@ -235,7 +481,13 @@ function generateInvitationToken(): string {
   return crypto.randomUUID() + '-' + Date.now().toString(36);
 }
 
-// Créer une invitation pour un membre d'équipe
+/** Récupère la dernière invitation pour un membre (pour réutiliser le même lien). */
+async function getLatestInvitationByTeamMember(teamMemberId: string): Promise<TeamInvitation | null> {
+  const list = await fetchTeamInvitationsByMember(teamMemberId);
+  return list.length > 0 ? list[0] : null;
+}
+
+// Créer une invitation pour un membre d'équipe (réutilise le même lien si une invitation existe déjà)
 export async function createTeamInvitation(
   teamMemberId: string,
   email: string
@@ -244,10 +496,28 @@ export async function createTeamInvitation(
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('User not authenticated');
 
-    const token = generateInvitationToken();
+    const existing = await getLatestInvitationByTeamMember(teamMemberId);
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7); // Expire dans 7 jours
 
+    if (existing) {
+      // Réutiliser le même lien : mettre à jour expiration et remettre used=false pour que le lien reste valide à chaque connexion
+      const { error } = await supabase
+        .from('team_invitations')
+        .update({
+          expires_at: expiresAt.toISOString(),
+          updated_at: new Date().toISOString(),
+          used: false,
+        })
+        .eq('id', existing.id);
+
+      if (error) throw error;
+
+      const inviteLink = `${window.location.origin}/invite/${existing.token}`;
+      return { invitation: { ...existing, expires_at: expiresAt.toISOString(), used: false }, inviteLink };
+    }
+
+    const token = generateInvitationToken();
     const { data, error } = await supabase
       .from('team_invitations')
       .insert({
@@ -262,13 +532,33 @@ export async function createTeamInvitation(
 
     if (error) throw error;
 
-    // Générer le lien d'invitation
     const inviteLink = `${window.location.origin}/invite/${token}`;
-
     return { invitation: data, inviteLink };
   } catch (error) {
     console.error('Error creating invitation:', error);
     return { invitation: null, inviteLink: null };
+  }
+}
+
+/** Récupère l'historique des invitations pour un membre */
+export async function fetchTeamInvitationsByMember(teamMemberId: string): Promise<TeamInvitation[]> {
+  try {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+
+    const { data, error } = await supabase
+      .from('team_invitations')
+      .select('*')
+      .eq('team_member_id', teamMemberId)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (error) throw error;
+    return data ?? [];
+  } catch (error) {
+    console.error('Error fetching invitations by member:', error);
+    return [];
   }
 }
 
@@ -361,6 +651,30 @@ export async function updateAdminCode(newCode: string): Promise<AdminCode | null
 }
 
 // Chantier assignments (affectation chantier <-> membre d'équipe)
+
+/** Récupère les affectations pour plusieurs membres en une requête. Retourne Map<memberId, chantierIds[]> */
+export async function fetchChantierAssignmentsMap(teamMemberIds: string[]): Promise<Record<string, string[]>> {
+  if (teamMemberIds.length === 0) return {};
+  try {
+    const { data, error } = await supabase
+      .from('chantier_assignments')
+      .select('team_member_id, chantier_id')
+      .in('team_member_id', teamMemberIds);
+
+    if (error) throw error;
+    const map: Record<string, string[]> = {};
+    for (const id of teamMemberIds) map[id] = [];
+    for (const row of (data ?? []) as { team_member_id: string; chantier_id: string }[]) {
+      if (!map[row.team_member_id]) map[row.team_member_id] = [];
+      map[row.team_member_id].push(row.chantier_id);
+    }
+    return map;
+  } catch (error) {
+    console.error('Error fetching chantier assignments map:', error);
+    return {};
+  }
+}
+
 export async function fetchChantierAssignmentsByTeamMember(teamMemberId: string): Promise<string[]> {
   try {
     const userId = await getCurrentUserId();

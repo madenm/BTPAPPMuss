@@ -7,9 +7,11 @@ import { Badge } from '@/components/ui/badge'
 import TeamSidebar from '@/components/TeamSidebar'
 import { GlobalBackground } from '@/components/GlobalBackground'
 import { UserAccountButton } from '@/components/UserAccountButton'
-import { Building, Calendar, Clock, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Building, Calendar, Clock, ChevronLeft, ChevronRight, FileText } from 'lucide-react'
 import { useChantiers } from '@/context/ChantiersContext'
 import type { Chantier } from '@/context/ChantiersContext'
+import QuotesPage from '@/pages/QuotesPage'
+import { refreshTeamMember, type TeamMember } from '@/lib/supabase'
 
 // Helpers pour le planning (alignés sur PlanningPage)
 function parseLocalDate(dateStr: string): Date {
@@ -72,27 +74,173 @@ const DAY_NAMES = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
 export default function TeamDashboard() {
   const [location, setLocation] = useLocation()
   const tabFromPath = useMemo(() => {
-    if (location === '/team-dashboard/projects') return 'projects' as const
-    if (location === '/team-dashboard/planning') return 'planning' as const
+    // Vérifier les permissions avant de déterminer l'onglet actif
+    const storedMember = localStorage.getItem('teamMember');
+    let teamMemberForCheck: TeamMember | null = null;
+    if (storedMember) {
+      try {
+        const member = JSON.parse(storedMember);
+        let permissionsFromStorage: Partial<TeamMember> = {};
+        try {
+          const storedPermissions = localStorage.getItem(`team_member_permissions_${member.id}`);
+          if (storedPermissions) {
+            permissionsFromStorage = JSON.parse(storedPermissions);
+          }
+        } catch (e) {
+          console.warn('Could not load permissions from localStorage:', e);
+        }
+        // Donner la priorité aux permissions stockées dans localStorage
+        teamMemberForCheck = {
+          ...member,
+          can_view_dashboard: permissionsFromStorage.can_view_dashboard !== undefined 
+            ? permissionsFromStorage.can_view_dashboard 
+            : (member.can_view_dashboard ?? false),
+          can_use_estimation: permissionsFromStorage.can_use_estimation !== undefined 
+            ? permissionsFromStorage.can_use_estimation 
+            : (member.can_use_estimation ?? false),
+          can_view_all_chantiers: permissionsFromStorage.can_view_all_chantiers !== undefined 
+            ? permissionsFromStorage.can_view_all_chantiers 
+            : (member.can_view_all_chantiers ?? false),
+          can_manage_chantiers: permissionsFromStorage.can_manage_chantiers !== undefined 
+            ? permissionsFromStorage.can_manage_chantiers 
+            : (member.can_manage_chantiers ?? false),
+          can_view_planning: permissionsFromStorage.can_view_planning !== undefined 
+            ? permissionsFromStorage.can_view_planning 
+            : (member.can_view_planning ?? false),
+          can_manage_planning: permissionsFromStorage.can_manage_planning !== undefined 
+            ? permissionsFromStorage.can_manage_planning 
+            : (member.can_manage_planning ?? false),
+          can_access_crm: permissionsFromStorage.can_access_crm !== undefined 
+            ? permissionsFromStorage.can_access_crm 
+            : (member.can_access_crm ?? false),
+          can_create_quotes: permissionsFromStorage.can_create_quotes !== undefined 
+            ? permissionsFromStorage.can_create_quotes 
+            : (member.can_create_quotes ?? false),
+          can_manage_invoices: permissionsFromStorage.can_manage_invoices !== undefined 
+            ? permissionsFromStorage.can_manage_invoices 
+            : (member.can_manage_invoices ?? false),
+          can_use_ai_visualization: permissionsFromStorage.can_use_ai_visualization !== undefined 
+            ? permissionsFromStorage.can_use_ai_visualization 
+            : (member.can_use_ai_visualization ?? false),
+          can_manage_team: permissionsFromStorage.can_manage_team !== undefined 
+            ? permissionsFromStorage.can_manage_team 
+            : (member.can_manage_team ?? false),
+          can_manage_clients: permissionsFromStorage.can_manage_clients !== undefined 
+            ? permissionsFromStorage.can_manage_clients 
+            : (member.can_manage_clients ?? false),
+        } as TeamMember;
+      } catch (e) {
+        console.error('Error parsing team member:', e);
+      }
+    }
+    
+    if (location === '/team-dashboard/projects') {
+      if (teamMemberForCheck?.can_view_all_chantiers || teamMemberForCheck?.can_manage_chantiers) {
+        return 'projects' as const;
+      }
+      return 'overview' as const;
+    }
+    if (location === '/team-dashboard/planning') {
+      if (teamMemberForCheck?.can_view_planning || teamMemberForCheck?.can_manage_planning) {
+        return 'planning' as const;
+      }
+      return 'overview' as const;
+    }
+    if (location === '/team-dashboard/quotes') {
+      if (teamMemberForCheck?.can_create_quotes) {
+        return 'quotes' as const;
+      }
+      return 'overview' as const;
+    }
     return 'overview' as const
   }, [location])
-  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'planning'>(tabFromPath)
+  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'planning' | 'quotes'>(tabFromPath)
   const { chantiers, refreshChantiers, loading } = useChantiers()
-  const [teamMember, setTeamMember] = useState<any>(null)
+  const [teamMember, setTeamMember] = useState<TeamMember | null>(null)
 
   useEffect(() => {
     setActiveTab(tabFromPath)
   }, [tabFromPath])
+  
+  // Rediriger si l'utilisateur n'a pas la permission pour l'onglet demandé
+  useEffect(() => {
+    if (!teamMember) return;
+    
+    if (tabFromPath === 'projects' && !teamMember.can_view_all_chantiers && !teamMember.can_manage_chantiers) {
+      setLocation('/team-dashboard');
+    } else if (tabFromPath === 'planning' && !teamMember.can_view_planning && !teamMember.can_manage_planning) {
+      setLocation('/team-dashboard');
+    } else if (tabFromPath === 'quotes' && !teamMember.can_create_quotes) {
+      setLocation('/team-dashboard');
+    }
+  }, [tabFromPath, teamMember, setLocation])
 
   useEffect(() => {
     const storedMember = localStorage.getItem('teamMember')
-    if (storedMember) {
-      setTeamMember(JSON.parse(storedMember))
+    if (!storedMember) return
+
+    const applyMember = (memberWithPermissions: TeamMember) => {
+      setTeamMember(memberWithPermissions)
       refreshChantiers()
+      window.dispatchEvent(new CustomEvent('teamMemberRefreshed'))
     }
+
+    const mergePermissions = (member: TeamMember): TeamMember => {
+      let permissionsFromStorage: Partial<TeamMember> = {}
+      try {
+        const storedPermissions = localStorage.getItem(`team_member_permissions_${member.id}`)
+        if (storedPermissions) permissionsFromStorage = JSON.parse(storedPermissions)
+      } catch (e) {
+        console.warn('Could not load permissions from localStorage:', e)
+      }
+      return {
+        ...member,
+        can_view_dashboard: permissionsFromStorage.can_view_dashboard !== undefined ? permissionsFromStorage.can_view_dashboard : (member.can_view_dashboard ?? false),
+        can_use_estimation: permissionsFromStorage.can_use_estimation !== undefined ? permissionsFromStorage.can_use_estimation : (member.can_use_estimation ?? false),
+        can_view_all_chantiers: permissionsFromStorage.can_view_all_chantiers !== undefined ? permissionsFromStorage.can_view_all_chantiers : (member.can_view_all_chantiers ?? false),
+        can_manage_chantiers: permissionsFromStorage.can_manage_chantiers !== undefined ? permissionsFromStorage.can_manage_chantiers : (member.can_manage_chantiers ?? false),
+        can_view_planning: permissionsFromStorage.can_view_planning !== undefined ? permissionsFromStorage.can_view_planning : (member.can_view_planning ?? false),
+        can_manage_planning: permissionsFromStorage.can_manage_planning !== undefined ? permissionsFromStorage.can_manage_planning : (member.can_manage_planning ?? false),
+        can_access_crm: permissionsFromStorage.can_access_crm !== undefined ? permissionsFromStorage.can_access_crm : (member.can_access_crm ?? false),
+        can_create_quotes: permissionsFromStorage.can_create_quotes !== undefined ? permissionsFromStorage.can_create_quotes : (member.can_create_quotes ?? false),
+        can_manage_invoices: permissionsFromStorage.can_manage_invoices !== undefined ? permissionsFromStorage.can_manage_invoices : (member.can_manage_invoices ?? false),
+        can_use_ai_visualization: permissionsFromStorage.can_use_ai_visualization !== undefined ? permissionsFromStorage.can_use_ai_visualization : (member.can_use_ai_visualization ?? false),
+        can_manage_team: permissionsFromStorage.can_manage_team !== undefined ? permissionsFromStorage.can_manage_team : (member.can_manage_team ?? false),
+        can_manage_clients: permissionsFromStorage.can_manage_clients !== undefined ? permissionsFromStorage.can_manage_clients : (member.can_manage_clients ?? false),
+      }
+    }
+
+    ;(async () => {
+      try {
+        const member = JSON.parse(storedMember) as TeamMember
+        const code = sessionStorage.getItem('teamMemberLoginCode')
+        if (member.id && code) {
+          const refreshed = await refreshTeamMember(member.id, code)
+          if (refreshed) {
+            localStorage.setItem('teamMember', JSON.stringify(refreshed))
+            applyMember(mergePermissions(refreshed))
+            return
+          }
+        }
+        applyMember(mergePermissions(member))
+      } catch (error) {
+        console.error('Error loading team member:', error)
+      }
+    })()
   }, [refreshChantiers])
 
-  const goToTab = (tab: 'overview' | 'projects' | 'planning') => {
+  const goToTab = (tab: 'overview' | 'projects' | 'planning' | 'quotes') => {
+    // Vérifier les permissions avant de changer d'onglet
+    if (tab === 'projects' && !teamMember?.can_view_all_chantiers && !teamMember?.can_manage_chantiers) {
+      return; // Pas de permission pour voir les chantiers
+    }
+    if (tab === 'planning' && !teamMember?.can_view_planning && !teamMember?.can_manage_planning) {
+      return; // Pas de permission pour voir le planning
+    }
+    if (tab === 'quotes' && !teamMember?.can_create_quotes) {
+      return; // Pas de permission pour créer des devis
+    }
+    
     setActiveTab(tab)
     const path = tab === 'overview' ? '/team-dashboard' : `/team-dashboard/${tab}`
     setLocation(path)
@@ -132,7 +280,7 @@ export default function TeamDashboard() {
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             className="flex-1 flex flex-col relative z-10 ml-64 rounded-l-3xl overflow-hidden"
           >
-            <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-6 py-4 rounded-tl-3xl ml-20">
+            <header className="bg-black/10 backdrop-blur-xl border-b border-white/10 px-6 py-4 rounded-tl-3xl ml-20">
               <div className="flex items-center justify-between">
                 <div>
                   <h1 className="text-2xl font-bold text-white">
@@ -156,8 +304,9 @@ export default function TeamDashboard() {
             </header>
 
             {/* Tabs Navigation */}
-            <div className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-6 rounded-tl-3xl">
+            <div className="bg-black/10 backdrop-blur-xl border-b border-white/10 px-6 rounded-tl-3xl">
               <div className="flex gap-2 overflow-x-auto">
+                {/* Vue d'ensemble - toujours accessible */}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -166,24 +315,45 @@ export default function TeamDashboard() {
                 >
                   Vue d'ensemble
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => goToTab('projects')}
-                  className={activeTab === 'projects' ? 'bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}
-                >
-                  <Building className="h-4 w-4 mr-2" />
-                  Mes Chantiers
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => goToTab('planning')}
-                  className={activeTab === 'planning' ? 'bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}
-                >
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Planning
-                </Button>
+                
+                {/* Mes Chantiers - seulement si permission */}
+                {(teamMember?.can_view_all_chantiers || teamMember?.can_manage_chantiers) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => goToTab('projects')}
+                    className={activeTab === 'projects' ? 'bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}
+                  >
+                    <Building className="h-4 w-4 mr-2" />
+                    Mes Chantiers
+                  </Button>
+                )}
+                
+                {/* Planning - seulement si permission */}
+                {(teamMember?.can_view_planning || teamMember?.can_manage_planning) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => goToTab('planning')}
+                    className={activeTab === 'planning' ? 'bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}
+                  >
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Planning
+                  </Button>
+                )}
+                
+                {/* Créer un Devis - seulement si permission */}
+                {teamMember?.can_create_quotes && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => goToTab('quotes')}
+                    className={activeTab === 'quotes' ? 'bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Créer un Devis
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -191,84 +361,144 @@ export default function TeamDashboard() {
             <main className="flex-1 p-6 space-y-6 overflow-auto ml-20">
               {activeTab === 'overview' && (
                 <div className="space-y-6">
-                  {/* Stats Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white">
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Mes Chantiers</CardTitle>
-                        <Building className="h-4 w-4 text-white/70" />
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">{myChantiers.length}</div>
-                        <p className="text-xs text-white/70">Chantiers actifs</p>
-                      </CardContent>
-                    </Card>
+                  {(() => {
+                    // Si le membre n'est pas encore chargé, afficher un message de chargement
+                    if (!teamMember) {
+                      return (
+                        <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                          <CardContent className="py-12 text-center">
+                            <p className="text-white/70">Chargement...</p>
+                          </CardContent>
+                        </Card>
+                      );
+                    }
+                    
+                    // Vérifier si le membre a au moins une permission accordée
+                    const hasAnyPermission = 
+                      teamMember.can_view_dashboard ||
+                      teamMember.can_use_estimation ||
+                      teamMember.can_view_all_chantiers ||
+                      teamMember.can_manage_chantiers ||
+                      teamMember.can_view_planning ||
+                      teamMember.can_manage_planning ||
+                      teamMember.can_access_crm ||
+                      teamMember.can_create_quotes ||
+                      teamMember.can_manage_invoices ||
+                      teamMember.can_use_ai_visualization ||
+                      teamMember.can_manage_team ||
+                      teamMember.can_manage_clients;
+                    
+                    // Si le membre n'a aucune permission, afficher le message d'accès limité
+                    if (!hasAnyPermission) {
+                      return (
+                        <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                          <CardContent className="py-12 text-center">
+                            <Building className="h-12 w-12 mx-auto mb-4 text-white/50" />
+                            <p className="text-white/70 text-lg font-semibold">Accès limité</p>
+                            <p className="text-sm text-white/50 mt-2">Vous n'avez pas accès au tableau de bord complet. Contactez votre administrateur pour obtenir cette autorisation.</p>
+                          </CardContent>
+                        </Card>
+                      );
+                    }
+                    
+                    // Sinon, afficher le contenu du dashboard
+                    return (
+                      <>
+                        {/* Stats Cards - seulement si permission de voir les chantiers */}
+                        {(teamMember.can_view_all_chantiers || teamMember.can_manage_chantiers) && (
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">Mes Chantiers</CardTitle>
+                                <Building className="h-4 w-4 text-white/70" />
+                              </CardHeader>
+                              <CardContent>
+                                <div className="text-2xl font-bold">{myChantiers.length}</div>
+                                <p className="text-xs text-white/70">Chantiers actifs</p>
+                              </CardContent>
+                            </Card>
 
-                    <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white">
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">En Cours</CardTitle>
-                        <Clock className="h-4 w-4 text-white/70" />
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">{chantiersEnCours.length}</div>
-                        <p className="text-xs text-white/70">Chantiers en cours</p>
-                      </CardContent>
-                    </Card>
+                            <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">En Cours</CardTitle>
+                                <Clock className="h-4 w-4 text-white/70" />
+                              </CardHeader>
+                              <CardContent>
+                                <div className="text-2xl font-bold">{chantiersEnCours.length}</div>
+                                <p className="text-xs text-white/70">Chantiers en cours</p>
+                              </CardContent>
+                            </Card>
 
-                    <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white">
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Planifiés</CardTitle>
-                        <Calendar className="h-4 w-4 text-white/70" />
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">{chantiersPlanifies.length}</div>
-                        <p className="text-xs text-white/70">Chantiers planifiés</p>
-                      </CardContent>
-                    </Card>
-                  </div>
+                            <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">Planifiés</CardTitle>
+                                <Calendar className="h-4 w-4 text-white/70" />
+                              </CardHeader>
+                              <CardContent>
+                                <div className="text-2xl font-bold">{chantiersPlanifies.length}</div>
+                                <p className="text-xs text-white/70">Chantiers planifiés</p>
+                              </CardContent>
+                            </Card>
+                          </div>
+                        )}
 
-                  {/* Mes Chantiers Récents */}
-                  <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white">
-                    <CardHeader>
-                      <CardTitle>Mes Chantiers Récents</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {chantiers.length === 0 ? (
-                        <p className="text-white/70 text-center py-4">Aucun chantier assigné</p>
-                      ) : (
-                        <div className="space-y-3">
-                          {chantiers.slice(0, 5).map((chantier) => (
-                            <div
-                              key={chantier.id}
-                              className="flex items-center justify-between p-3 bg-black/20 backdrop-blur-md border border-white/10 rounded-lg"
-                            >
-                              <div>
-                                <p className="font-medium text-white">{chantier.nom}</p>
-                                <p className="text-sm text-white/70">Client: {chantier.clientName}</p>
-                                <p className="text-xs text-white/60">Début: {chantier.dateDebut} ({chantier.duree})</p>
-                              </div>
-                              <Badge className={
-                                chantier.statut === 'planifié' ? 'bg-blue-500/20 text-blue-300' :
-                                chantier.statut === 'en cours' ? 'bg-yellow-500/20 text-yellow-300' :
-                                'bg-green-500/20 text-green-300'
-                              }>
-                                {chantier.statut}
-                              </Badge>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                        {/* Mes Chantiers Récents - seulement si permission de voir les chantiers */}
+                        {(teamMember.can_view_all_chantiers || teamMember.can_manage_chantiers) && (
+                          <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                            <CardHeader>
+                              <CardTitle>Mes Chantiers Récents</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              {chantiers.length === 0 ? (
+                                <p className="text-white/70 text-center py-4">Aucun chantier assigné</p>
+                              ) : (
+                                <div className="space-y-3">
+                                  {chantiers.slice(0, 5).map((chantier) => (
+                                    <div
+                                      key={chantier.id}
+                                      className="flex items-center justify-between p-3 bg-black/10 backdrop-blur-md border border-white/10 rounded-lg"
+                                    >
+                                      <div>
+                                        <p className="font-medium text-white">{chantier.nom}</p>
+                                        <p className="text-sm text-white/70">Client: {chantier.clientName}</p>
+                                        <p className="text-xs text-white/60">Début: {chantier.dateDebut} ({chantier.duree})</p>
+                                      </div>
+                                      <Badge className={
+                                        chantier.statut === 'planifié' ? 'bg-blue-500/20 text-blue-300' :
+                                        chantier.statut === 'en cours' ? 'bg-yellow-500/20 text-yellow-300' :
+                                        'bg-green-500/20 text-green-300'
+                                      }>
+                                        {chantier.statut}
+                                      </Badge>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        )}
+                      </>
+                    )
+                  })()}
                 </div>
               )}
 
               {activeTab === 'projects' && (
-                <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white">
-                  <CardHeader>
-                    <CardTitle>Mes Chantiers</CardTitle>
-                  </CardHeader>
-                  <CardContent>
+                <>
+                  {!teamMember?.can_view_all_chantiers && !teamMember?.can_manage_chantiers ? (
+                    <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                      <CardContent className="py-12 text-center">
+                        <Building className="h-12 w-12 mx-auto mb-4 text-white/50" />
+                        <p className="text-white/70 text-lg font-semibold">Accès refusé</p>
+                        <p className="text-sm text-white/50 mt-2">Vous n'avez pas la permission de voir les chantiers. Contactez votre administrateur pour obtenir cette autorisation.</p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                      <CardHeader>
+                        <CardTitle>Mes Chantiers</CardTitle>
+                      </CardHeader>
+                      <CardContent>
                     {loading ? (
                       <div className="text-center py-8">
                         <p className="text-white/70">Chargement des chantiers...</p>
@@ -282,7 +512,7 @@ export default function TeamDashboard() {
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {chantiers.map((chantier) => (
-                          <Card key={chantier.id} className="bg-black/20 backdrop-blur-lg border border-white/10 text-white">
+                          <Card key={chantier.id} className="bg-black/10 backdrop-blur-lg border border-white/10 text-white">
                             <CardHeader>
                               <CardTitle className="text-lg">{chantier.nom}</CardTitle>
                             </CardHeader>
@@ -311,12 +541,40 @@ export default function TeamDashboard() {
                     )}
                   </CardContent>
                 </Card>
+                  )}
+                </>
+              )}
+
+              {activeTab === 'quotes' && (
+                <div className="space-y-6">
+                  {teamMember?.can_create_quotes ? (
+                    <QuotesPage />
+                  ) : (
+                    <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                      <CardContent className="py-12 text-center">
+                        <FileText className="h-12 w-12 mx-auto mb-4 text-white/50" />
+                        <p className="text-white/70 text-lg font-semibold">Accès refusé</p>
+                        <p className="text-sm text-white/50 mt-2">Vous n'avez pas la permission de créer des devis. Contactez votre administrateur pour obtenir cette autorisation.</p>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
               )}
 
               {activeTab === 'planning' && (
-                <div className="space-y-4">
-                  {!loading && chantiers.length === 0 ? (
-                    <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white">
+                <>
+                  {!teamMember?.can_view_planning && !teamMember?.can_manage_planning ? (
+                    <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                      <CardContent className="py-12 text-center">
+                        <Calendar className="h-12 w-12 mx-auto mb-4 text-white/50" />
+                        <p className="text-white/70 text-lg font-semibold">Accès refusé</p>
+                        <p className="text-sm text-white/50 mt-2">Vous n'avez pas la permission de voir le planning. Contactez votre administrateur pour obtenir cette autorisation.</p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="space-y-4">
+                      {!loading && chantiers.length === 0 ? (
+                    <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
                       <CardContent className="py-12 text-center">
                         <Calendar className="h-12 w-12 mx-auto mb-4 text-white/50" />
                         <p className="text-white/70">Aucun chantier assigné</p>
@@ -325,7 +583,7 @@ export default function TeamDashboard() {
                     </Card>
                   ) : (
                     <>
-                  <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white">
+                  <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
                     <CardHeader>
                       <div className="flex items-center justify-between flex-wrap gap-2">
                         <CardTitle>Mon Planning</CardTitle>
@@ -361,7 +619,7 @@ export default function TeamDashboard() {
                       </div>
                     </CardHeader>
                   </Card>
-                  <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white">
+                  <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
                     <CardContent className="p-6">
                       <div className="grid grid-cols-7 gap-2 mb-4">
                         {DAY_NAMES.map((day) => (
@@ -425,7 +683,7 @@ export default function TeamDashboard() {
                       </div>
                     </CardContent>
                   </Card>
-                  <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white">
+                  <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
                     <CardContent className="py-3">
                       <div className="flex flex-wrap gap-4">
                         <div className="flex items-center gap-2">
@@ -445,7 +703,9 @@ export default function TeamDashboard() {
                   </Card>
                     </>
                   )}
-                </div>
+                    </div>
+                  )}
+                </>
               )}
             </main>
           </motion.div>

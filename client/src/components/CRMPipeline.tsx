@@ -14,10 +14,11 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { Mail, Phone, Plus, Loader2, Upload, X } from "lucide-react"
+import { Mail, Phone, Plus, Loader2, Upload, X, Search, User } from "lucide-react"
 import { motion } from "framer-motion"
 import { useAuth } from "@/context/AuthContext"
 import { useUserSettings } from "@/context/UserSettingsContext"
+import { useChantiers } from "@/context/ChantiersContext"
 import {
   type Prospect,
   fetchProspectsForUser,
@@ -51,11 +52,13 @@ const DEFAULT_THEME_COLOR = "#8b5cf6"
 export function CRMPipeline() {
   const { user } = useAuth()
   const { profile, logoUrl, themeColor } = useUserSettings()
+  const { clients } = useChantiers()
   const accentColor = themeColor || DEFAULT_THEME_COLOR
   const [prospects, setProspects] = useState<Prospect[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [clientSearchQuery, setClientSearchQuery] = useState("")
   const [newProspect, setNewProspect] = useState({
     name: "",
     email: "",
@@ -168,6 +171,17 @@ export function CRMPipeline() {
     setProspects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
   }
 
+  const handleSelectClient = (client: { name: string; email: string; phone?: string | null }) => {
+    setNewProspect({
+      name: client.name,
+      email: client.email,
+      phone: client.phone || "",
+      company: "",
+      notes: "",
+    })
+    setClientSearchQuery("")
+  }
+
   const handleAddProspect = async () => {
     if (!user?.id || !newProspect.name.trim() || !newProspect.email.trim()) {
       toast({ title: "Nom et email requis", variant: "destructive" })
@@ -184,6 +198,7 @@ export function CRMPipeline() {
       })
       setProspects((prev) => [created, ...prev])
       setNewProspect({ name: "", email: "", phone: "", company: "", notes: "" })
+      setClientSearchQuery("")
       setAddDialogOpen(false)
       toast({ title: "Prospect ajouté" })
     } catch (err) {
@@ -500,11 +515,21 @@ export function CRMPipeline() {
       })
       const invoiceHtml = buildInvoiceEmailHtml({
         clientName: invoiceModalSelectedInvoice.client_name ?? "",
+        clientEmail: invoiceModalSelectedInvoice.client_email,
+        clientPhone: invoiceModalSelectedInvoice.client_phone,
+        clientAddress: invoiceModalSelectedInvoice.client_address,
         invoiceNumber: invoiceModalSelectedInvoice.invoice_number ?? "",
+        items: invoiceModalSelectedInvoice.items ?? [],
+        subtotalHt: invoiceModalSelectedInvoice.subtotal_ht ?? 0,
+        tvaAmount: invoiceModalSelectedInvoice.tva_amount ?? 0,
         total: invoiceModalSelectedInvoice.total_ttc ?? 0,
         dueDate: invoiceModalSelectedInvoice.due_date ?? new Date().toISOString(),
         paymentTerms: invoiceModalSelectedInvoice.payment_terms ?? "",
         companyName: profile?.full_name ?? undefined,
+        companyAddress: profile?.company_address,
+        companyCityPostal: profile?.company_city_postal,
+        companyPhone: profile?.company_phone,
+        companyEmail: profile?.company_email,
         contactBlock: {
           contactName: profile?.full_name,
           phone: profile?.company_phone,
@@ -663,14 +688,85 @@ export function CRMPipeline() {
               Ajouter un prospect
             </Button>
           </DialogTrigger>
-          <DialogContent className="bg-black/20 backdrop-blur-xl border border-white/10 text-white">
-            <DialogHeader>
+          <DialogContent className="bg-black/20 backdrop-blur-xl border border-white/10 text-white max-w-2xl max-h-[90vh] flex flex-col">
+            <DialogHeader className="flex-shrink-0">
               <DialogTitle>Nouveau prospect</DialogTitle>
               <DialogDescription className="text-white/70">
                 Ajoutez un prospect à votre pipeline. Il apparaîtra dans &quot;Tous les prospects&quot;.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4">
+            <div className="overflow-y-auto flex-1 pr-2 custom-scrollbar">
+              <style>{`
+                .custom-scrollbar::-webkit-scrollbar {
+                  width: 6px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-track {
+                  background: rgba(0, 0, 0, 0.1);
+                  border-radius: 3px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb {
+                  background-color: rgba(255, 255, 255, 0.15);
+                  border-radius: 3px;
+                  border: 1px solid rgba(255, 255, 255, 0.05);
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                  background-color: rgba(255, 255, 255, 0.25);
+                }
+                .custom-scrollbar {
+                  scrollbar-width: thin;
+                  scrollbar-color: rgba(255, 255, 255, 0.15) rgba(0, 0, 0, 0.1);
+                }
+              `}</style>
+              {clients.length > 0 && (
+                <div className="space-y-2 py-2">
+                  <Label className="text-white text-sm">Rechercher parmi vos clients existants</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
+                    <Input
+                      placeholder="Rechercher un client (nom, email, téléphone)..."
+                      value={clientSearchQuery}
+                      onChange={(e) => setClientSearchQuery(e.target.value)}
+                      className="pl-9 bg-black/20 border-white/10 text-white placeholder:text-white/50"
+                    />
+                  </div>
+                  {clientSearchQuery.trim() && (() => {
+                    const q = clientSearchQuery.trim().toLowerCase()
+                    const filtered = clients.filter(
+                      (c) =>
+                        c.name?.toLowerCase().includes(q) ||
+                        c.email?.toLowerCase().includes(q) ||
+                        (c.phone ?? "").includes(q)
+                    )
+                    return filtered.length > 0 ? (
+                      <div className="max-h-48 overflow-y-auto space-y-1 border border-white/10 rounded-lg p-2 bg-black/10">
+                        {filtered.map((client) => (
+                          <button
+                            key={client.id}
+                            type="button"
+                            onClick={() => handleSelectClient(client)}
+                            className="w-full text-left p-2 rounded-md border border-white/10 bg-black/20 hover:bg-white/10 transition-colors flex flex-col gap-1"
+                          >
+                            <span className="font-medium text-white text-sm">{client.name}</span>
+                            <span className="text-xs text-white/70 flex items-center gap-1">
+                              <Mail className="h-3 w-3" />
+                              {client.email}
+                            </span>
+                            {client.phone && (
+                              <span className="text-xs text-white/70 flex items-center gap-1">
+                                <Phone className="h-3 w-3" />
+                                {client.phone}
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-white/50 py-2">Aucun client trouvé</p>
+                    )
+                  })()}
+                </div>
+              )}
+              <div className="space-y-4 py-4">
               <div>
                 <Label className="text-white">Nom</Label>
                 <Input
@@ -718,12 +814,16 @@ export function CRMPipeline() {
                   className="bg-black/20 border-white/10 text-white placeholder:text-white/50"
                 />
               </div>
+              </div>
             </div>
-            <DialogFooter>
+            <DialogFooter className="flex-shrink-0">
               <Button
                 variant="outline"
                 className="text-white border-white/20 hover:bg-white/10"
-                onClick={() => setAddDialogOpen(false)}
+                onClick={() => {
+                  setAddDialogOpen(false)
+                  setClientSearchQuery("")
+                }}
               >
                 Annuler
               </Button>

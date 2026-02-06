@@ -52,6 +52,22 @@ export type NewQuotePayload = {
   status?: "brouillon" | "envoyé" | "accepté" | "refusé" | "expiré" | "validé";
 };
 
+/**
+ * Calcule le numéro d'affichage d'un devis (ex. 2026-001) en fonction du rang
+ * parmi les devis de l'année, triés par date de création.
+ */
+export function getQuoteDisplayNumber(quotes: SupabaseQuote[], quoteId: string): string {
+  const quote = quotes.find((q) => q.id === quoteId);
+  if (!quote?.created_at) return "";
+  const year = new Date(quote.created_at).getFullYear();
+  const sameYear = quotes.filter((q) => new Date(q.created_at).getFullYear() === year);
+  sameYear.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  const index = sameYear.findIndex((q) => q.id === quoteId);
+  if (index === -1) return "";
+  const rank = index + 1;
+  return `${year}-${String(rank).padStart(3, "0")}`;
+}
+
 export async function fetchQuotesForUser(
   userId: string,
   status?: string,

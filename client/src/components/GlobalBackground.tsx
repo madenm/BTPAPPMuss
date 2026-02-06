@@ -5,7 +5,7 @@ export function GlobalBackground() {
   const [dimensions, setDimensions] = useState({ width: 1920, height: 1080 })
   const [mounted, setMounted] = useState(false)
 
-  const colors = ["hsl(216, 90%, 27%)", "hsl(243, 68%, 36%)", "hsl(205, 91%, 64%)", "hsl(211, 61%, 57%)"]
+  const colors = ["hsl(216, 90%, 27%)", "hsl(243, 68%, 36%)", "hsl(205, 91%, 36%)", "hsl(211, 61%, 42%)"]
 
   useEffect(() => {
     setMounted(true)
@@ -30,7 +30,7 @@ export function GlobalBackground() {
           swirl={0.1}
           grainMixer={0}
           grainOverlay={0}
-          speed={1}
+          speed={0.25}
           offsetX={0}
           offsetY={0}
           scale={1}

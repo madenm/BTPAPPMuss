@@ -120,7 +120,7 @@ export default function ContactSection() {
 
                 <Button 
                   type="submit" 
-                  className="w-full bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30"
+                  className="w-full bg-white/20 backdrop-blur-md border border-white/5 text-white hover:bg-white/20"
                   data-testid="button-submit-contact"
                 >
                   Demander une Démo

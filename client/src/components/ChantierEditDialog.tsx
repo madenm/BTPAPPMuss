@@ -334,6 +334,13 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
                 <SelectItem value="paysage" className="text-white">Aménagement Paysager</SelectItem>
                 <SelectItem value="menuiserie" className="text-white">Menuiserie Sur-Mesure</SelectItem>
                 <SelectItem value="renovation" className="text-white">Rénovation</SelectItem>
+                <SelectItem value="plomberie" className="text-white">Plomberie</SelectItem>
+                <SelectItem value="maconnerie" className="text-white">Maçonnerie</SelectItem>
+                <SelectItem value="terrasse" className="text-white">Terrasse & Patio</SelectItem>
+                <SelectItem value="chauffage" className="text-white">Chauffage & Climatisation</SelectItem>
+                <SelectItem value="isolation" className="text-white">Isolation de la charpente</SelectItem>
+                <SelectItem value="electricite" className="text-white">Électricité</SelectItem>
+                <SelectItem value="peinture" className="text-white">Peinture & Revêtements</SelectItem>
                 <SelectItem value="autre" className="text-white">Autre</SelectItem>
               </SelectContent>
             </Select>

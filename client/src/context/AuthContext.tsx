@@ -91,6 +91,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
+  /** Nettoie la session membre d'équipe (localStorage/sessionStorage) pour éviter d'afficher le dashboard équipe après déconnexion ou connexion propriétaire. */
+  const clearTeamMemberSession = () => {
+    if (typeof window === 'undefined') return;
+    localStorage.removeItem('userType');
+    localStorage.removeItem('teamMember');
+    sessionStorage.removeItem('teamMemberLoginCode');
+  };
+
   const signIn = async (email: string, password: string, rememberMe?: boolean) => {
     // Validation basique avant l'appel API
     if (!email || !password) {
@@ -103,6 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     // Mise à jour immédiate du contexte pour éviter la race : redirect avant onAuthStateChange
     if (!error && data?.session) {
+      clearTeamMemberSession(); // Connexion propriétaire = plus de contexte membre d'équipe
       setSession(data.session);
       setUser(data.session.user ?? null);
       setLoading(false);
@@ -112,6 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    clearTeamMemberSession();
   };
 
   const resendConfirmationEmail = async (email: string) => {

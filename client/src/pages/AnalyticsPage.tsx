@@ -6,7 +6,7 @@ import { BarChart3 } from 'lucide-react';
 export default function AnalyticsPage() {
   return (
     <PageWrapper>
-      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-6 py-4">
+      <header className="bg-black/10 backdrop-blur-xl border-b border-white/5 px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-white">
@@ -19,9 +19,9 @@ export default function AnalyticsPage() {
       </header>
 
       <main className="flex-1 p-6 flex items-center justify-center">
-        <Card className="w-full max-w-md text-center bg-black/20 backdrop-blur-xl border border-white/10 text-white hover-elevate">
+        <Card className="w-full max-w-md text-center bg-black/10 backdrop-blur-xl border border-white/5 text-white hover-elevate">
           <CardHeader className="pb-4">
-            <div className="w-16 h-16 mx-auto rounded-xl bg-black/20 backdrop-blur-md border border-white/10 flex items-center justify-center mb-4">
+            <div className="w-16 h-16 mx-auto rounded-xl bg-black/10 backdrop-blur-md border border-white/5 flex items-center justify-center mb-4">
               <BarChart3 className="h-8 w-8 text-cyan-500" />
             </div>
             <CardTitle className="text-xl text-white">Rapports Détaillés</CardTitle>

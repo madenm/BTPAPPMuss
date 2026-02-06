@@ -3,6 +3,10 @@ import autoTable from "jspdf-autotable";
 import type { InvoiceItem, SupabaseInvoice } from "./supabaseInvoices";
 import { buildContactBlockHtml, type ContactBlockParams } from "./quotePdf";
 
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value);
+}
+
 const MARGIN = 15;
 const PAGE_W = 210;
 const LOGO_MAX_HEIGHT_MM = 20;
@@ -280,11 +284,21 @@ export function getInvoicePdfBase64(params: InvoicePdfParams): string {
 /** Builds HTML body for invoice email (matches PDF layout style). */
 export function buildInvoiceEmailHtml(params: {
   clientName: string;
+  clientEmail?: string | null;
+  clientPhone?: string | null;
+  clientAddress?: string | null;
   invoiceNumber: string;
+  items: InvoiceItem[];
+  subtotalHt: number;
+  tvaAmount: number;
   total: number;
   dueDate: string;
   paymentTerms: string;
   companyName?: string;
+  companyAddress?: string;
+  companyCityPostal?: string;
+  companyPhone?: string;
+  companyEmail?: string;
   /** Bloc de contact en fin d'email (nom, tél., email, adresse) */
   contactBlock?: ContactBlockParams;
 }): string {
@@ -294,6 +308,59 @@ export function buildInvoiceEmailHtml(params: {
     return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
   })();
   const company = params.companyName || "Nom de l'entreprise";
+  const companyAddress = params.companyAddress || "";
+  const companyCityPostal = params.companyCityPostal || "";
+  const companyPhone = params.companyPhone || "";
+  const companyEmail = params.companyEmail || "";
+  
+  const clientAddress = params.clientAddress || "—";
+  const clientPhone = params.clientPhone || "—";
+  const clientEmail = params.clientEmail || "—";
+  
+  // Générer le HTML des articles
+  let itemsHtml = '';
+  if (params.items && params.items.length > 0) {
+    itemsHtml = '<table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px;">';
+    itemsHtml += '<thead><tr style="background-color: #64748b; color: white;">';
+    itemsHtml += '<th style="padding: 10px; text-align: left; border: 1px solid #475569;">Description</th>';
+    itemsHtml += '<th style="padding: 10px; text-align: right; border: 1px solid #475569;">Prix unitaire HT</th>';
+    itemsHtml += '<th style="padding: 10px; text-align: center; border: 1px solid #475569;">Quantité</th>';
+    itemsHtml += '<th style="padding: 10px; text-align: right; border: 1px solid #475569;">Montant HT</th>';
+    itemsHtml += '</tr></thead><tbody>';
+    
+    params.items.forEach((item, idx) => {
+      if (item.subItems && item.subItems.length > 0) {
+        // Article avec sous-articles
+        const mainTotal = item.subItems.reduce((sum, sub) => sum + sub.total, 0);
+        itemsHtml += `<tr style="background-color: ${idx % 2 === 0 ? '#f8fafc' : '#ffffff'}; border-bottom: 1px solid #e2e8f0;">`;
+        itemsHtml += `<td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold;">${item.description || "—"}</td>`;
+        itemsHtml += `<td style="padding: 10px; text-align: right; border: 1px solid #e2e8f0;">—</td>`;
+        itemsHtml += `<td style="padding: 10px; text-align: center; border: 1px solid #e2e8f0;">—</td>`;
+        itemsHtml += `<td style="padding: 10px; text-align: right; border: 1px solid #e2e8f0; font-weight: bold;">${formatCurrency(mainTotal)}</td>`;
+        itemsHtml += '</tr>';
+        
+        item.subItems.forEach((subItem) => {
+          itemsHtml += `<tr style="background-color: ${idx % 2 === 0 ? '#f8fafc' : '#ffffff'}; border-bottom: 1px solid #e2e8f0;">`;
+          itemsHtml += `<td style="padding: 10px; padding-left: 30px; border: 1px solid #e2e8f0;">${subItem.description || "—"}</td>`;
+          itemsHtml += `<td style="padding: 10px; text-align: right; border: 1px solid #e2e8f0;">${formatCurrency(subItem.unitPrice)}</td>`;
+          itemsHtml += `<td style="padding: 10px; text-align: center; border: 1px solid #e2e8f0;">${subItem.quantity}</td>`;
+          itemsHtml += `<td style="padding: 10px; text-align: right; border: 1px solid #e2e8f0;">${formatCurrency(subItem.total)}</td>`;
+          itemsHtml += '</tr>';
+        });
+      } else {
+        // Article simple
+        itemsHtml += `<tr style="background-color: ${idx % 2 === 0 ? '#f8fafc' : '#ffffff'}; border-bottom: 1px solid #e2e8f0;">`;
+        itemsHtml += `<td style="padding: 10px; border: 1px solid #e2e8f0;">${item.description || "—"}</td>`;
+        itemsHtml += `<td style="padding: 10px; text-align: right; border: 1px solid #e2e8f0;">${formatCurrency(item.unitPrice)}</td>`;
+        itemsHtml += `<td style="padding: 10px; text-align: center; border: 1px solid #e2e8f0;">${item.quantity}</td>`;
+        itemsHtml += `<td style="padding: 10px; text-align: right; border: 1px solid #e2e8f0;">${formatCurrency(item.total)}</td>`;
+        itemsHtml += '</tr>';
+      }
+    });
+    
+    itemsHtml += '</tbody></table>';
+  }
+  
   return `
 <!DOCTYPE html>
 <html>
@@ -308,10 +375,11 @@ export function buildInvoiceEmailHtml(params: {
   .client-box strong { display: block; margin-bottom: 4px; font-size: 11px; color: #475569; }
   .dates { margin-bottom: 16px; font-size: 12px; }
   .dates span { margin-right: 24px; }
-  .totals { margin-top: 16px; text-align: right; }
+  .items-section { margin: 20px 0; }
+  .totals { margin-top: 20px; text-align: right; }
   .totals-row { display: flex; justify-content: flex-end; gap: 24px; padding: 4px 0; }
   .totals-row.grey { background: #f1f5f9; padding: 6px 8px; margin: 0 -8px; }
-  .totals-row strong { min-width: 80px; text-align: right; }
+  .totals-row strong { min-width: 100px; text-align: right; }
   .payment-terms { margin-top: 20px; padding: 12px; background: #f1f5f9; border-left: 3px solid #64748b; font-size: 12px; }
   .footer { margin-top: 32px; text-align: center; font-size: 11px; color: #64748b; }
 </style></head>
@@ -327,25 +395,31 @@ export function buildInvoiceEmailHtml(params: {
   <div class="two-cols">
     <div class="col">
       <strong>${company}</strong><br>
-      Adresse<br>
-      Ville et Code Postal<br>
-      Téléphone / Email
+      ${companyAddress ? companyAddress + "<br>" : ""}
+      ${companyCityPostal ? companyCityPostal + "<br>" : ""}
+      ${companyPhone ? companyPhone + "<br>" : ""}
+      ${companyEmail ? companyEmail : ""}
     </div>
     <div class="col client-box">
       <strong>Facturé à</strong>
       ${params.clientName || "—"}<br>
-      <strong>Adresse</strong> —<br>
-      <strong>Téléphone</strong> —<br>
-      <strong>Email</strong> —
+      ${clientAddress !== "—" ? `<strong>Adresse</strong> ${clientAddress}<br>` : ""}
+      ${clientPhone !== "—" ? `<strong>Téléphone</strong> ${clientPhone}<br>` : ""}
+      ${clientEmail !== "—" ? `<strong>Email</strong> ${clientEmail}` : ""}
     </div>
   </div>
   <div class="dates">
     <span><strong>Date d'émission:</strong> ${dateStr}</span>
     <span><strong>Date d'échéance:</strong> ${dueDateStr}</span>
   </div>
-  <p>Veuillez trouver ci-joint le détail de la facture en pièce jointe (PDF).</p>
+  <div class="items-section">
+    <h3 style="font-size: 14px; font-weight: bold; margin-bottom: 12px; color: #475569;">Détail des articles</h3>
+    ${itemsHtml}
+  </div>
   <div class="totals">
-    <div class="totals-row grey"><strong>Total TTC</strong> ${params.total.toFixed(2)} €</div>
+    <div class="totals-row"><strong>Total HT:</strong> ${formatCurrency(params.subtotalHt)}</div>
+    <div class="totals-row"><strong>TVA (20%):</strong> ${formatCurrency(params.tvaAmount)}</div>
+    <div class="totals-row grey" style="font-weight: bold; font-size: 16px; margin-top: 8px;"><strong>Total TTC:</strong> ${formatCurrency(params.total)}</div>
   </div>
   <div class="payment-terms">
     <strong>Conditions de paiement:</strong><br>

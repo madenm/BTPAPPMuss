@@ -5,7 +5,7 @@ import { CRMPipeline } from '@/components/CRMPipeline';
 export default function CRMPipelinePage() {
   return (
     <PageWrapper>
-      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-6 py-4 rounded-tl-3xl ml-20">
+      <header className="bg-black/10 backdrop-blur-xl border-b border-white/5 px-6 py-4 rounded-tl-3xl ml-20">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-white">

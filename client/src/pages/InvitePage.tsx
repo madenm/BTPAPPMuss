@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { useLocation } from "wouter"
-import { getInvitationByToken, markInvitationAsUsed, verifyTeamMemberCode, type TeamInvitation } from "@/lib/supabase"
+import { getInvitationByToken, verifyTeamMemberCode, type TeamInvitation } from "@/lib/supabase"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { XCircle, Loader2, Key } from "lucide-react"
 
@@ -74,17 +74,15 @@ export default function InvitePage() {
 
     try {
       // Vérifier le code avec le token d'invitation
+      // verifyTeamMemberCode fusionne déjà les permissions depuis localStorage
       const member = await verifyTeamMemberCode(code.trim(), token)
 
       if (member) {
-        // Stocker les infos du membre dans le localStorage
         localStorage.setItem('teamMember', JSON.stringify(member))
         localStorage.setItem('userType', 'team')
+        sessionStorage.setItem('teamMemberLoginCode', code.trim())
 
-        // Marquer l'invitation comme utilisée
-        await markInvitationAsUsed(token)
-
-        // Rediriger vers le dashboard membre
+        // Ne pas marquer l'invitation comme utilisée : le même lien reste valide pour les prochaines connexions
         setLocation("/team-dashboard")
       } else {
         setError("Code de connexion incorrect")

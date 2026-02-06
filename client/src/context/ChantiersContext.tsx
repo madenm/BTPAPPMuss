@@ -5,19 +5,23 @@ import {
   fetchChantiersForTeamMember,
   insertChantier as insertChantierRemote,
   updateChantierRemote,
+  softDeleteChantier as softDeleteChantierRemote,
   type NewChantierPayload,
 } from '@/lib/supabaseChantiers';
 import {
   fetchClientsForUser,
   insertClient as insertClientRemote,
+  updateClient as updateClientRemote,
+  softDeleteClient as softDeleteClientRemote,
   type Client,
   type NewClientPayload,
+  type UpdateClientPayload,
 } from '@/lib/supabaseClients';
 import { fetchChantierAssignmentsByTeamMember } from '@/lib/supabase';
 
 export type { Client };
 
-export type TypeChantier = 'piscine' | 'paysage' | 'menuiserie' | 'renovation' | 'autre';
+export type TypeChantier = 'piscine' | 'paysage' | 'menuiserie' | 'renovation' | 'plomberie' | 'maconnerie' | 'terrasse' | 'chauffage' | 'isolation' | 'electricite' | 'peinture' | 'autre';
 
 export interface Chantier {
   id: string;
@@ -25,6 +29,7 @@ export interface Chantier {
   clientId: string;
   clientName: string;
   dateDebut: string;
+  dateFin?: string;
   duree: string;
   images: string[];
   statut: 'planifié' | 'en cours' | 'terminé';
@@ -40,9 +45,13 @@ interface ChantiersContextType {
   loading: boolean;
   error: string | null;
   addClient: (payload: NewClientPayload) => Promise<Client>;
+  updateClient: (id: string, payload: UpdateClientPayload) => Promise<Client>;
+  deleteClient: (id: string) => Promise<void>;
   addChantier: (payload: NewChantierPayload) => Promise<Chantier>;
   updateChantier: (id: string, updates: Partial<Chantier>) => Promise<void>;
+  deleteChantier: (id: string) => Promise<void>;
   refreshChantiers: () => void;
+  refreshClients: () => void;
 }
 
 const ChantiersContext = createContext<ChantiersContextType | undefined>(undefined);
@@ -58,6 +67,7 @@ export function ChantiersProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const loadingRef = useRef(false);
   const [chantiersRefreshKey, setChantiersRefreshKey] = useState(0);
+  const [clientsRefreshKey, setClientsRefreshKey] = useState(0);
 
   // Charger les clients de l'utilisateur connecté
   useEffect(() => {
@@ -74,7 +84,7 @@ export function ChantiersProvider({ children }: { children: ReactNode }) {
       }
     };
     void loadClients();
-  }, [user?.id]);
+  }, [user?.id, clientsRefreshKey]);
 
   // Charger les chantiers : utilisateur connecté (Supabase) ou membre d'équipe (localStorage)
   useEffect(() => {
@@ -104,13 +114,33 @@ export function ChantiersProvider({ children }: { children: ReactNode }) {
           const data = await fetchChantiersForUser(user.id);
           if (isTeamMember) {
             try {
-              const teamMember = JSON.parse(teamMemberJson!) as { id: string };
-              const assignedIds = await fetchChantierAssignmentsByTeamMember(teamMember.id);
-              const filtered = assignedIds.length > 0 ? data.filter((c) => assignedIds.includes(c.id)) : [];
-              // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ChantiersContext.tsx:load:admin+team', message: 'filtered for team', data: { assignedIdsLength: assignedIds.length, assignedIds, dataLength: data.length, filteredLength: filtered.length, filteredIds: filtered.map((c) => c.id) }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'E' }) }).catch(() => {});
-              // #endregion
-              setChantiers(filtered);
+              const teamMember = JSON.parse(teamMemberJson!) as { id: string; can_view_all_chantiers?: boolean };
+              
+              // Charger les permissions depuis localStorage si elles n'existent pas
+              let permissionsFromStorage: { can_view_all_chantiers?: boolean } = {};
+              try {
+                const storedPermissions = localStorage.getItem(`team_member_permissions_${teamMember.id}`);
+                if (storedPermissions) {
+                  permissionsFromStorage = JSON.parse(storedPermissions);
+                }
+              } catch (e) {
+                console.warn('Could not load permissions from localStorage:', e);
+              }
+              
+              const canViewAll = teamMember.can_view_all_chantiers ?? permissionsFromStorage.can_view_all_chantiers ?? false;
+              
+              // Si le membre a la permission de voir tous les chantiers, afficher tous les chantiers
+              // Sinon, filtrer pour ne montrer que les chantiers assignés
+              if (canViewAll) {
+                setChantiers(data);
+              } else {
+                const assignedIds = await fetchChantierAssignmentsByTeamMember(teamMember.id);
+                const filtered = assignedIds.length > 0 ? data.filter((c) => assignedIds.includes(c.id)) : [];
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ChantiersContext.tsx:load:admin+team', message: 'filtered for team', data: { assignedIdsLength: assignedIds.length, assignedIds, dataLength: data.length, filteredLength: filtered.length, filteredIds: filtered.map((c) => c.id) }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'E' }) }).catch(() => {});
+                // #endregion
+                setChantiers(filtered);
+              }
             } catch {
               setChantiers(data);
             }
@@ -118,12 +148,34 @@ export function ChantiersProvider({ children }: { children: ReactNode }) {
             setChantiers(data);
           }
         } else {
-          const teamMember = JSON.parse(teamMemberJson!) as { id: string };
-          const data = await fetchChantiersForTeamMember(teamMember.id);
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ChantiersContext.tsx:load:teamOnly', message: 'setChantiers team path', data: { dataLength: data.length, ids: data.map((c) => c.id) }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'C,D' }) }).catch(() => {});
-          // #endregion
-          setChantiers(data);
+          const teamMember = JSON.parse(teamMemberJson!) as { id: string; can_view_all_chantiers?: boolean; user_id?: string | null };
+          
+          // Charger les permissions depuis localStorage si elles n'existent pas
+          let permissionsFromStorage: { can_view_all_chantiers?: boolean } = {};
+          try {
+            const storedPermissions = localStorage.getItem(`team_member_permissions_${teamMember.id}`);
+            if (storedPermissions) {
+              permissionsFromStorage = JSON.parse(storedPermissions);
+            }
+          } catch (e) {
+            console.warn('Could not load permissions from localStorage:', e);
+          }
+          
+          const canViewAll = teamMember.can_view_all_chantiers ?? permissionsFromStorage.can_view_all_chantiers ?? false;
+          
+          // Si le membre a la permission de voir tous les chantiers ET qu'il a un user_id,
+          // charger tous les chantiers de l'utilisateur propriétaire
+          // Sinon, charger seulement les chantiers assignés
+          if (canViewAll && teamMember.user_id) {
+            const data = await fetchChantiersForUser(teamMember.user_id);
+            setChantiers(data);
+          } else {
+            const data = await fetchChantiersForTeamMember(teamMember.id);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ChantiersContext.tsx:load:teamOnly', message: 'setChantiers team path', data: { dataLength: data.length, ids: data.map((c) => c.id) }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'C,D' }) }).catch(() => {});
+            // #endregion
+            setChantiers(data);
+          }
         }
       } catch (e: any) {
         console.error('Error loading chantiers', e);
@@ -141,6 +193,10 @@ export function ChantiersProvider({ children }: { children: ReactNode }) {
     setChantiersRefreshKey(k => k + 1);
   }, []);
 
+  const refreshClients = useCallback(() => {
+    setClientsRefreshKey(k => k + 1);
+  }, []);
+
   const addClient = async (payload: NewClientPayload): Promise<Client> => {
     if (!user) {
       console.error('addClient called without authenticated user');
@@ -149,6 +205,25 @@ export function ChantiersProvider({ children }: { children: ReactNode }) {
     const created = await insertClientRemote(user.id, payload);
     setClients(prev => [created, ...prev]);
     return created;
+  };
+
+  const updateClient = async (id: string, payload: UpdateClientPayload): Promise<Client> => {
+    if (!user) {
+      console.error('updateClient called without authenticated user');
+      throw new Error('User not authenticated');
+    }
+    const updated = await updateClientRemote(user.id, id, payload);
+    setClients(prev => prev.map(c => (c.id === id ? updated : c)));
+    return updated;
+  };
+
+  const deleteClient = async (id: string): Promise<void> => {
+    if (!user) {
+      console.error('deleteClient called without authenticated user');
+      throw new Error('User not authenticated');
+    }
+    await softDeleteClientRemote(user.id, id);
+    setClients(prev => prev.filter(c => c.id !== id));
   };
 
   const addChantier = async (payload: NewChantierPayload): Promise<Chantier> => {
@@ -170,9 +245,18 @@ export function ChantiersProvider({ children }: { children: ReactNode }) {
     setChantiers(prev => prev.map(c => (c.id === id ? updated : c)));
   };
 
+  const deleteChantier = async (id: string) => {
+    if (!user) {
+      console.error('deleteChantier called without authenticated user');
+      throw new Error('User not authenticated');
+    }
+    await softDeleteChantierRemote(id, user.id);
+    setChantiers(prev => prev.filter(c => c.id !== id));
+  };
+
   return (
     <ChantiersContext.Provider
-      value={{ clients, chantiers, loading, error, addClient, addChantier, updateChantier, refreshChantiers }}
+      value={{ clients, chantiers, loading, error, addClient, updateClient, deleteClient, addChantier, updateChantier, deleteChantier, refreshChantiers, refreshClients }}
     >
       {children}
     </ChantiersContext.Provider>

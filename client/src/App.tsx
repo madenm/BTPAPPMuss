@@ -77,6 +77,7 @@ function Router() {
       case "/team-dashboard":
       case "/team-dashboard/projects":
       case "/team-dashboard/planning":
+      case "/team-dashboard/quotes":
         return <ProtectedTeamRoute><TeamDashboard /></ProtectedTeamRoute>;
       case "/dashboard":
         return <ProtectedRoute><Dashboard /></ProtectedRoute>;

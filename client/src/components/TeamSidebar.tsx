@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -6,6 +6,7 @@ import {
   Home, 
   Building,
   Calendar,
+  FileText,
 } from 'lucide-react';
 import type { TeamMember } from '@/lib/supabase';
 
@@ -14,22 +15,69 @@ export default function TeamSidebar() {
   const [location] = useLocation();
   const [teamMember, setTeamMember] = useState<TeamMember | null>(null);
 
-  useEffect(() => {
+  const loadMemberFromStorage = useCallback(() => {
     const storedMember = localStorage.getItem('teamMember');
-    if (storedMember) {
+    if (!storedMember) return;
+    try {
+      const member = JSON.parse(storedMember);
+      let permissionsFromStorage: Partial<TeamMember> = {};
       try {
-        setTeamMember(JSON.parse(storedMember));
-      } catch (error) {
-        console.error('Error parsing team member from localStorage:', error);
+        const storedPermissions = localStorage.getItem(`team_member_permissions_${member.id}`);
+        if (storedPermissions) permissionsFromStorage = JSON.parse(storedPermissions);
+      } catch (e) {
+        console.warn('Could not load permissions from localStorage:', e);
       }
+      const memberWithPermissions: TeamMember = {
+        ...member,
+        can_view_dashboard: permissionsFromStorage.can_view_dashboard !== undefined ? permissionsFromStorage.can_view_dashboard : (member.can_view_dashboard ?? false),
+        can_use_estimation: permissionsFromStorage.can_use_estimation !== undefined ? permissionsFromStorage.can_use_estimation : (member.can_use_estimation ?? false),
+        can_view_all_chantiers: permissionsFromStorage.can_view_all_chantiers !== undefined ? permissionsFromStorage.can_view_all_chantiers : (member.can_view_all_chantiers ?? false),
+        can_manage_chantiers: permissionsFromStorage.can_manage_chantiers !== undefined ? permissionsFromStorage.can_manage_chantiers : (member.can_manage_chantiers ?? false),
+        can_view_planning: permissionsFromStorage.can_view_planning !== undefined ? permissionsFromStorage.can_view_planning : (member.can_view_planning ?? false),
+        can_manage_planning: permissionsFromStorage.can_manage_planning !== undefined ? permissionsFromStorage.can_manage_planning : (member.can_manage_planning ?? false),
+        can_access_crm: permissionsFromStorage.can_access_crm !== undefined ? permissionsFromStorage.can_access_crm : (member.can_access_crm ?? false),
+        can_create_quotes: permissionsFromStorage.can_create_quotes !== undefined ? permissionsFromStorage.can_create_quotes : (member.can_create_quotes ?? false),
+        can_manage_invoices: permissionsFromStorage.can_manage_invoices !== undefined ? permissionsFromStorage.can_manage_invoices : (member.can_manage_invoices ?? false),
+        can_use_ai_visualization: permissionsFromStorage.can_use_ai_visualization !== undefined ? permissionsFromStorage.can_use_ai_visualization : (member.can_use_ai_visualization ?? false),
+        can_manage_team: permissionsFromStorage.can_manage_team !== undefined ? permissionsFromStorage.can_manage_team : (member.can_manage_team ?? false),
+        can_manage_clients: permissionsFromStorage.can_manage_clients !== undefined ? permissionsFromStorage.can_manage_clients : (member.can_manage_clients ?? false),
+      };
+      setTeamMember(memberWithPermissions);
+    } catch (error) {
+      console.error('Error parsing team member from localStorage:', error);
     }
   }, []);
 
-  const menuItems = [
-    { icon: Home, label: 'Vue d\'ensemble', path: '/team-dashboard', active: location === '/team-dashboard' },
-    { icon: Building, label: 'Mes Chantiers', path: '/team-dashboard/projects', active: location === '/team-dashboard/projects' },
-    { icon: Calendar, label: 'Planning', path: '/team-dashboard/planning', active: location === '/team-dashboard/planning' },
-  ];
+  useEffect(() => {
+    loadMemberFromStorage();
+  }, [loadMemberFromStorage]);
+
+  useEffect(() => {
+    const onRefreshed = () => loadMemberFromStorage();
+    window.addEventListener('teamMemberRefreshed', onRefreshed);
+    return () => window.removeEventListener('teamMemberRefreshed', onRefreshed);
+  }, [loadMemberFromStorage]);
+
+  // Construire les éléments de menu selon les permissions
+  const menuItems = [];
+  
+  // Vue d'ensemble - toujours accessible
+  menuItems.push({ icon: Home, label: 'Vue d\'ensemble', path: '/team-dashboard', active: location === '/team-dashboard' });
+  
+  // Mes Chantiers - accessible si can_view_all_chantiers ou can_manage_chantiers
+  if (teamMember?.can_view_all_chantiers || teamMember?.can_manage_chantiers) {
+    menuItems.push({ icon: Building, label: 'Mes Chantiers', path: '/team-dashboard/projects', active: location === '/team-dashboard/projects' });
+  }
+  
+  // Planning - accessible si can_view_planning ou can_manage_planning
+  if (teamMember?.can_view_planning || teamMember?.can_manage_planning) {
+    menuItems.push({ icon: Calendar, label: 'Planning', path: '/team-dashboard/planning', active: location === '/team-dashboard/planning' });
+  }
+  
+  // Créer un Devis - accessible si can_create_quotes
+  if (teamMember?.can_create_quotes) {
+    menuItems.push({ icon: FileText, label: 'Créer un Devis', path: '/team-dashboard/quotes', active: location === '/team-dashboard/quotes' });
+  }
 
   return (
     <div className={cn(

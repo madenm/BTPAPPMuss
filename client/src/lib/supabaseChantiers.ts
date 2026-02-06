@@ -2,7 +2,7 @@ import { supabase } from "./supabaseClient";
 import type { Chantier } from "@/context/ChantiersContext";
 
 // Types de chantier (alignés sur les types de projet des devis)
-export type TypeChantier = "piscine" | "paysage" | "menuiserie" | "renovation" | "autre";
+export type TypeChantier = "piscine" | "paysage" | "menuiserie" | "renovation" | "plomberie" | "maconnerie" | "terrasse" | "chauffage" | "isolation" | "electricite" | "peinture" | "autre";
 
 // Représentation telle qu'enregistrée dans Supabase
 export interface SupabaseChantier {
@@ -12,6 +12,7 @@ export interface SupabaseChantier {
   client_name: string;
   client_id: string | null;
   date_debut: string;
+  date_fin?: string | null;
   duree: string;
   images: string[] | null;
   statut: "planifié" | "en cours" | "terminé";
@@ -19,6 +20,8 @@ export interface SupabaseChantier {
   type_chantier: string | null;
   notes_avancement?: string | null;
   montant_devis?: number | null;
+  is_deleted?: boolean | null;
+  deleted_at?: string | null;
   created_at: string;
 }
 
@@ -27,12 +30,14 @@ export type NewChantierPayload = {
   clientId: string;
   clientName: string;
   dateDebut: string;
+  dateFin?: string | null;
   duree: string;
   images: string[];
   statut?: "planifié" | "en cours" | "terminé";
   notes?: string | null;
   typeChantier?: TypeChantier | string | null;
   notesAvancement?: string | null;
+  montantDevis?: number | null;
 };
 
 function mapFromSupabase(row: SupabaseChantier): Chantier {
@@ -42,6 +47,7 @@ function mapFromSupabase(row: SupabaseChantier): Chantier {
     clientId: row.client_id ?? "",
     clientName: row.client_name,
     dateDebut: row.date_debut,
+    dateFin: row.date_fin ?? undefined,
     duree: row.duree,
     images: row.images ?? [],
     statut: row.statut,
@@ -64,7 +70,9 @@ export async function fetchChantiersForUser(userId: string): Promise<Chantier[]>
     throw error;
   }
 
-  return (data ?? []).map(mapFromSupabase);
+  const rows = (data ?? []) as SupabaseChantier[];
+  const nonDeleted = rows.filter((row) => row.is_deleted !== true);
+  return nonDeleted.map(mapFromSupabase);
 }
 
 /** Charge les chantiers assignés à un membre d'équipe (utilisé sans session Supabase). */
@@ -142,6 +150,12 @@ export async function insertChantier(
   if (payload.notesAvancement !== undefined) {
     insertData.notes_avancement = payload.notesAvancement?.trim() || null;
   }
+  if (payload.dateFin !== undefined && payload.dateFin?.trim()) {
+    insertData.date_fin = payload.dateFin.trim().slice(0, 10);
+  }
+  if (payload.montantDevis !== undefined && payload.montantDevis != null && !isNaN(Number(payload.montantDevis))) {
+    insertData.montant_devis = Number(payload.montantDevis);
+  }
 
   const { data, error } = await supabase
     .from("chantiers")
@@ -189,6 +203,9 @@ export async function updateChantierRemote(
   if (updates.montantDevis !== undefined) {
     updateData.montant_devis = updates.montantDevis ?? null;
   }
+  if (updates.dateFin !== undefined) {
+    updateData.date_fin = updates.dateFin?.trim() ? updates.dateFin.trim().slice(0, 10) : null;
+  }
 
   const { data, error } = await supabase
     .from("chantiers")
@@ -204,4 +221,21 @@ export async function updateChantierRemote(
   }
 
   return mapFromSupabase(data as SupabaseChantier);
+}
+
+/** Soft delete: marque le chantier comme supprimé (is_deleted = true, deleted_at = now). */
+export async function softDeleteChantier(id: string, userId: string): Promise<void> {
+  const { error } = await supabase
+    .from("chantiers")
+    .update({
+      is_deleted: true,
+      deleted_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("user_id", userId);
+
+  if (error) {
+    console.error("Error soft deleting chantier:", error);
+    throw error;
+  }
 }

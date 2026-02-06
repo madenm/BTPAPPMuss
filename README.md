@@ -171,6 +171,13 @@ Pour qu'un membre d'équipe invité (sans compte Supabase) voie les chantiers au
 1. Ouvrez votre projet sur [Supabase](https://supabase.com) → **SQL Editor**.
 2. Exécutez le script **`supabase_get_chantiers_for_team_member.sql`** (à la racine du projet). Ce script crée la fonction `get_chantiers_for_team_member` (SECURITY DEFINER) et accorde son exécution aux rôles `anon` et `authenticated`.
 
+## 🗄️ Supabase – permissions des membres d'équipe
+
+Pour que les accès accordés par le patron (tableau de bord, chantiers, planning, devis, factures, etc.) s’affichent correctement sur la page du membre, y compris lorsqu’il se connecte depuis un autre appareil ou navigateur, les permissions doivent être en base.
+
+1. La migration **`add_team_members_permissions_columns`** (script `supabase_team_members_permissions.sql`) ajoute les colonnes de permissions sur la table `team_members`. Si elle n’a pas encore été exécutée, ouvrez le **SQL Editor** de votre projet Supabase et exécutez le contenu de **`supabase_team_members_permissions.sql`**.
+2. **Après** avoir exécuté cette migration : en tant que patron, ouvrez **Gestion de l’équipe** → **Modifier le Membre** pour chaque membre concerné, cochez les droits souhaités, puis cliquez sur **Enregistrer**. Les permissions seront alors enregistrées en base et le membre verra les bons onglets et contenus à sa prochaine connexion (sur n’importe quel appareil).
+
 ## 📝 Notes
 
 - Le projet utilise un serveur Express pour servir l'application
