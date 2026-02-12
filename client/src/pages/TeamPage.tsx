@@ -52,6 +52,7 @@ import {
 import { useChantiers } from '@/context/ChantiersContext';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
+import { debugIngest } from '@/lib/debugIngest';
 import {
   ROLE_DEFAULT_PERMISSIONS,
   ROLE_ICONS,
@@ -199,9 +200,7 @@ export default function TeamPage() {
   };
 
   const handleRoleChange = (role: string, isNew = false) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TeamPage.tsx:handleRoleChange',message:'Role selected',data:{role,isNew},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
-    // #endregion
+    debugIngest({ location: 'TeamPage.tsx:handleRoleChange', message: 'Role selected', data: { role, isNew }, hypothesisId: 'H4' });
     const defaults = ROLE_DEFAULT_PERMISSIONS[role] ?? emptyPermissions();
     if (isNew) {
       setNewMember((prev) => ({ ...prev, role, ...defaults }));

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Mic, MicOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { debugIngest } from '@/lib/debugIngest';
 
 interface VoiceInputButtonProps {
   onTranscript: (text: string) => void;
@@ -102,7 +103,7 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
         console.error('Speech recognition error:', event.error);
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'VoiceInputButton.tsx:onerror', message: 'Speech recognition error occurred', data: { error: event.error, message: event.message, isListening: isListening, protocol: window.location.protocol }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'A,B,C,D,E' }) }).catch(() => {});
+        debugIngest({ location: 'VoiceInputButton.tsx:onerror', message: 'Speech recognition error occurred', data: { error: event.error, message: event.message, isListening: isListening, protocol: window.location.protocol }, sessionId: 'debug-session', hypothesisId: 'A,B,C,D,E' });
         // #endregion
         setIsListening(false);
         
@@ -130,7 +131,7 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
 
       recognition.onend = () => {
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'VoiceInputButton.tsx:onend', message: 'Recognition ended', data: { wasListening: isListening }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'B,E' }) }).catch(() => {});
+        debugIngest({ location: 'VoiceInputButton.tsx:onend', message: 'Recognition ended', data: { wasListening: isListening }, sessionId: 'debug-session', hypothesisId: 'B,E' });
         // #endregion
         setIsListening(false);
         if (interimTranscriptRef.current) {
@@ -148,7 +149,7 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
 
   useEffect(() => {
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'VoiceInputButton.tsx:useEffect:init', message: 'Initializing speech recognition', data: { hasSpeechRecognition: !!window.SpeechRecognition, hasWebkitSpeechRecognition: !!window.webkitSpeechRecognition, protocol: window.location.protocol, hostname: window.location.hostname }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'A,D' }) }).catch(() => {});
+    debugIngest({ location: 'VoiceInputButton.tsx:useEffect:init', message: 'Initializing speech recognition', data: { hasSpeechRecognition: !!window.SpeechRecognition, hasWebkitSpeechRecognition: !!window.webkitSpeechRecognition, protocol: window.location.protocol, hostname: window.location.hostname }, sessionId: 'debug-session', hypothesisId: 'A,D' });
     // #endregion
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     setIsSupported(!!SpeechRecognition);
@@ -168,7 +169,7 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
 
   const toggleListening = () => {
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'VoiceInputButton.tsx:toggleListening:entry', message: 'Toggle listening called', data: { isListening, disabled, hasRecognition: !!recognitionRef.current }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'B,E' }) }).catch(() => {});
+    debugIngest({ location: 'VoiceInputButton.tsx:toggleListening:entry', message: 'Toggle listening called', data: { isListening, disabled, hasRecognition: !!recognitionRef.current }, sessionId: 'debug-session', hypothesisId: 'B,E' });
     // #endregion
     if (disabled || !isSupported) return;
 
@@ -219,17 +220,17 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
           if (!recognitionRef.current) return;
           try {
             // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'VoiceInputButton.tsx:toggleListening:beforeStart', message: 'About to start recognition', data: { lang: recognitionRef.current.lang, continuous: recognitionRef.current.continuous }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'B,C' }) }).catch(() => {});
+            debugIngest({ location: 'VoiceInputButton.tsx:toggleListening:beforeStart', message: 'About to start recognition', data: { lang: recognitionRef.current.lang, continuous: recognitionRef.current.continuous }, sessionId: 'debug-session', hypothesisId: 'B,C' });
             // #endregion
             recognitionRef.current.start();
             setIsListening(true);
             // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'VoiceInputButton.tsx:toggleListening:afterStart', message: 'Recognition started', data: {}, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'B' }) }).catch(() => {});
+            debugIngest({ location: 'VoiceInputButton.tsx:toggleListening:afterStart', message: 'Recognition started', data: {}, sessionId: 'debug-session', hypothesisId: 'B' });
             // #endregion
           } catch (startErr) {
             console.error('Error starting recognition:', startErr);
             // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'VoiceInputButton.tsx:toggleListening:startErr', message: 'Exception starting recognition', data: { error: startErr instanceof Error ? startErr.message : String(startErr) }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'B,E' }) }).catch(() => {});
+            debugIngest({ location: 'VoiceInputButton.tsx:toggleListening:startErr', message: 'Exception starting recognition', data: { error: startErr instanceof Error ? startErr.message : String(startErr) }, sessionId: 'debug-session', hypothesisId: 'B,E' });
             // #endregion
             setIsListening(false);
             recognitionRef.current = null;
@@ -241,7 +242,7 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
     } catch (err) {
       console.error('Error toggling speech recognition:', err);
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'VoiceInputButton.tsx:toggleListening:catch', message: 'Exception in toggleListening', data: { error: err instanceof Error ? err.message : String(err) }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'B,E' }) }).catch(() => {});
+      debugIngest({ location: 'VoiceInputButton.tsx:toggleListening:catch', message: 'Exception in toggleListening', data: { error: err instanceof Error ? err.message : String(err) }, sessionId: 'debug-session', hypothesisId: 'B,E' });
       // #endregion
       setError('Erreur lors du démarrage');
       setIsListening(false);

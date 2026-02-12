@@ -28,6 +28,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Mail, Phone, Plus, Loader2, Upload, X, Search, User, Trash2, Pencil } from "lucide-react"
 import { motion } from "framer-motion"
 import { useAuth } from "@/context/AuthContext"
+import { debugIngest } from "@/lib/debugIngest"
 import { useTeamEffectiveUserId } from "@/context/TeamEffectiveUserIdContext"
 import { useUserSettings } from "@/context/UserSettingsContext"
 import { useChantiers } from "@/context/ChantiersContext"
@@ -561,19 +562,13 @@ export function CRMPipeline() {
 
       // Mettre à jour le statut du devis à "validé" si un devis a été sélectionné (validation automatique lors de l'envoi)
       if (quoteModalSelectedQuote && userId) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'CRMPipeline.tsx:sendQuoteEmail:before-status-update', message: 'Updating quote status to validé', data: { quoteId: quoteModalSelectedQuote.id, currentStatus: quoteModalSelectedQuote.status }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'F' }) }).catch(() => {});
-        // #endregion
+        debugIngest({ location: 'CRMPipeline.tsx:sendQuoteEmail:before-status-update', message: 'Updating quote status to validé', data: { quoteId: quoteModalSelectedQuote.id, currentStatus: quoteModalSelectedQuote.status }, sessionId: 'debug-session', hypothesisId: 'F' });
         try {
           await updateQuoteStatus(quoteModalSelectedQuote.id, userId, 'validé');
           await createInvoiceFromQuote(userId, quoteModalSelectedQuote);
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'CRMPipeline.tsx:sendQuoteEmail:after-status-update', message: 'Quote status updated to validé', data: { quoteId: quoteModalSelectedQuote.id }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'F' }) }).catch(() => {});
-          // #endregion
+          debugIngest({ location: 'CRMPipeline.tsx:sendQuoteEmail:after-status-update', message: 'Quote status updated to validé', data: { quoteId: quoteModalSelectedQuote.id }, sessionId: 'debug-session', hypothesisId: 'F' });
         } catch (err) {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'CRMPipeline.tsx:sendQuoteEmail:status-update-error', message: 'Error updating quote status', data: { error: err instanceof Error ? err.message : String(err) }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'F' }) }).catch(() => {});
-          // #endregion
+          debugIngest({ location: 'CRMPipeline.tsx:sendQuoteEmail:status-update-error', message: 'Error updating quote status', data: { error: err instanceof Error ? err.message : String(err) }, sessionId: 'debug-session', hypothesisId: 'F' });
           console.error('Error updating quote status:', err);
           // Ne pas bloquer le processus si la mise à jour du statut échoue
         }

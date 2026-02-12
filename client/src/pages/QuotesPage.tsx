@@ -30,6 +30,7 @@ import { QuotePreview } from '@/components/QuotePreview';
 import { InvoiceDialog } from '@/components/InvoiceDialog';
 import { QuotesQuestionnaire } from '@/components/QuotesQuestionnaire';
 import { hasQuestionsForType } from '@/lib/estimationQuestionnaire';
+import { debugIngest } from '@/lib/debugIngest';
 import { 
   FileText, 
   Plus, 
@@ -248,7 +249,7 @@ export default function QuotesPage() {
     if (!selectedChantierId) return;
     if (!selectedClientId) {
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'QuotesPage.tsx:effect-clear-chantier',message:'Clearing chantier (no client)',data:{selectedChantierId,clearingDescription:true},timestamp:Date.now(),hypothesisId:'H2',runId:'post-fix'})}).catch(()=>{});
+      debugIngest({ location: 'QuotesPage.tsx:effect-clear-chantier', message: 'Clearing chantier (no client)', data: { selectedChantierId, clearingDescription: true }, hypothesisId: 'H2', runId: 'post-fix' });
       // #endregion
       setSelectedChantierId(null);
       setProjectDescription('');
@@ -259,7 +260,7 @@ export default function QuotesPage() {
     // Ne réinitialiser que si le chantier est en liste et appartient à un autre client (pas si absent, ex. chantier venant d'être créé)
     if (ch && ch.clientId !== selectedClientId) {
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'QuotesPage.tsx:effect-clear-chantier',message:'Clearing chantier (wrong client)',data:{selectedClientId,selectedChantierId,chantierClientId:ch?.clientId,clearingDescription:true},timestamp:Date.now(),hypothesisId:'H2',runId:'post-fix'})}).catch(()=>{});
+      debugIngest({ location: 'QuotesPage.tsx:effect-clear-chantier', message: 'Clearing chantier (wrong client)', data: { selectedClientId, selectedChantierId, chantierClientId: ch?.clientId, clearingDescription: true }, hypothesisId: 'H2', runId: 'post-fix' });
       // #endregion
       setSelectedChantierId(null);
       setProjectDescription('');
@@ -444,7 +445,7 @@ export default function QuotesPage() {
     const prevStep = step;
     const selClient = selectedClientId ? clients.find(c => c.id === selectedClientId) : null;
     const selChantier = selectedChantierId ? chantiers.find(c => c.id === selectedChantierId) : null;
-    fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'QuotesPage.tsx:handlePrev',message:'Before prev',data:{prevStep,selectedClientId,selectedChantierId,clientInfoName:clientInfo.name,clientInfoEmail:clientInfo.email,projectType,selectedClientName:selClient?.name,selectedChantierNom:selChantier?.nom,selectedChantierType:selChantier?.typeChantier},timestamp:Date.now(),hypothesisId:'H1,H4'})}).catch(()=>{});
+    debugIngest({ location: 'QuotesPage.tsx:handlePrev', message: 'Before prev', data: { prevStep, selectedClientId, selectedChantierId, clientInfoName: clientInfo.name, clientInfoEmail: clientInfo.email, projectType, selectedClientName: selClient?.name, selectedChantierNom: selChantier?.nom, selectedChantierType: selChantier?.typeChantier }, hypothesisId: 'H1,H4' });
     // #endregion
     setStep((s) => Math.max(1, s - 1));
   };
@@ -486,7 +487,7 @@ export default function QuotesPage() {
   // Fonction de sauvegarde manuelle du devis
   const handleSaveQuote = async () => {
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'QuotesPage.tsx:handleSaveQuote:entry', message: 'handleSaveQuote called', data: { userId: user?.id, step, editingQuoteId, editingQuoteStatus }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'A,B,C' }) }).catch(() => {});
+    debugIngest({ location: 'QuotesPage.tsx:handleSaveQuote:entry', message: 'handleSaveQuote called', data: { userId: user?.id, step, editingQuoteId, editingQuoteStatus }, sessionId: 'debug-session', hypothesisId: 'A,B,C' });
     // #endregion
     if (!user?.id || step !== 3) return;
     
@@ -534,7 +535,7 @@ export default function QuotesPage() {
       // Si c'est un nouveau devis, créer avec le statut "brouillon"
       if (!editingQuoteId) {
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'QuotesPage.tsx:handleSaveQuote:new-quote', message: 'Creating new quote', data: { status: 'brouillon', chantierId: selectedChantierId }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'A' }) }).catch(() => {});
+        debugIngest({ location: 'QuotesPage.tsx:handleSaveQuote:new-quote', message: 'Creating new quote', data: { status: 'brouillon', chantierId: selectedChantierId }, sessionId: 'debug-session', hypothesisId: 'A' });
         // #endregion
         const payload = {
           chantier_id: selectedChantierId ?? null,
@@ -552,7 +553,7 @@ export default function QuotesPage() {
         };
         const newQuote = await insertQuote(user.id, payload);
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'QuotesPage.tsx:handleSaveQuote:new-quote-result', message: 'New quote created', data: { quoteId: newQuote.id, status: newQuote.status }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'A' }) }).catch(() => {});
+        debugIngest({ location: 'QuotesPage.tsx:handleSaveQuote:new-quote-result', message: 'New quote created', data: { quoteId: newQuote.id, status: newQuote.status }, sessionId: 'debug-session', hypothesisId: 'A' });
         // #endregion
         setEditingQuoteId(newQuote.id);
         setEditingQuoteStatus(newQuote.status);
@@ -570,7 +571,7 @@ export default function QuotesPage() {
       } else {
         // Mettre à jour le devis existant - ne pas modifier le statut lors de la sauvegarde
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'QuotesPage.tsx:handleSaveQuote:update-quote-before', message: 'Updating existing quote', data: { quoteId: editingQuoteId, currentStatus: editingQuoteStatus }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'B,C' }) }).catch(() => {});
+        debugIngest({ location: 'QuotesPage.tsx:handleSaveQuote:update-quote-before', message: 'Updating existing quote', data: { quoteId: editingQuoteId, currentStatus: editingQuoteStatus }, sessionId: 'debug-session', hypothesisId: 'B,C' });
         // #endregion
         const payload = {
           chantier_id: selectedChantierId ?? null,
@@ -589,7 +590,7 @@ export default function QuotesPage() {
         };
         const updatedQuote = await updateQuote(user.id, editingQuoteId, payload);
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'QuotesPage.tsx:handleSaveQuote:update-quote-after', message: 'Quote updated', data: { quoteId: updatedQuote.id, returnedStatus: updatedQuote.status }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'B,C' }) }).catch(() => {});
+        debugIngest({ location: 'QuotesPage.tsx:handleSaveQuote:update-quote-after', message: 'Quote updated', data: { quoteId: updatedQuote.id, returnedStatus: updatedQuote.status }, sessionId: 'debug-session', hypothesisId: 'B,C' });
         // #endregion
         setEditingQuoteStatus(updatedQuote.status);
         if (selectedChantierId) {
@@ -606,7 +607,7 @@ export default function QuotesPage() {
       }
     } catch (error: unknown) {
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'QuotesPage.tsx:handleSaveQuote:error', message: 'Error saving quote', data: { error: error instanceof Error ? error.message : String(error) }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'D' }) }).catch(() => {});
+      debugIngest({ location: 'QuotesPage.tsx:handleSaveQuote:error', message: 'Error saving quote', data: { error: error instanceof Error ? error.message : String(error) }, sessionId: 'debug-session', hypothesisId: 'D' });
       // #endregion
       console.error('Error saving quote:', error);
       const message = error instanceof Error ? error.message : 'Erreur inconnue';
@@ -1097,7 +1098,7 @@ export default function QuotesPage() {
                         const currentChantier = selectedChantierId ? chantiers.find(c => c.id === selectedChantierId) : null;
                         if (currentChantier && currentChantier.clientId !== client.id) {
                           // #region agent log
-                          fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'QuotesPage.tsx:client-onClick-clear-chantier',message:'Client selected, clearing chantier (other client)',data:{newClientId:client.id,newClientName:client.name,clearedChantierId:selectedChantierId,clearedChantierNom:currentChantier?.nom,clearingDescription:true},timestamp:Date.now(),hypothesisId:'H1',runId:'post-fix'})}).catch(()=>{});
+                          debugIngest({ location: 'QuotesPage.tsx:client-onClick-clear-chantier', message: 'Client selected, clearing chantier (other client)', data: { newClientId: client.id, newClientName: client.name, clearedChantierId: selectedChantierId, clearedChantierNom: currentChantier?.nom, clearingDescription: true }, hypothesisId: 'H1', runId: 'post-fix' });
                           // #endregion
                           setSelectedChantierId(null);
                           setProjectDescription('');
@@ -1161,7 +1162,7 @@ export default function QuotesPage() {
                                 ? `${chantier.nom}\n${chantier.notes}`
                                 : chantier.nom;
                               // #region agent log
-                              fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'QuotesPage.tsx:chantier-onClick-set-desc',message:'Chantier selected, setting description',data:{chantierId:chantier.id,chantierNom:chantier.nom,descPreview:desc.slice(0,50)},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
+                              debugIngest({ location: 'QuotesPage.tsx:chantier-onClick-set-desc', message: 'Chantier selected, setting description', data: { chantierId: chantier.id, chantierNom: chantier.nom, descPreview: desc.slice(0, 50) }, hypothesisId: 'H3' });
                               // #endregion
                               setSelectedChantierId(chantier.id);
                               setProjectDescription(desc);
@@ -1252,7 +1253,7 @@ export default function QuotesPage() {
                           const newName = e.target.value;
                           // #region agent log
                           const selClient = selectedClientId ? clients.find(c => c.id === selectedClientId) : null;
-                          fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'QuotesPage.tsx:clientNameChange',message:'Client name changed',data:{newName,selectedClientId,selectedClientName:selClient?.name,clientInfoEmail:clientInfo.email},timestamp:Date.now(),hypothesisId:'H3',runId:'post-fix'})}).catch(()=>{});
+                          debugIngest({ location: 'QuotesPage.tsx:clientNameChange', message: 'Client name changed', data: { newName, selectedClientId, selectedClientName: selClient?.name, clientInfoEmail: clientInfo.email }, hypothesisId: 'H3', runId: 'post-fix' });
                           // #endregion
                           setClientInfo(prev => ({ ...prev, name: newName }));
                           setHighlightMissing(prev => ({ ...prev, clientName: false }));
@@ -1358,7 +1359,7 @@ export default function QuotesPage() {
                           const selectedClient = selectedClientId ? clients.find(c => c.id === selectedClientId) : null;
                           const displayClientName = selectedClient ? selectedClient.name : (clientInfo.name?.trim() || null);
                           // #region agent log
-                          fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'QuotesPage.tsx:badge-render-step2',message:'Badge step2',data:{selectedClientId,selectedChantierId,clientInfoName:clientInfo.name,projectType,displayClientName,selectedChantierNom:selectedChantierId?chantiers.find(c=>c.id===selectedChantierId)?.nom:null},timestamp:Date.now(),hypothesisId:'H1,H5',runId:'post-fix'})}).catch(()=>{});
+                          debugIngest({ location: 'QuotesPage.tsx:badge-render-step2', message: 'Badge step2', data: { selectedClientId, selectedChantierId, clientInfoName: clientInfo.name, projectType, displayClientName, selectedChantierNom: selectedChantierId ? chantiers.find(c => c.id === selectedChantierId)?.nom : null }, hypothesisId: 'H1,H5', runId: 'post-fix' });
                           // #endregion
                           return displayClientName ? (
                             <div className="flex items-center gap-2">
@@ -1391,7 +1392,7 @@ export default function QuotesPage() {
                         <Select value={projectType} onValueChange={(newValue) => {
                           // #region agent log
                           const selChantier = selectedChantierId ? chantiers.find(c => c.id === selectedChantierId) : null;
-                          fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'QuotesPage.tsx:projectTypeChange',message:'Project type changed',data:{newValue,selectedChantierId,selectedChantierType:selChantier?.typeChantier,selectedChantierNom:selChantier?.nom},timestamp:Date.now(),hypothesisId:'H2',runId:'post-fix'})}).catch(()=>{});
+                          debugIngest({ location: 'QuotesPage.tsx:projectTypeChange', message: 'Project type changed', data: { newValue, selectedChantierId, selectedChantierType: selChantier?.typeChantier, selectedChantierNom: selChantier?.nom }, hypothesisId: 'H2', runId: 'post-fix' });
                           // #endregion
                           setProjectType(newValue);
                           if (selectedChantierId && selChantier) {
@@ -1399,7 +1400,7 @@ export default function QuotesPage() {
                             const chantierType = selChantier.typeChantier && validTypes.includes(selChantier.typeChantier) ? selChantier.typeChantier : 'autre';
                             if (chantierType !== newValue) {
                               // #region agent log
-                              fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'QuotesPage.tsx:projectType-clear-chantier',message:'Project type change clearing chantier',data:{newValue,chantierType,clearedChantierId:selectedChantierId,clearingDescription:true},timestamp:Date.now(),hypothesisId:'H4',runId:'post-fix'})}).catch(()=>{});
+                              debugIngest({ location: 'QuotesPage.tsx:projectType-clear-chantier', message: 'Project type change clearing chantier', data: { newValue, chantierType, clearedChantierId: selectedChantierId, clearingDescription: true }, hypothesisId: 'H4', runId: 'post-fix' });
                               // #endregion
                               setSelectedChantierId(null);
                               setProjectDescription('');

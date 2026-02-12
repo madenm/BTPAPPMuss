@@ -4,6 +4,7 @@ import { useChantiers } from "@/context/ChantiersContext";
 import { fetchQuotesForUser } from "@/lib/supabaseQuotes";
 import { fetchRevenuesByPeriod } from "@/lib/supabaseRevenues";
 import { fetchInvoicesForUser } from "@/lib/supabaseInvoices";
+import { debugIngest } from "@/lib/debugIngest";
 
 export interface DashboardMetrics {
   totalRevenue: number;
@@ -58,9 +59,7 @@ export function useDashboardMetrics(): DashboardMetrics {
 
         // Charger les devis
         const allQuotes = await fetchQuotesForUser(user.id);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useDashboardMetrics.ts:loadMetrics',message:'loadMetrics run',data:{userId:user.id,allQuotesCount:allQuotes.length,chantiersLength:chantiers.length,timestamp:Date.now()},timestamp:Date.now(),hypothesisId:'H4,H5'})}).catch(()=>{});
-        // #endregion
+        debugIngest({ location: 'useDashboardMetrics.ts:loadMetrics', message: 'loadMetrics run', data: { userId: user.id, allQuotesCount: allQuotes.length, chantiersLength: chantiers.length }, hypothesisId: 'H4,H5' });
         // Devis en attente = au plus un par chantier (chantiers ayant au moins un devis envoyé/brouillon)
         const pendingStatuses = ["envoyé", "brouillon"];
         const pendingQuotesList = allQuotes.filter((q) =>
@@ -105,9 +104,7 @@ export function useDashboardMetrics(): DashboardMetrics {
           (sum, q) => sum + (Number(q.total_ht) || 0),
           0,
         );
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useDashboardMetrics.ts:CA-calculation',message:'CA calc',data:{currentYear,currentMonth,acceptedCount:acceptedOrValide.length,includedCount:quotesAcceptedThisMonth.length,totalRevenue,acceptedQuotes:acceptedOrValide.map(q=>{const ds=q.accepted_at||q.updated_at||q.created_at;const d=ds?new Date(ds):null;return{id:q.id,status:q.status,total_ht:q.total_ht,accepted_at:q.accepted_at,updated_at:q.updated_at,created_at:q.created_at,parsedMonth:d?.getMonth(),parsedYear:d?.getFullYear(),included:d&&d.getFullYear()===currentYear&&d.getMonth()===currentMonth}})},timestamp:Date.now(),hypothesisId:'H1,H2,H3,H5'})}).catch(()=>{});
-        // #endregion
+        debugIngest({ location: 'useDashboardMetrics.ts:CA-calculation', message: 'CA calc', data: { currentYear, currentMonth, acceptedCount: acceptedOrValide.length, includedCount: quotesAcceptedThisMonth.length, totalRevenue, acceptedQuotes: acceptedOrValide.map(q => { const ds = q.accepted_at || q.updated_at || q.created_at; const d = ds ? new Date(ds) : null; return { id: q.id, status: q.status, total_ht: q.total_ht, accepted_at: q.accepted_at, updated_at: q.updated_at, created_at: q.created_at, parsedMonth: d?.getMonth(), parsedYear: d?.getFullYear(), included: d && d.getFullYear() === currentYear && d.getMonth() === currentMonth }; }) }, hypothesisId: 'H1,H2,H3,H5' });
 
         // Charger l'évolution des revenus (par mois)
         const revenuesByMonth = await fetchRevenuesByPeriod(user.id, "month");

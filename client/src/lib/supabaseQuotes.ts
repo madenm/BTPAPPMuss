@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { debugIngest } from "./debugIngest";
 
 export interface QuoteSubItem {
   id: string;
@@ -135,9 +136,7 @@ export async function updateQuote(
   quoteId: string,
   payload: NewQuotePayload,
 ): Promise<SupabaseQuote> {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'supabaseQuotes.ts:updateQuote:entry', message: 'updateQuote called', data: { quoteId, status: payload.status, hasStatus: !!payload.status }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'B,C' }) }).catch(() => {});
-  // #endregion
+  debugIngest({ location: 'supabaseQuotes.ts:updateQuote:entry', message: 'updateQuote called', data: { quoteId, status: payload.status, hasStatus: !!payload.status }, sessionId: 'debug-session', hypothesisId: 'B,C' });
   const updateData: any = {
     chantier_id: payload.chantier_id ?? null,
     client_name: payload.client_name,
@@ -158,9 +157,7 @@ export async function updateQuote(
     updateData.status = payload.status;
   }
   
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'supabaseQuotes.ts:updateQuote:before-update', message: 'Before Supabase update', data: { updateDataStatus: updateData.status, hasStatus: 'status' in updateData }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'B,C' }) }).catch(() => {});
-  // #endregion
+  debugIngest({ location: 'supabaseQuotes.ts:updateQuote:before-update', message: 'Before Supabase update', data: { updateDataStatus: updateData.status, hasStatus: 'status' in updateData }, sessionId: 'debug-session', hypothesisId: 'B,C' });
   const { data, error } = await supabase
     .from("quotes")
     .update(updateData)
@@ -169,9 +166,7 @@ export async function updateQuote(
     .select("*")
     .single();
 
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'supabaseQuotes.ts:updateQuote:after-update', message: 'After Supabase update', data: { error: error?.message, returnedStatus: data?.status }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'B,C' }) }).catch(() => {});
-  // #endregion
+  debugIngest({ location: 'supabaseQuotes.ts:updateQuote:after-update', message: 'After Supabase update', data: { error: error?.message, returnedStatus: data?.status }, sessionId: 'debug-session', hypothesisId: 'B,C' });
 
   if (error || !data) {
     console.error("Error updating quote:", error);

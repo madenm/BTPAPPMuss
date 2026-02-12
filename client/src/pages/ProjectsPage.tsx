@@ -29,6 +29,7 @@ import { InvoiceDialog } from '@/components/InvoiceDialog';
 import { Receipt, Check, Trash2, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { DeleteChantierConfirmDialog } from '@/components/DeleteChantierConfirmDialog';
+import { debugIngest } from '@/lib/debugIngest';
 
 // Format montant en euros (FR)
 function formatMontantEuro(value?: number | null): string {
@@ -676,7 +677,7 @@ export default function ProjectsPage() {
     fetchQuotesByChantierId(selectedChantier.id)
       .then((quotes) => {
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ProjectsPage.tsx:fetchQuotesByChantierId:result', message: 'Quotes loaded', data: { chantierId: selectedChantier.id, quotesCount: quotes.length, quotesStatuses: quotes.map(q => ({ id: q.id, status: q.status })) }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'E' }) }).catch(() => {});
+        debugIngest({ location: 'ProjectsPage.tsx:fetchQuotesByChantierId:result', message: 'Quotes loaded', data: { chantierId: selectedChantier.id, quotesCount: quotes.length, quotesStatuses: quotes.map(q => ({ id: q.id, status: q.status })) }, sessionId: 'debug-session', hypothesisId: 'E' });
         // #endregion
         setChantierQuotes(quotes);
       })

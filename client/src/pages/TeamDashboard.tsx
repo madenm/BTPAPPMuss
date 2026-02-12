@@ -18,6 +18,7 @@ import ClientsPage from '@/pages/ClientsPage'
 import AIVisualizationPage from '@/pages/AIVisualizationPage'
 import { refreshTeamMember, type TeamMember } from '@/lib/supabase'
 import { TeamEffectiveUserIdProvider } from '@/context/TeamEffectiveUserIdContext'
+import { debugIngest } from '@/lib/debugIngest'
 
 // Helpers pour le planning (alignés sur PlanningPage)
 function parseLocalDate(dateStr: string): Date {
@@ -288,11 +289,9 @@ export default function TeamDashboard() {
   const chantiersEnCours = chantiers.filter(c => c.statut === 'en cours')
   const chantiersPlanifies = chantiers.filter(c => c.statut === 'planifié')
 
-  // #region agent log
   useEffect(() => {
-    fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'TeamDashboard.tsx:chantiers', message: 'chantiers in UI', data: { chantiersLength: chantiers.length, chantierIds: chantiers.map((c) => c.id), myChantiersLength: myChantiers.length }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'C,D' }) }).catch(() => {});
+    debugIngest({ location: 'TeamDashboard.tsx:chantiers', message: 'chantiers in UI', data: { chantiersLength: chantiers.length, chantierIds: chantiers.map((c) => c.id), myChantiersLength: myChantiers.length }, sessionId: 'debug-session', hypothesisId: 'C,D' });
   }, [chantiers, myChantiers.length]);
-  // #endregion
 
   return (
     <>

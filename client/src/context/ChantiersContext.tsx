@@ -18,6 +18,7 @@ import {
   type UpdateClientPayload,
 } from '@/lib/supabaseClients';
 import { fetchChantierAssignmentsByTeamMember } from '@/lib/supabase';
+import { debugIngest } from '@/lib/debugIngest';
 
 export type { Client };
 
@@ -107,10 +108,8 @@ export function ChantiersProvider({ children }: { children: ReactNode }) {
       setError(null);
 
       try {
-        // #region agent log
         const teamMemberForLog = teamMemberJson ? (JSON.parse(teamMemberJson) as { id: string }) : null;
-        fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ChantiersContext.tsx:load:branch', message: 'which load branch', data: { hasUser: !!user, isTeamMember, teamMemberId: teamMemberForLog?.id }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'C,D,E' }) }).catch(() => {});
-        // #endregion
+        debugIngest({ location: 'ChantiersContext.tsx:load:branch', message: 'which load branch', data: { hasUser: !!user, isTeamMember, teamMemberId: teamMemberForLog?.id }, sessionId: 'debug-session', hypothesisId: 'C,D,E' });
         if (ownerId) {
           const data = await fetchChantiersForUser(ownerId);
           if (isTeamMember) {
@@ -137,9 +136,7 @@ export function ChantiersProvider({ children }: { children: ReactNode }) {
               } else {
                 const assignedIds = await fetchChantierAssignmentsByTeamMember(teamMember.id);
                 const filtered = assignedIds.length > 0 ? data.filter((c) => assignedIds.includes(c.id)) : [];
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ChantiersContext.tsx:load:admin+team', message: 'filtered for team', data: { assignedIdsLength: assignedIds.length, assignedIds, dataLength: data.length, filteredLength: filtered.length, filteredIds: filtered.map((c) => c.id) }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'E' }) }).catch(() => {});
-                // #endregion
+                debugIngest({ location: 'ChantiersContext.tsx:load:admin+team', message: 'filtered for team', data: { assignedIdsLength: assignedIds.length, assignedIds, dataLength: data.length, filteredLength: filtered.length, filteredIds: filtered.map((c) => c.id) }, sessionId: 'debug-session', hypothesisId: 'E' });
                 setChantiers(filtered);
               }
             } catch {
@@ -172,9 +169,7 @@ export function ChantiersProvider({ children }: { children: ReactNode }) {
             setChantiers(data);
           } else {
             const data = await fetchChantiersForTeamMember(teamMember.id);
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ChantiersContext.tsx:load:teamOnly', message: 'setChantiers team path', data: { dataLength: data.length, ids: data.map((c) => c.id) }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'C,D' }) }).catch(() => {});
-            // #endregion
+            debugIngest({ location: 'ChantiersContext.tsx:load:teamOnly', message: 'setChantiers team path', data: { dataLength: data.length, ids: data.map((c) => c.id) }, sessionId: 'debug-session', hypothesisId: 'C,D' });
             setChantiers(data);
           }
         }

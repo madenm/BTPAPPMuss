@@ -19,6 +19,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { debugIngest } from '@/lib/debugIngest';
 
 interface UploadedImage {
   file: File;
@@ -121,9 +122,7 @@ export default function AIVisualizationPage() {
       ? `http://127.0.0.1:${window.location.port || '5000'}`
       : window.location.origin;
     const apiUrl = `${apiBase}/api/generate-visualization`;
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AIVisualizationPage.tsx:generateVisualization',message:'generateVisualization start',data:{origin:window.location.origin,apiUrl,hostname:window.location.hostname},timestamp:Date.now(),hypothesisId:'H1,H2,H3',runId:'run4'})}).catch(()=>{});
-    // #endregion
+    debugIngest({ location: 'AIVisualizationPage.tsx:generateVisualization', message: 'generateVisualization start', data: { origin: window.location.origin, apiUrl, hostname: window.location.hostname }, hypothesisId: 'H1,H2,H3', runId: 'run4' });
     try {
       const pingRes = await fetch(`${apiBase}/api/ai-status`, { method: 'GET' });
       if (!pingRes.ok) {
@@ -168,9 +167,7 @@ export default function AIVisualizationPage() {
         toast({ title: 'Erreur', description: 'Réponse invalide du serveur.', variant: 'destructive' });
       }
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AIVisualizationPage.tsx:generateVisualization-catch',message:'fetch or flow error',data:{errMessage:err instanceof Error?err.message:String(err),errName:err instanceof Error?err.name:''},timestamp:Date.now(),hypothesisId:'H1,H4,H5',runId:'post-fix'})}).catch(()=>{});
-      // #endregion
+      debugIngest({ location: 'AIVisualizationPage.tsx:generateVisualization-catch', message: 'fetch or flow error', data: { errMessage: err instanceof Error ? err.message : String(err), errName: err instanceof Error ? err.name : '' }, hypothesisId: 'H1,H4,H5', runId: 'post-fix' });
       const message = err instanceof Error ? err.message : 'Erreur réseau. Réessayez.';
       const isAbort = err instanceof Error && err.name === 'AbortError';
       setGenerationError(isAbort ? 'Délai dépassé. La génération peut prendre jusqu\'à 90 secondes.' : message);
