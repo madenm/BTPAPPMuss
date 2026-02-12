@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/context/AuthContext';
+import { useTeamEffectiveUserId } from '@/context/TeamEffectiveUserIdContext';
 import { useToast } from '@/hooks/use-toast';
 import { insertPayment, type NewPaymentPayload } from '@/lib/supabaseInvoices';
 import { CheckCircle } from 'lucide-react';
@@ -30,6 +31,8 @@ export function PaymentDialog({
   onSaved,
 }: PaymentDialogProps) {
   const { user } = useAuth();
+  const effectiveUserId = useTeamEffectiveUserId();
+  const userId = effectiveUserId ?? user?.id ?? null;
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
 
@@ -50,7 +53,7 @@ export function PaymentDialog({
   }, [open]);
 
   const handleSave = async () => {
-    if (!user?.id) return;
+    if (!userId) return;
 
     const amountNum = parseFloat(amount);
     if (!amountNum || amountNum <= 0) {
@@ -81,7 +84,7 @@ export function PaymentDialog({
         notes: notes || null,
       };
 
-      await insertPayment(user.id, invoiceId, payload);
+      await insertPayment(userId, invoiceId, payload);
       toast({
         title: 'Succès',
         description: 'Paiement enregistré avec succès',

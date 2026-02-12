@@ -78,6 +78,11 @@ function Router() {
       case "/team-dashboard/projects":
       case "/team-dashboard/planning":
       case "/team-dashboard/quotes":
+      case "/team-dashboard/crm":
+      case "/team-dashboard/invoices":
+      case "/team-dashboard/team":
+      case "/team-dashboard/clients":
+      case "/team-dashboard/ai-visualization":
         return <ProtectedTeamRoute><TeamDashboard /></ProtectedTeamRoute>;
       case "/dashboard":
         return <ProtectedRoute><Dashboard /></ProtectedRoute>;

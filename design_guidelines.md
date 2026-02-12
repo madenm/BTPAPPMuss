@@ -1,4 +1,4 @@
-# Design Guidelines for AgentPro Real Estate SaaS
+# Design Guidelines for ChantierPro
 
 ## Design Approach
 **Reference-Based Approach**: Drawing inspiration from the provided dashboard image with modern SaaS platforms like Linear and Notion, creating a professional real estate technology interface that balances visual appeal with utility-focused functionality.

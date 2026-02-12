@@ -24,7 +24,7 @@ import { downloadQuotePdf, fetchLogoDataUrl, type QuotePdfParams } from '@/lib/q
 import { QuotePreview } from '@/components/QuotePreview';
 import { useUserSettings } from '@/context/UserSettingsContext';
 import { VoiceInputButton } from '@/components/VoiceInputButton';
-import { fetchInvoicesForUser, type InvoiceWithPayments } from '@/lib/supabaseInvoices';
+import { fetchInvoicesForUser, createInvoiceFromQuote, type InvoiceWithPayments } from '@/lib/supabaseInvoices';
 import { InvoiceDialog } from '@/components/InvoiceDialog';
 import { Receipt, Check, Trash2, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -227,6 +227,8 @@ export default function ProjectsPage() {
   const [assigneesByChantierId, setAssigneesByChantierId] = useState<Record<string, TeamMember[]>>({});
   const [chantierToDelete, setChantierToDelete] = useState<Chantier | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const scrollToDevisRef = useRef(false);
+  const devisSectionRef = useRef<HTMLDivElement>(null);
 
   // Debounce search 300ms
   useEffect(() => {
@@ -434,7 +436,8 @@ export default function ProjectsPage() {
     setNewChantier(prev => ({ ...prev, clientId: created.id }));
   };
 
-  const handleEditChantier = async (chantier: Chantier) => {
+  const handleEditChantier = async (chantier: Chantier, scrollToDevis = false) => {
+    scrollToDevisRef.current = scrollToDevis;
     setSelectedChantier(chantier);
     setEditChantier({
       id: chantier.id,
@@ -693,6 +696,15 @@ export default function ProjectsPage() {
     }
   }, [isEditDialogOpen, selectedChantier?.id, user?.id]);
 
+  // Scroll vers la section Devis quand ouvert via le bouton Devis (après chargement des devis)
+  useEffect(() => {
+    if (!isEditDialogOpen || !scrollToDevisRef.current || chantierQuotesLoading || !devisSectionRef.current) return;
+    const timer = setTimeout(() => {
+      devisSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      scrollToDevisRef.current = false;
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [isEditDialogOpen, chantierQuotesLoading, selectedChantier?.id]);
 
   return (
     <PageWrapper>
@@ -1405,7 +1417,7 @@ export default function ProjectsPage() {
               )}
             </div>
 
-            <div className="space-y-2">
+            <div ref={devisSectionRef} className="space-y-2">
               <Label className="text-white">Devis</Label>
               {chantierQuotesLoading ? (
                 <p className="text-sm text-white/50">Chargement...</p>
@@ -1551,9 +1563,15 @@ export default function ProjectsPage() {
                                 setQuoteValidatingLoading(true);
                                 try {
                                   await updateQuoteStatus(q.id, user.id, 'validé');
+                                  const invoice = await createInvoiceFromQuote(user.id, q);
                                   const updated = await fetchQuotesByChantierId(selectedChantier.id);
                                   setChantierQuotes(updated);
-                                  toast({ title: 'Devis validé', description: 'Le devis a été marqué comme validé et ne sera plus compté dans les devis en attente.' });
+                                  toast({
+                                    title: 'Devis validé',
+                                    description: invoice
+                                      ? 'Le devis a été validé et la facture correspondante a été créée dans la page Factures.'
+                                      : 'Le devis a été marqué comme validé et ne sera plus compté dans les devis en attente.',
+                                  });
                                 } catch (err) {
                                   console.error(err);
                                   toast({ title: 'Erreur', description: err instanceof Error ? err.message : 'Impossible de marquer le devis comme validé.', variant: 'destructive' });
@@ -1861,7 +1879,16 @@ export default function ProjectsPage() {
                             {assignees.length > 2 && ` +${assignees.length - 2}`}
                           </div>
                         )}
-                        <div className="flex gap-2 mt-3 pt-3 border-t border-white/10" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-white/10" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-white border-white/20 hover:bg-white/10"
+                            onClick={() => handleEditChantier(chantier, true)}
+                          >
+                            <FileText className="h-3.5 w-3.5 mr-1" />
+                            Devis
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"
@@ -1934,7 +1961,8 @@ export default function ProjectsPage() {
             toast({ title: 'Chantier supprimé', description: 'Le chantier a été masqué.' });
             setChantierToDelete(null);
           } catch (err) {
-            toast({ title: 'Erreur', description: err instanceof Error ? err.message : 'Impossible de supprimer.', variant: 'destructive' });
+            const errMsg = err instanceof Error ? err.message : (err && typeof err === 'object' && 'message' in err) ? String((err as { message: unknown }).message) : 'Impossible de supprimer.';
+            toast({ title: 'Erreur', description: errMsg || 'Impossible de supprimer.', variant: 'destructive' });
           } finally {
             setDeleteLoading(false);
           }

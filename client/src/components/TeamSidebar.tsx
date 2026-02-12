@@ -7,6 +7,11 @@ import {
   Building,
   Calendar,
   FileText,
+  LayoutGrid,
+  Receipt,
+  Users,
+  UserCircle,
+  Sparkles,
 } from 'lucide-react';
 import type { TeamMember } from '@/lib/supabase';
 
@@ -78,6 +83,21 @@ export default function TeamSidebar() {
   if (teamMember?.can_create_quotes) {
     menuItems.push({ icon: FileText, label: 'Créer un Devis', path: '/team-dashboard/quotes', active: location === '/team-dashboard/quotes' });
   }
+  if (teamMember?.can_access_crm) {
+    menuItems.push({ icon: LayoutGrid, label: 'CRM', path: '/team-dashboard/crm', active: location === '/team-dashboard/crm' });
+  }
+  if (teamMember?.can_manage_invoices) {
+    menuItems.push({ icon: Receipt, label: 'Factures', path: '/team-dashboard/invoices', active: location === '/team-dashboard/invoices' });
+  }
+  if (teamMember?.can_manage_team) {
+    menuItems.push({ icon: Users, label: 'Équipe', path: '/team-dashboard/team', active: location === '/team-dashboard/team' });
+  }
+  if (teamMember?.can_manage_clients) {
+    menuItems.push({ icon: UserCircle, label: 'Clients', path: '/team-dashboard/clients', active: location === '/team-dashboard/clients' });
+  }
+  if (teamMember?.can_use_ai_visualization) {
+    menuItems.push({ icon: Sparkles, label: 'IA Visualisation', path: '/team-dashboard/ai-visualization', active: location === '/team-dashboard/ai-visualization' });
+  }
 
   return (
     <div className={cn(
@@ -93,7 +113,7 @@ export default function TeamSidebar() {
               Connecté en tant qu'{teamMember.role}
             </span>
           )}
-          <span className="text-xs text-white/70 italic mt-1">Aos Renov</span>
+          <span className="text-xs text-white/70 italic mt-1">ChantierPro</span>
         </div>
       </div>
 

@@ -225,17 +225,21 @@ export async function updateChantierRemote(
 
 /** Soft delete: marque le chantier comme supprimé (is_deleted = true, deleted_at = now). */
 export async function softDeleteChantier(id: string, userId: string): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("chantiers")
     .update({
       is_deleted: true,
       deleted_at: new Date().toISOString(),
     })
     .eq("id", id)
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .select("id");
 
   if (error) {
     console.error("Error soft deleting chantier:", error);
     throw error;
+  }
+  if (!data || (Array.isArray(data) ? data.length === 0 : !data)) {
+    throw new Error('Chantier non trouvé ou suppression non autorisée');
   }
 }

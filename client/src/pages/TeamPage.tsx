@@ -199,6 +199,9 @@ export default function TeamPage() {
   };
 
   const handleRoleChange = (role: string, isNew = false) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TeamPage.tsx:handleRoleChange',message:'Role selected',data:{role,isNew},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
+    // #endregion
     const defaults = ROLE_DEFAULT_PERMISSIONS[role] ?? emptyPermissions();
     if (isNew) {
       setNewMember((prev) => ({ ...prev, role, ...defaults }));
@@ -369,12 +372,6 @@ export default function TeamPage() {
 
   const modalStyles = 'bg-black/10 backdrop-blur-xl border border-white/10 text-white rounded-2xl max-h-[90vh] overflow-y-auto';
   const inputStyles = 'bg-black/10 border-white/10 text-white';
-  const scrollStyles = `
-    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); border-radius: 3px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
-    .custom-scrollbar { scrollbar-width: thin; }
-  `;
 
   return (
     <PageWrapper>
@@ -385,15 +382,14 @@ export default function TeamPage() {
             <p className="text-sm text-white/70">Gérez les membres et leurs codes de connexion</p>
           </div>
           <div className="flex items-center gap-3">
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen} modal={false}>
               <DialogTrigger asChild>
                 <Button className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30">
                   <Plus className="h-4 w-4 mr-2" />
                   Ajouter un Membre
                 </Button>
               </DialogTrigger>
-              <DialogContent className={modalStyles + ' flex flex-col custom-scrollbar'}>
-                <style>{scrollStyles}</style>
+              <DialogContent className={modalStyles + ' flex flex-col'}>
                 <DialogHeader>
                   <DialogTitle>Ajouter un Nouveau Membre</DialogTitle>
                   <DialogDescription className="text-white/70">
@@ -414,7 +410,7 @@ export default function TeamPage() {
                         <SelectTrigger className={inputStyles}>
                           <SelectValue placeholder="Rôle" />
                         </SelectTrigger>
-                        <SelectContent className="bg-black/30 border-white/10">
+                        <SelectContent className="bg-white/95 text-black border-white/20 shadow-lg">
                           {ROLES.map((r) => (
                             <SelectItem key={r} value={r}>{ROLE_ICONS[r] || ''} {r}</SelectItem>
                           ))}
@@ -773,9 +769,8 @@ export default function TeamPage() {
       </main>
 
       {/* Modal Édition avec onglets */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className={modalStyles + ' flex flex-col custom-scrollbar'}>
-          <style>{scrollStyles}</style>
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen} modal={false}>
+        <DialogContent className={modalStyles + ' flex flex-col'}>
           <DialogHeader>
             <DialogTitle>Modifier un Membre</DialogTitle>
             <DialogDescription className="text-white/70">
@@ -807,7 +802,7 @@ export default function TeamPage() {
                     <SelectTrigger className={inputStyles}>
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-black/30 border-white/10">
+                    <SelectContent className="bg-white/95 text-black border-white/20 shadow-lg">
                       {ROLES.map((r) => (
                         <SelectItem key={r} value={r}>{ROLE_ICONS[r]} {r}</SelectItem>
                       ))}

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/context/AuthContext';
+import { useTeamEffectiveUserId } from '@/context/TeamEffectiveUserIdContext';
 import { useChantiers } from '@/context/ChantiersContext';
 import { useUserSettings } from '@/context/UserSettingsContext';
 import { useToast } from '@/hooks/use-toast';
@@ -75,6 +76,8 @@ export function InvoiceDetailDialog({
   onUpdated,
 }: InvoiceDetailDialogProps) {
   const { user } = useAuth();
+  const effectiveUserId = useTeamEffectiveUserId();
+  const userId = effectiveUserId ?? user?.id ?? null;
   const { chantiers } = useChantiers();
   const { logoUrl, profile } = useUserSettings();
   const { toast } = useToast();
@@ -84,10 +87,10 @@ export function InvoiceDetailDialog({
   const [sendingEmail, setSendingEmail] = useState(false);
 
   useEffect(() => {
-    if (open && user?.id) {
+    if (open && userId) {
       const loadInvoice = async () => {
         try {
-          const updated = await fetchInvoiceById(user.id, initialInvoice.id);
+          const updated = await fetchInvoiceById(userId, initialInvoice.id);
           if (updated) setInvoice(updated);
         } catch (error) {
           console.error('Error loading invoice:', error);
@@ -95,10 +98,10 @@ export function InvoiceDetailDialog({
       };
       loadInvoice();
     }
-  }, [open, initialInvoice.id, user?.id]);
+  }, [open, initialInvoice.id, userId]);
 
   const handleDownloadPdf = async () => {
-    if (!user?.id) return;
+    if (!userId) return;
 
     try {
       const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : null;
@@ -123,7 +126,7 @@ export function InvoiceDetailDialog({
   };
 
   const handleSendEmail = async () => {
-    if (!user?.id || !invoice.client_email) {
+    if (!userId || !invoice.client_email) {
       toast({
         title: 'Erreur',
         description: 'Aucune adresse email pour ce client',
@@ -176,7 +179,7 @@ export function InvoiceDetailDialog({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: user.id,
+          userId,
           to: invoice.client_email,
           subject: `Facture ${invoice.invoice_number}`,
           pdfBase64,
@@ -207,11 +210,11 @@ export function InvoiceDetailDialog({
   };
 
   const handleCancelInvoice = async () => {
-    if (!user?.id) return;
+    if (!userId) return;
     if (!confirm('Êtes-vous sûr de vouloir annuler cette facture ?')) return;
 
     try {
-      await cancelInvoice(user.id, invoice.id);
+      await cancelInvoice(userId, invoice.id);
       toast({
         title: 'Succès',
         description: 'Facture annulée',
@@ -229,18 +232,18 @@ export function InvoiceDetailDialog({
   };
 
   const handleDeletePayment = async (paymentId: string) => {
-    if (!user?.id) return;
+    if (!userId) return;
     if (!confirm('Êtes-vous sûr de vouloir supprimer ce paiement ?')) return;
 
     try {
-      await deletePayment(user.id, paymentId);
+      await deletePayment(userId, paymentId);
       toast({
         title: 'Succès',
         description: 'Paiement supprimé',
       });
       onUpdated();
       // Recharger la facture
-      const updated = await fetchInvoiceById(user.id, invoice.id);
+      const updated = await fetchInvoiceById(userId, invoice.id);
       if (updated) setInvoice(updated);
     } catch (error) {
       console.error('Error deleting payment:', error);
@@ -466,8 +469,8 @@ export function InvoiceDetailDialog({
             onUpdated();
             setIsPaymentDialogOpen(false);
             // Recharger la facture
-            if (user?.id) {
-              fetchInvoiceById(user.id, invoice.id).then((updated) => {
+            if (userId) {
+              fetchInvoiceById(userId, invoice.id).then((updated) => {
                 if (updated) setInvoice(updated);
               });
             }

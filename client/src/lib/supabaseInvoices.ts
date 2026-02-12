@@ -247,6 +247,93 @@ export async function fetchPaymentsForInvoice(
   return (data ?? []) as SupabasePayment[];
 }
 
+/** Quote-like shape used to create an invoice (from supabaseQuotes) */
+export type QuoteForInvoice = {
+  id: string;
+  chantier_id: string | null;
+  client_name: string | null;
+  client_email: string | null;
+  client_phone: string | null;
+  client_address: string | null;
+  total_ht: number;
+  total_ttc: number;
+  validity_days: number | null;
+  items: Array<{
+    id: string;
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+    subItems?: Array<{ id: string; description: string; quantity: number; unitPrice: number; total: number }>;
+  }> | null;
+};
+
+/**
+ * Crée une facture à partir d'un devis accepté/validé.
+ * Ne fait rien si une facture existe déjà pour ce devis (quote_id).
+ */
+export async function createInvoiceFromQuote(
+  userId: string,
+  quote: QuoteForInvoice
+): Promise<SupabaseInvoice | null> {
+  const existing = await fetchInvoicesForUser(userId);
+  const alreadyHasInvoice = existing.some((inv) => inv.quote_id === quote.id);
+  if (alreadyHasInvoice) {
+    return null;
+  }
+
+  const today = new Date();
+  const invoiceDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const dueDate = new Date(today);
+  const validityDays = quote.validity_days ?? 30;
+  dueDate.setDate(dueDate.getDate() + validityDays);
+  const dueDateStr = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, "0")}-${String(dueDate.getDate()).padStart(2, "0")}`;
+
+  const totalHt = Number(quote.total_ht) || 0;
+  const totalTtc = Number(quote.total_ttc) || 0;
+  const tvaAmount = Math.round((totalTtc - totalHt) * 100) / 100;
+
+  const items: InvoiceItem[] = (quote.items || []).map((item) => ({
+    id: item.id,
+    description: item.description,
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+    total: item.total,
+    ...(item.subItems?.length
+      ? {
+          subItems: item.subItems.map((s) => ({
+            id: s.id,
+            description: s.description,
+            quantity: s.quantity,
+            unitPrice: s.unitPrice,
+            total: s.total,
+          })),
+        }
+      : {}),
+  }));
+
+  const payload: NewInvoicePayload = {
+    quote_id: quote.id,
+    chantier_id: quote.chantier_id ?? null,
+    client_id: null,
+    client_name: quote.client_name ?? "",
+    client_email: quote.client_email ?? null,
+    client_phone: quote.client_phone ?? null,
+    client_address: quote.client_address ?? null,
+    invoice_date: invoiceDate,
+    due_date: dueDateStr,
+    payment_terms: "30 jours net",
+    items,
+    subtotal_ht: totalHt,
+    tva_amount: tvaAmount,
+    total_ttc: totalTtc,
+    status: "brouillon",
+    notes: null,
+  };
+
+  return insertInvoice(userId, payload);
+}
+
 export async function generateInvoiceNumber(userId: string): Promise<string> {
   const { data, error } = await supabase.rpc("generate_invoice_number", {
     p_user_id: userId,

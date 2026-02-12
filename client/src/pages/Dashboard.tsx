@@ -14,7 +14,9 @@ import {
   Users,
   User,
   Clock,
-  Calendar
+  Calendar,
+  Wallet,
+  StickyNote
 } from 'lucide-react'
 import { UserAccountButton } from '@/components/UserAccountButton'
 import { Link, useLocation } from 'wouter'
@@ -22,6 +24,8 @@ import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
 import { useDashboardMetrics } from '@/hooks/useDashboardMetrics'
 import { useChantiers } from '@/context/ChantiersContext'
 import { fetchChantierAssignmentsByChantier, type TeamMember } from '@/lib/supabase'
+import { fetchPlanningNoteForDate } from '@/lib/supabasePlanningNotes'
+import { toNoteDateKey } from '@/lib/planningUtils'
 
 // Parse "YYYY-MM-DD" (ou ISO avec time) en date locale pour éviter le décalage UTC
 function parseLocalDate(dateStr: string): Date {
@@ -113,12 +117,25 @@ function OverviewTab() {
   const { chantiers } = useChantiers();
   const [assignmentsByChantierId, setAssignmentsByChantierId] = useState<Record<string, TeamMember[]>>({});
   const [loadingAssignments, setLoadingAssignments] = useState(false);
-  
+  const [noteToday, setNoteToday] = useState<string | null>(null);
+
+  const todayKey = toNoteDateKey(new Date());
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchPlanningNoteForDate(todayKey).then((note) => {
+      if (!cancelled && note?.content?.trim()) setNoteToday(note.content.trim());
+      else if (!cancelled) setNoteToday(null);
+    });
+    return () => { cancelled = true; };
+  }, [todayKey]);
+
   const {
     totalRevenue,
     activeChantiers,
     pendingQuotes,
     conversionRate,
+    remainingToCollect,
     revenueEvolution,
     conversionEvolution,
     loading,
@@ -215,14 +232,14 @@ function OverviewTab() {
         <MetricCard
           title="Chiffre d'Affaires"
           value={formatCurrency(totalRevenue)}
-          change={totalRevenue > 0 ? "Paiements enregistrés" : "Aucun paiement enregistré"}
+          change={totalRevenue > 0 ? "Devis acceptés ce mois-ci (HT)" : "Aucun devis accepté ce mois-ci"}
           icon={Euro}
           delay={0.1}
         />
         <MetricCard
-          title="Chantiers Actifs"
+          title="Chantiers en cours"
           value={activeChantiers.toString()}
-          change={activeChantiers > 0 ? "En cours et planifiés" : "Aucun chantier actif"}
+          change={activeChantiers > 0 ? "Chantiers en cours" : "Aucun chantier en cours"}
           icon={Building}
           delay={0.2}
         />
@@ -234,10 +251,10 @@ function OverviewTab() {
           delay={0.3}
         />
         <MetricCard
-          title="Taux de Conversion"
-          value={`${conversionRate}%`}
-          change={conversionRate > 0 ? "Factures envoyées / devis envoyés" : "Devis ou factures envoyés"}
-          icon={TrendingUp}
+          title="À encaisser"
+          value={formatCurrency(remainingToCollect)}
+          change={remainingToCollect > 0 ? "Montant restant sur les factures" : "Toutes les factures soldées"}
+          icon={Wallet}
           delay={0.4}
         />
       </div>
@@ -303,6 +320,15 @@ function OverviewTab() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-6 pt-0">
+            {noteToday !== null && (
+              <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                <div className="flex items-center gap-2 text-amber-200/90 text-sm font-medium mb-1">
+                  <StickyNote className="h-4 w-4 shrink-0" />
+                  Note du jour
+                </div>
+                <p className="text-white/90 text-sm whitespace-pre-wrap">{noteToday}</p>
+              </div>
+            )}
             {loadingAssignments ? (
               <div className="flex items-center justify-center h-64 text-white/60">
                 <div className="text-center">

@@ -96,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (typeof window === 'undefined') return;
     localStorage.removeItem('userType');
     localStorage.removeItem('teamMember');
+    localStorage.removeItem('teamMemberLoginCode');
     sessionStorage.removeItem('teamMemberLoginCode');
   };
 

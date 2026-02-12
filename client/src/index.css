@@ -91,6 +91,12 @@
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 
+  /* Scrollbar (design unifié) */
+  --scrollbar-thumb: rgba(139, 92, 246, 0.3);
+  --scrollbar-thumb-hover: rgba(139, 92, 246, 0.45);
+  --scrollbar-thumb-active: rgba(139, 92, 246, 0.5);
+  --scrollbar-track: transparent;
+
   /* Automatically computed borders - intensity can be controlled by the user by the --opaque-button-border-intensity setting */
 
   /* Fallback for older browsers */
@@ -212,6 +218,48 @@
   body {
     @apply font-sans antialiased bg-background text-foreground;
   }
+}
+
+/* Scrollbars unifiés – même design partout (page chantier, fiche chantier, modals, etc.)
+   Teinte claire et discrète */
+*,
+html,
+body {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent !important;
+}
+
+*::-webkit-scrollbar,
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
+}
+
+*::-webkit-scrollbar-track,
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track {
+  background: transparent !important;
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb,
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25) !important;
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb:hover,
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4) !important;
+}
+
+*::-webkit-scrollbar-thumb:active,
+html::-webkit-scrollbar-thumb:active,
+body::-webkit-scrollbar-thumb:active {
+  background: rgba(255, 255, 255, 0.5) !important;
 }
 
 /**

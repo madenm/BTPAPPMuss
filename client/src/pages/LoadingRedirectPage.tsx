@@ -50,7 +50,7 @@ export default function LoadingRedirectPage() {
           className="text-center"
         >
           <h1 className="text-4xl font-light tracking-tight text-white mb-2 drop-shadow-lg">
-            Aos Renov
+            ChantierPro
           </h1>
           <p className="text-lg text-white/80 font-light drop-shadow-md">
             Chargement de votre espace...

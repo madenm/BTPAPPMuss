@@ -35,9 +35,11 @@ export interface DayInfo {
   date: Date;
   isCurrentMonth: boolean;
   isToday: boolean;
+  /** Cellule vide de fin de grille (pas de jour du mois suivant) */
+  isPlaceholder?: boolean;
 }
 
-// Fonction pour obtenir les jours du mois
+// Fonction pour obtenir les jours du mois (uniquement le mois en cours, jusqu'à 31 jours)
 export function getDaysInMonth(year: number, month: number): DayInfo[] {
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
@@ -66,12 +68,15 @@ export function getDaysInMonth(year: number, month: number): DayInfo[] {
     });
   }
 
-  const remainingDays = 42 - days.length;
-  for (let day = 1; day <= remainingDays; day++) {
+  // Compléter la dernière ligne (multiple de 7) par des cellules vides, sans jours du mois suivant
+  const remainder = days.length % 7;
+  const padCount = remainder === 0 ? 0 : 7 - remainder;
+  for (let i = 0; i < padCount; i++) {
     days.push({
-      date: new Date(year, month + 1, day),
+      date: new Date(year, month + 1, 0),
       isCurrentMonth: false,
       isToday: false,
+      isPlaceholder: true,
     });
   }
 
@@ -99,6 +104,14 @@ export const TYPE_CHANTIER_LABELS: Record<string, string> = {
   peinture: 'Peinture & Revêtements',
   autre: 'Autre',
 };
+
+/** Format date en YYYY-MM-DD pour les notes du planning */
+export function toNoteDateKey(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 
 /** Format court pour affichage : "4 fév" ou "4-7 fév" (debut-fin) */
 export function formatDateShort(date: Date): string {

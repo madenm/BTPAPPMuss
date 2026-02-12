@@ -6,8 +6,18 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJ
 
 const TEAM_MEMBERS_TABLE_MISSING_KEY = 'aos_team_members_table_missing';
 
+/** En mode membre d'équipe, l'ID du propriétaire (pour charger les données à sa place). Défini par TeamDashboard. */
+declare global {
+  interface Window {
+    __AOS_TEAM_EFFECTIVE_USER_ID__?: string | null;
+  }
+}
+
 // Helper function to get current user ID
 async function getCurrentUserId(): Promise<string | null> {
+  if (typeof window !== 'undefined' && window.__AOS_TEAM_EFFECTIVE_USER_ID__) {
+    return window.__AOS_TEAM_EFFECTIVE_USER_ID__;
+  }
   const { data: { user } } = await supabase.auth.getUser();
   return user?.id || null;
 }

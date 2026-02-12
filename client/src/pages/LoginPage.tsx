@@ -55,8 +55,9 @@ export default function LoginPage() {
       if (member) {
         localStorage.setItem('teamMember', JSON.stringify(member))
         localStorage.setItem('userType', 'team')
-        // Stocker le code en session pour rafraîchir les permissions au chargement du dashboard
+        // Stocker le code pour rafraîchir les permissions au chargement du dashboard (session + local pour persistance)
         sessionStorage.setItem('teamMemberLoginCode', code.trim())
+        localStorage.setItem('teamMemberLoginCode', code.trim())
         setLocation("/team-dashboard")
       } else {
         alert("Code invalide ou membre inactif")

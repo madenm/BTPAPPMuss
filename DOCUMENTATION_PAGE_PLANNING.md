@@ -1,4 +1,4 @@
-  # Documentation Page Planning – Aos Renov
+  # Documentation Page Planning – ChantierPro
 
   **Document destiné à l'analyse fonctionnelle et technique**
 
@@ -274,4 +274,4 @@
 
   ---
 
-  *Document mis à jour pour l'analyse fonctionnelle de la page Planning – Aos Renov*
+  *Document mis à jour pour l'analyse fonctionnelle de la page Planning – ChantierPro*

@@ -14,9 +14,21 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { Mail, Phone, Plus, Loader2, Upload, X, Search, User } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Mail, Phone, Plus, Loader2, Upload, X, Search, User, Trash2, Pencil } from "lucide-react"
 import { motion } from "framer-motion"
 import { useAuth } from "@/context/AuthContext"
+import { useTeamEffectiveUserId } from "@/context/TeamEffectiveUserIdContext"
 import { useUserSettings } from "@/context/UserSettingsContext"
 import { useChantiers } from "@/context/ChantiersContext"
 import {
@@ -24,9 +36,10 @@ import {
   fetchProspectsForUser,
   insertProspect,
   updateProspect,
+  deleteProspect,
 } from "@/lib/supabaseProspects"
 import { fetchQuotesForUser, updateQuoteStatus, type SupabaseQuote } from "@/lib/supabaseQuotes"
-import { fetchInvoicesForUser, type InvoiceWithPayments } from "@/lib/supabaseInvoices"
+import { fetchInvoicesForUser, createInvoiceFromQuote, type InvoiceWithPayments } from "@/lib/supabaseInvoices"
 import { getQuotePdfBase64, fetchLogoDataUrl, buildQuoteEmailHtml, buildContactBlockHtml, type QuotePdfParams } from "@/lib/quotePdf"
 import { getInvoicePdfBase64, buildInvoiceEmailHtml } from "@/lib/invoicePdf"
 import { toast } from "@/hooks/use-toast"
@@ -49,8 +62,52 @@ const COLUMN_DEFS: { id: string; name: string }[] = [
 
 const DEFAULT_THEME_COLOR = "#8b5cf6"
 
+const DEFAULT_QUOTE_EMAIL_MESSAGE =
+  "Bonjour,\n\nVeuillez trouver ci-joint notre devis. N'hésitez pas à nous contacter pour toute question.\n\nCordialement"
+
+const DEFAULT_INVOICE_EMAIL_MESSAGE =
+  "Bonjour,\n\nVeuillez trouver ci-joint notre facture. N'hésitez pas à nous contacter pour toute question.\n\nCordialement"
+
+const DEFAULT_QUOTE_FOLLOWUP = "Bonjour, je souhaite faire un suivi concernant notre échange précédent et le devis que je vous ai transmis. N'hésitez pas à me recontacter pour en discuter. Cordialement."
+const DEFAULT_INVOICE_FOLLOWUP = "Bonjour, je souhaite faire un suivi concernant la facture que je vous ai transmise. N'hésitez pas à me recontacter pour régler ou en discuter. Cordialement."
+
+function getDefaultMessageForColumn(columnId: string): string {
+  if (columnId === "quote") return DEFAULT_QUOTE_EMAIL_MESSAGE
+  if (columnId === "invoice") return DEFAULT_INVOICE_EMAIL_MESSAGE
+  if (columnId.startsWith("quote_")) return DEFAULT_QUOTE_FOLLOWUP
+  if (columnId.startsWith("invoice_")) return DEFAULT_INVOICE_FOLLOWUP
+  return ""
+}
+
+const PIPELINE_MESSAGES_STORAGE_KEY = "crm_pipeline_messages"
+
+function getStoredPipelineMessages(userId: string | null): Record<string, string> {
+  if (!userId || typeof window === "undefined") return {}
+  try {
+    const raw = localStorage.getItem(`${PIPELINE_MESSAGES_STORAGE_KEY}_${userId}`)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as Record<string, string>
+    return typeof parsed === "object" && parsed !== null ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function setStoredPipelineMessage(userId: string | null, key: string, value: string): void {
+  if (!userId || typeof window === "undefined") return
+  try {
+    const prev = getStoredPipelineMessages(userId)
+    const next = { ...prev, [key]: value }
+    localStorage.setItem(`${PIPELINE_MESSAGES_STORAGE_KEY}_${userId}`, JSON.stringify(next))
+  } catch {
+    // ignore
+  }
+}
+
 export function CRMPipeline() {
   const { user } = useAuth()
+  const effectiveUserId = useTeamEffectiveUserId()
+  const userId = effectiveUserId ?? user?.id ?? null
   const { profile, logoUrl, themeColor } = useUserSettings()
   const { clients } = useChantiers()
   const accentColor = themeColor || DEFAULT_THEME_COLOR
@@ -74,12 +131,15 @@ export function CRMPipeline() {
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null)
   const [selectedColumn, setSelectedColumn] = useState<string>("")
   const [updatingStage, setUpdatingStage] = useState(false)
+  const [removingId, setRemovingId] = useState<string | null>(null)
+  const [prospectToRemove, setProspectToRemove] = useState<Prospect | null>(null)
 
   const [quoteModalPdfFile, setQuoteModalPdfFile] = useState<File | null>(null)
   const [quoteModalSelectedQuote, setQuoteModalSelectedQuote] = useState<SupabaseQuote | null>(null)
   const [quoteModalQuotes, setQuoteModalQuotes] = useState<SupabaseQuote[]>([])
   const [quoteModalQuotesLoading, setQuoteModalQuotesLoading] = useState(false)
   const [quoteModalDragOver, setQuoteModalDragOver] = useState(false)
+  const [quoteModalCustomMessage, setQuoteModalCustomMessage] = useState("")
   const quoteModalFileInputRef = useRef<HTMLInputElement>(null)
 
   const DEFAULT_QUOTE_FOLLOWUP_MESSAGE = "Bonjour, je souhaite faire un suivi concernant notre échange précédent et le devis que je vous ai transmis. N'hésitez pas à me recontacter pour en discuter. Cordialement."
@@ -90,6 +150,9 @@ export function CRMPipeline() {
   const [invoiceModalInvoices, setInvoiceModalInvoices] = useState<InvoiceWithPayments[]>([])
   const [invoiceModalSelectedInvoice, setInvoiceModalSelectedInvoice] = useState<InvoiceWithPayments | null>(null)
   const [invoiceModalLoading, setInvoiceModalLoading] = useState(false)
+  const [invoiceModalCustomMessage, setInvoiceModalCustomMessage] = useState("")
+  const [pipelineMessageEditColumnId, setPipelineMessageEditColumnId] = useState<string | null>(null)
+  const [pipelineMessageEditDraft, setPipelineMessageEditDraft] = useState("")
 
   const columns = useMemo<Column[]>(() => {
     return COLUMN_DEFS.map((col) => ({
@@ -108,30 +171,41 @@ export function CRMPipeline() {
     }))
   }, [prospects])
 
+  const quoteColumns = useMemo(
+    () => columns.filter((c) => ["all", "quote", "quote_followup1", "quote_followup2"].includes(c.id)),
+    [columns]
+  )
+  const invoiceColumns = useMemo(
+    () => columns.filter((c) => ["invoice", "invoice_followup1", "invoice_followup2"].includes(c.id)),
+    [columns]
+  )
+
   useEffect(() => {
-    if (!user?.id) {
+    if (!userId) {
       setLoading(false)
       setProspects([])
       return
     }
     setLoading(true)
     setError(null)
-    fetchProspectsForUser(user.id)
+    fetchProspectsForUser(userId)
       .then(setProspects)
       .catch((err) => {
         console.error(err)
         setError("Impossible de charger les prospects.")
       })
       .finally(() => setLoading(false))
-  }, [user?.id])
+  }, [userId])
 
   useEffect(() => {
-    if (!showQuoteModal || !user?.id) return
+    if (!showQuoteModal || !userId) return
     setQuoteModalPdfFile(null)
     setQuoteModalSelectedQuote(null)
+    const stored = getStoredPipelineMessages(userId)
+    setQuoteModalCustomMessage(stored["quote"] ?? DEFAULT_QUOTE_EMAIL_MESSAGE)
     setQuoteModalQuotesLoading(true)
     const prospect = selectedProspect
-    fetchQuotesForUser(user.id)
+    fetchQuotesForUser(userId)
       .then((quotes) => {
         setQuoteModalQuotes(quotes)
         // Pré-sélectionner le devis qui correspond au prospect (même email client)
@@ -145,14 +219,24 @@ export function CRMPipeline() {
       })
       .catch(() => setQuoteModalQuotes([]))
       .finally(() => setQuoteModalQuotesLoading(false))
-  }, [showQuoteModal, user?.id, selectedProspect?.id])
+  }, [showQuoteModal, userId, selectedProspect?.id])
 
   useEffect(() => {
-    if (!showInvoiceModal || !user?.id) return
+    if (!showFollowupModal || !selectedColumn || !userId) return
+    const stored = getStoredPipelineMessages(userId)
+    const defaultMsg =
+      selectedColumn.startsWith("quote_") ? DEFAULT_QUOTE_FOLLOWUP_MESSAGE : DEFAULT_INVOICE_FOLLOWUP_MESSAGE
+    setFollowupMessage(stored[selectedColumn] ?? defaultMsg)
+  }, [showFollowupModal, selectedColumn, userId])
+
+  useEffect(() => {
+    if (!showInvoiceModal || !userId) return
     setInvoiceModalSelectedInvoice(null)
+    const stored = getStoredPipelineMessages(userId)
+    setInvoiceModalCustomMessage(stored["invoice"] ?? DEFAULT_INVOICE_EMAIL_MESSAGE)
     setInvoiceModalLoading(true)
     const prospect = selectedProspect
-    fetchInvoicesForUser(user.id)
+    fetchInvoicesForUser(userId)
       .then((invoices) => {
         setInvoiceModalInvoices(invoices)
         if (prospect && invoices.length > 0) {
@@ -165,10 +249,32 @@ export function CRMPipeline() {
       })
       .catch(() => setInvoiceModalInvoices([]))
       .finally(() => setInvoiceModalLoading(false))
-  }, [showInvoiceModal, user?.id, selectedProspect?.id])
+  }, [showInvoiceModal, userId, selectedProspect?.id])
 
   const refreshAfterUpdate = (updated: Prospect) => {
     setProspects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+  }
+
+  const handleRemoveProspectClick = (prospect: Prospect, e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    setProspectToRemove(prospect)
+  }
+
+  const handleConfirmRemoveProspect = async () => {
+    if (!userId || !prospectToRemove) return
+    setRemovingId(prospectToRemove.id)
+    try {
+      await deleteProspect(userId, prospectToRemove.id)
+      setProspects((prev) => prev.filter((p) => p.id !== prospectToRemove.id))
+      setProspectToRemove(null)
+      toast({ title: "Prospect retiré", description: `${prospectToRemove.name} a été retiré du pipeline.` })
+    } catch (err) {
+      console.error(err)
+      toast({ title: "Erreur", description: "Impossible de retirer le prospect.", variant: "destructive" })
+    } finally {
+      setRemovingId(null)
+    }
   }
 
   const handleSelectClient = (client: { name: string; email: string; phone?: string | null }) => {
@@ -183,13 +289,13 @@ export function CRMPipeline() {
   }
 
   const handleAddProspect = async () => {
-    if (!user?.id || !newProspect.name.trim() || !newProspect.email.trim()) {
+    if (!userId || !newProspect.name.trim() || !newProspect.email.trim()) {
       toast({ title: "Nom et email requis", variant: "destructive" })
       return
     }
     setAdding(true)
     try {
-      const created = await insertProspect(user.id, {
+      const created = await insertProspect(userId, {
         name: newProspect.name.trim(),
         email: newProspect.email.trim(),
         phone: newProspect.phone.trim() || undefined,
@@ -222,7 +328,7 @@ export function CRMPipeline() {
     columnId: string,
     type: "quote" | "invoice"
   ) => {
-    if (!user?.id) return
+    if (!userId) return
     setUpdatingStage(true)
     try {
       const isQuote = type === "quote"
@@ -234,7 +340,6 @@ export function CRMPipeline() {
             : columnId === "invoice_followup1"
               ? "Relance facture 1"
               : "Relance facture 2"
-      const defaultMsg = isQuote ? DEFAULT_QUOTE_FOLLOWUP_MESSAGE : DEFAULT_INVOICE_FOLLOWUP_MESSAGE
       const subjectSuffix = isQuote ? "Votre devis" : "Votre facture"
       const contactBlock = buildContactBlockHtml({
         contactName: profile?.full_name,
@@ -243,7 +348,10 @@ export function CRMPipeline() {
         address: profile?.company_address,
         cityPostal: profile?.company_city_postal,
       })
-      const htmlContent = `<p>${defaultMsg.replace(/\n/g, "</p><p>")}</p>${contactBlock}`
+      const stored = getStoredPipelineMessages(userId)
+      const defaultMsg = isQuote ? DEFAULT_QUOTE_FOLLOWUP_MESSAGE : DEFAULT_INVOICE_FOLLOWUP_MESSAGE
+      const messageText = stored[columnId]?.trim() || defaultMsg
+      const htmlContent = `<p>${messageText.replace(/\n/g, "</p><p>")}</p>${contactBlock}`
       const emailRes = await fetch("/api/send-followup-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -258,7 +366,7 @@ export function CRMPipeline() {
         toast({ title: "Erreur d'envoi", description: data.message || "Impossible d'envoyer l'email de relance.", variant: "destructive" })
         return
       }
-      const updated = await updateProspect(user.id, prospect.id, { stage: columnId })
+      const updated = await updateProspect(userId, prospect.id, { stage: columnId })
       refreshAfterUpdate(updated)
       toast({ title: "Relance envoyée", description: `L'email de relance a été envoyé à ${prospect.email}.` })
     } catch (err) {
@@ -270,7 +378,7 @@ export function CRMPipeline() {
   }
 
   const handleDrop = async (targetColumnId: string) => {
-    if (!draggedItem || !user?.id) return
+    if (!draggedItem || !userId) return
 
     const { prospect, columnId: sourceColumnId } = draggedItem
     if (sourceColumnId === targetColumnId) {
@@ -308,7 +416,7 @@ export function CRMPipeline() {
 
     setUpdatingStage(true)
     try {
-      const updated = await updateProspect(user.id, prospect.id, { stage: targetColumnId })
+      const updated = await updateProspect(userId, prospect.id, { stage: targetColumnId })
       refreshAfterUpdate(updated)
     } catch (err) {
       console.error(err)
@@ -353,7 +461,7 @@ export function CRMPipeline() {
   }
 
   const handleQuoteConfirm = async () => {
-    if (!user?.id || !selectedProspect) return
+    if (!userId || !selectedProspect) return
     const hasPdf = !!quoteModalPdfFile
     const hasQuote = !!quoteModalSelectedQuote
     if (!hasPdf && !hasQuote) {
@@ -397,7 +505,7 @@ export function CRMPipeline() {
         return
       }
 
-      const htmlContent =
+      const builtHtml =
         quoteModalSelectedQuote != null
           ? buildQuoteEmailHtml({
               clientName: quoteModalSelectedQuote.client_name ?? "",
@@ -425,7 +533,14 @@ export function CRMPipeline() {
                 cityPostal: profile?.company_city_postal,
               },
             })
-          : undefined
+          : ""
+
+      const customMessageHtml = quoteModalCustomMessage.trim()
+        ? "<p>" + quoteModalCustomMessage.trim().replace(/\n/g, "</p><p>") + "</p>"
+        : ""
+      const htmlContent = (customMessageHtml + builtHtml).trim() || undefined
+
+      setStoredPipelineMessage(userId, "quote", quoteModalCustomMessage)
 
       const emailRes = await fetch("/api/send-quote-email", {
         method: "POST",
@@ -445,12 +560,13 @@ export function CRMPipeline() {
       }
 
       // Mettre à jour le statut du devis à "validé" si un devis a été sélectionné (validation automatique lors de l'envoi)
-      if (quoteModalSelectedQuote && user?.id) {
+      if (quoteModalSelectedQuote && userId) {
         // #region agent log
         fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'CRMPipeline.tsx:sendQuoteEmail:before-status-update', message: 'Updating quote status to validé', data: { quoteId: quoteModalSelectedQuote.id, currentStatus: quoteModalSelectedQuote.status }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'F' }) }).catch(() => {});
         // #endregion
         try {
-          await updateQuoteStatus(quoteModalSelectedQuote.id, user.id, 'validé');
+          await updateQuoteStatus(quoteModalSelectedQuote.id, userId, 'validé');
+          await createInvoiceFromQuote(userId, quoteModalSelectedQuote);
           // #region agent log
           fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'CRMPipeline.tsx:sendQuoteEmail:after-status-update', message: 'Quote status updated to validé', data: { quoteId: quoteModalSelectedQuote.id }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'F' }) }).catch(() => {});
           // #endregion
@@ -463,14 +579,18 @@ export function CRMPipeline() {
         }
       }
 
-      const updated = await updateProspect(user.id, selectedProspect.id, { stage: "quote" })
+      const updated = await updateProspect(userId, selectedProspect.id, { stage: "quote" })
       refreshAfterUpdate(updated)
       setShowQuoteModal(false)
       setSelectedProspect(null)
       setDraggedItem(null)
       setQuoteModalPdfFile(null)
       setQuoteModalSelectedQuote(null)
-      toast({ title: "Email envoyé", description: "Le devis a été envoyé au prospect." })
+      setQuoteModalCustomMessage("")
+      toast({
+        title: "Email envoyé",
+        description: "Le devis a été envoyé au prospect." + (quoteModalSelectedQuote && userId ? " La facture correspondante a été créée dans la page Factures." : ""),
+      })
     } catch (err) {
       console.error(err)
       toast({ title: "Erreur", description: err instanceof Error ? err.message : "Impossible d'envoyer l'email.", variant: "destructive" })
@@ -485,6 +605,7 @@ export function CRMPipeline() {
     setDraggedItem(null)
     setQuoteModalPdfFile(null)
     setQuoteModalSelectedQuote(null)
+    setQuoteModalCustomMessage("")
   }
 
   const closeInvoiceModal = () => {
@@ -495,7 +616,7 @@ export function CRMPipeline() {
   }
 
   const handleInvoiceConfirm = async () => {
-    if (!user?.id || !selectedProspect || !invoiceModalSelectedInvoice) return
+    if (!userId || !selectedProspect || !invoiceModalSelectedInvoice) return
     if (!invoiceModalSelectedInvoice.client_email?.trim()) {
       toast({ title: "Erreur", description: "Cette facture n'a pas d'email client.", variant: "destructive" })
       return
@@ -513,7 +634,7 @@ export function CRMPipeline() {
         companySiret: profile?.company_siret || "",
         logoDataUrl,
       })
-      const invoiceHtml = buildInvoiceEmailHtml({
+      const builtInvoiceHtml = buildInvoiceEmailHtml({
         clientName: invoiceModalSelectedInvoice.client_name ?? "",
         clientEmail: invoiceModalSelectedInvoice.client_email,
         clientPhone: invoiceModalSelectedInvoice.client_phone,
@@ -538,13 +659,20 @@ export function CRMPipeline() {
           cityPostal: profile?.company_city_postal,
         },
       })
+      const customInvoiceHtml = invoiceModalCustomMessage.trim()
+        ? "<p>" + invoiceModalCustomMessage.trim().replace(/\n/g, "</p><p>") + "</p>"
+        : ""
+      const invoiceHtml = (customInvoiceHtml + builtInvoiceHtml).trim() || builtInvoiceHtml
+
+      setStoredPipelineMessage(userId, "invoice", invoiceModalCustomMessage)
+
       const emailRes = await fetch(
         `/api/invoices/${invoiceModalSelectedInvoice.id}/send-email`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            userId: user.id,
+            userId,
             to: selectedProspect.email,
             subject: `Facture ${invoiceModalSelectedInvoice.invoice_number}`,
             pdfBase64,
@@ -561,7 +689,7 @@ export function CRMPipeline() {
         })
         return
       }
-      const updated = await updateProspect(user.id, selectedProspect.id, { stage: "invoice" })
+      const updated = await updateProspect(userId, selectedProspect.id, { stage: "invoice" })
       refreshAfterUpdate(updated)
       closeInvoiceModal()
       toast({ title: "Facture envoyée", description: "La facture a été envoyée au prospect." })
@@ -578,7 +706,7 @@ export function CRMPipeline() {
   }
 
   const handleFollowupConfirm = async () => {
-    if (!user?.id || !selectedProspect || !selectedColumn) return
+    if (!userId || !selectedProspect || !selectedColumn) return
 
     setUpdatingStage(true)
     try {
@@ -620,13 +748,14 @@ export function CRMPipeline() {
         return
       }
 
-      const updated = await updateProspect(user.id, selectedProspect.id, { stage: selectedColumn })
+      setStoredPipelineMessage(userId, selectedColumn, followupMessage)
+
+      const updated = await updateProspect(userId, selectedProspect.id, { stage: selectedColumn })
       refreshAfterUpdate(updated)
       setShowFollowupModal(false)
       setSelectedProspect(null)
       setSelectedColumn("")
       setDraggedItem(null)
-      setFollowupMessage(DEFAULT_QUOTE_FOLLOWUP_MESSAGE)
       toast({ title: "Relance envoyée", description: "L'email de relance a été envoyé au prospect." })
     } catch (err) {
       console.error(err)
@@ -636,7 +765,7 @@ export function CRMPipeline() {
     }
   }
 
-  if (!user) {
+  if (!userId) {
     return (
       <div className="rounded-lg border border-white/10 bg-black/20 p-6 text-center text-white/70">
         Connectez-vous pour gérer vos prospects.
@@ -660,10 +789,10 @@ export function CRMPipeline() {
           variant="outline"
           className="mt-4 text-white border-white/20 hover:bg-white/10"
           onClick={() => {
-            if (!user?.id) return
+            if (!userId) return
             setError(null)
             setLoading(true)
-            fetchProspectsForUser(user.id)
+            fetchProspectsForUser(userId)
               .then(setProspects)
               .catch((err) => {
                 console.error(err)
@@ -695,31 +824,10 @@ export function CRMPipeline() {
                 Ajoutez un prospect à votre pipeline. Il apparaîtra dans &quot;Tous les prospects&quot;.
               </DialogDescription>
             </DialogHeader>
-            <div className="overflow-y-auto flex-1 pr-2 custom-scrollbar">
-              <style>{`
-                .custom-scrollbar::-webkit-scrollbar {
-                  width: 6px;
-                }
-                .custom-scrollbar::-webkit-scrollbar-track {
-                  background: rgba(0, 0, 0, 0.1);
-                  border-radius: 3px;
-                }
-                .custom-scrollbar::-webkit-scrollbar-thumb {
-                  background-color: rgba(255, 255, 255, 0.15);
-                  border-radius: 3px;
-                  border: 1px solid rgba(255, 255, 255, 0.05);
-                }
-                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                  background-color: rgba(255, 255, 255, 0.25);
-                }
-                .custom-scrollbar {
-                  scrollbar-width: thin;
-                  scrollbar-color: rgba(255, 255, 255, 0.15) rgba(0, 0, 0, 0.1);
-                }
-              `}</style>
+            <div className="overflow-y-auto flex-1 pr-2">
               {clients.length > 0 && (
                 <div className="space-y-2 py-2">
-                  <Label className="text-white text-sm">Rechercher parmi vos clients existants</Label>
+                  <Label className="text-white text-sm">Sélectionner un client (recherche optionnelle)</Label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
                     <Input
@@ -729,14 +837,16 @@ export function CRMPipeline() {
                       className="pl-9 bg-black/20 border-white/10 text-white placeholder:text-white/50"
                     />
                   </div>
-                  {clientSearchQuery.trim() && (() => {
+                  {(() => {
                     const q = clientSearchQuery.trim().toLowerCase()
-                    const filtered = clients.filter(
-                      (c) =>
-                        c.name?.toLowerCase().includes(q) ||
-                        c.email?.toLowerCase().includes(q) ||
-                        (c.phone ?? "").includes(q)
-                    )
+                    const filtered = q
+                      ? clients.filter(
+                          (c) =>
+                            c.name?.toLowerCase().includes(q) ||
+                            c.email?.toLowerCase().includes(q) ||
+                            (c.phone ?? "").includes(q)
+                        )
+                      : clients
                     return filtered.length > 0 ? (
                       <div className="max-h-48 overflow-y-auto space-y-1 border border-white/10 rounded-lg p-2 bg-black/10">
                         {filtered.map((client) => (
@@ -840,54 +950,234 @@ export function CRMPipeline() {
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
-        {columns.map((column) => (
-          <Card
-            key={column.id}
-            className="bg-black/20 backdrop-blur-xl border border-white/10 text-white"
-            onDragOver={handleDragOver}
-            onDrop={() => handleDrop(column.id)}
-          >
-            <CardHeader>
-              <CardTitle className="text-sm">{column.name}</CardTitle>
-              <Badge variant="secondary" className="mt-2">
-                {column.items.length}
-              </Badge>
-            </CardHeader>
-            <CardContent>
-              <div className="min-h-[200px] space-y-2">
-                {column.items.map((prospect) => (
-                  <motion.div
-                    key={prospect.id}
-                    draggable
-                    onDragStart={() => handleDragStart(prospect, column.id)}
-                    className="p-3 bg-black/20 backdrop-blur-md border border-white/10 rounded-lg cursor-move hover:bg-white/10 transition-all text-white"
-                  >
-                    <div className="space-y-1">
-                      <p className="font-medium text-sm">{prospect.name}</p>
-                      <div className="flex items-center gap-1 text-xs text-white/70">
-                        <Mail className="h-3 w-3" />
-                        <span className="truncate">{prospect.email}</span>
-                      </div>
-                      {prospect.phone && (
-                        <div className="flex items-center gap-1 text-xs text-white/70">
-                          <Phone className="h-3 w-3" />
-                          <span>{prospect.phone}</span>
-                        </div>
-                      )}
-                      {prospect.company && (
-                        <p className="text-xs text-white/70">{prospect.company}</p>
-                      )}
+      <div className="space-y-6 w-full">
+        {/* Ligne 1 : Devis */}
+        <div>
+          <p className="text-xs font-medium text-white/60 uppercase tracking-wider mb-3">Devis</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {quoteColumns.map((column) => (
+              <Card
+                key={column.id}
+                className="bg-black/20 backdrop-blur-xl border border-white/10 text-white min-w-0 overflow-hidden flex flex-col"
+                onDragOver={handleDragOver}
+                onDrop={() => handleDrop(column.id)}
+              >
+                <CardHeader className="p-4 pb-2 flex-shrink-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <CardTitle className="text-sm font-semibold text-white break-words leading-snug" title={column.name}>{column.name}</CardTitle>
+                      <Badge variant="secondary" className="mt-1.5 text-white/80 rounded-full">
+                        {column.items.length}
+                      </Badge>
                     </div>
-                  </motion.div>
-                ))}
-                {column.items.length === 0 && (
-                  <p className="text-xs text-white/70 text-center py-8">Aucun prospect</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                    {column.id !== "all" && (
+                      <Popover
+                        open={pipelineMessageEditColumnId === column.id}
+                        onOpenChange={(open) => {
+                          if (open) {
+                            setPipelineMessageEditColumnId(column.id)
+                            setPipelineMessageEditDraft(getStoredPipelineMessages(userId)[column.id] ?? getDefaultMessageForColumn(column.id))
+                          } else {
+                            setPipelineMessageEditColumnId(null)
+                          }
+                        }}
+                      >
+                        <PopoverTrigger asChild>
+                          <Button type="button" size="icon" variant="ghost" className="h-7 w-7 shrink-0 text-white/70 hover:text-white" title="Personnaliser le message">
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[380px]" align="end">
+                          <p className="text-sm font-medium mb-2">Message pour : {column.name}</p>
+                          <Textarea
+                            value={pipelineMessageEditColumnId === column.id ? pipelineMessageEditDraft : ""}
+                            onChange={(e) => setPipelineMessageEditDraft(e.target.value)}
+                            rows={5}
+                            className="mb-3 resize-none"
+                            placeholder="Message personnalisé..."
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => {
+                              if (pipelineMessageEditColumnId) {
+                                setStoredPipelineMessage(userId, pipelineMessageEditColumnId, pipelineMessageEditDraft)
+                                setPipelineMessageEditColumnId(null)
+                                toast({ title: "Message enregistré" })
+                              }
+                            }}
+                          >
+                            Enregistrer
+                          </Button>
+                        </PopoverContent>
+                      </Popover>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="p-4 pt-0 min-w-0 overflow-hidden flex-1 min-h-0 flex flex-col">
+                  <div className="min-h-[120px] grid grid-cols-1 auto-rows-min gap-2 min-w-0 overflow-y-auto overflow-x-hidden flex-1 content-start">
+                    {column.items.map((prospect) => (
+                      <motion.div
+                        key={prospect.id}
+                        draggable
+                        onDragStart={() => handleDragStart(prospect, column.id)}
+                        className="group relative shrink-0 p-4 pr-10 bg-black/30 border border-white/10 rounded-xl cursor-move hover:bg-white/10 transition-colors text-white overflow-hidden min-w-0"
+                      >
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-1 top-1 h-6 w-6 rounded opacity-0 group-hover:opacity-100 hover:opacity-100 disabled:opacity-100 hover:bg-white/10 text-white/70 hover:text-white transition-opacity"
+                          onClick={(e) => handleRemoveProspectClick(prospect, e)}
+                          disabled={removingId === prospect.id}
+                          title="Retirer du pipeline"
+                        >
+                          {removingId === prospect.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3 w-3" />
+                          )}
+                        </Button>
+                        <div className="space-y-2 min-w-0 break-words">
+                          <p className="font-semibold text-sm text-white break-words leading-tight">{prospect.name}</p>
+                          <div className="flex items-start gap-1.5 text-xs text-white/70 min-w-0">
+                            <Mail className="h-3 w-3 shrink-0 mt-0.5" />
+                            <span className="break-all min-w-0">{prospect.email}</span>
+                          </div>
+                          {prospect.phone && (
+                            <div className="flex items-start gap-1.5 text-xs text-white/70 min-w-0">
+                              <Phone className="h-3 w-3 shrink-0 mt-0.5" />
+                              <span className="break-all min-w-0">{prospect.phone}</span>
+                            </div>
+                          )}
+                          {prospect.company && (
+                            <p className="text-xs text-white/60 break-words min-w-0">{prospect.company}</p>
+                          )}
+                        </div>
+                      </motion.div>
+                    ))}
+                    {column.items.length === 0 && (
+                      <p className="text-sm text-white/50 text-center py-10">Aucun prospect</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+
+        {/* Ligne 2 : Factures */}
+        <div>
+          <p className="text-xs font-medium text-white/60 uppercase tracking-wider mb-3">Factures</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {invoiceColumns.map((column) => (
+              <Card
+                key={column.id}
+                className="bg-black/20 backdrop-blur-xl border border-white/10 text-white min-w-0 overflow-hidden flex flex-col"
+                onDragOver={handleDragOver}
+                onDrop={() => handleDrop(column.id)}
+              >
+                <CardHeader className="p-4 pb-2 flex-shrink-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <CardTitle className="text-sm font-semibold text-white break-words leading-snug" title={column.name}>{column.name}</CardTitle>
+                      <Badge variant="secondary" className="mt-1.5 text-white/80 rounded-full">
+                        {column.items.length}
+                      </Badge>
+                    </div>
+                    <Popover
+                      open={pipelineMessageEditColumnId === column.id}
+                      onOpenChange={(open) => {
+                        if (open) {
+                          setPipelineMessageEditColumnId(column.id)
+                          setPipelineMessageEditDraft(getStoredPipelineMessages(userId)[column.id] ?? getDefaultMessageForColumn(column.id))
+                        } else {
+                          setPipelineMessageEditColumnId(null)
+                        }
+                      }}
+                    >
+                      <PopoverTrigger asChild>
+                        <Button type="button" size="icon" variant="ghost" className="h-7 w-7 shrink-0 text-white/70 hover:text-white" title="Personnaliser le message">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[380px]" align="end">
+                        <p className="text-sm font-medium mb-2">Message pour : {column.name}</p>
+                        <Textarea
+                          value={pipelineMessageEditColumnId === column.id ? pipelineMessageEditDraft : ""}
+                          onChange={(e) => setPipelineMessageEditDraft(e.target.value)}
+                          rows={5}
+                          className="mb-3 resize-none"
+                          placeholder="Message personnalisé..."
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => {
+                            if (pipelineMessageEditColumnId) {
+                              setStoredPipelineMessage(userId, pipelineMessageEditColumnId, pipelineMessageEditDraft)
+                              setPipelineMessageEditColumnId(null)
+                              toast({ title: "Message enregistré" })
+                            }
+                          }}
+                        >
+                          Enregistrer
+                        </Button>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-4 pt-0 min-w-0 overflow-hidden flex-1 min-h-0 flex flex-col">
+                  <div className="min-h-[120px] grid grid-cols-1 auto-rows-min gap-2 min-w-0 overflow-y-auto overflow-x-hidden flex-1 content-start">
+                    {column.items.map((prospect) => (
+                      <motion.div
+                        key={prospect.id}
+                        draggable
+                        onDragStart={() => handleDragStart(prospect, column.id)}
+                        className="group relative shrink-0 p-4 pr-10 bg-black/30 border border-white/10 rounded-xl cursor-move hover:bg-white/10 transition-colors text-white overflow-hidden min-w-0"
+                      >
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-1 top-1 h-6 w-6 rounded opacity-0 group-hover:opacity-100 hover:opacity-100 disabled:opacity-100 hover:bg-white/10 text-white/70 hover:text-white transition-opacity"
+                          onClick={(e) => handleRemoveProspectClick(prospect, e)}
+                          disabled={removingId === prospect.id}
+                          title="Retirer du pipeline"
+                        >
+                          {removingId === prospect.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3 w-3" />
+                          )}
+                        </Button>
+                        <div className="space-y-2 min-w-0 break-words">
+                          <p className="font-semibold text-sm text-white break-words leading-tight">{prospect.name}</p>
+                          <div className="flex items-start gap-1.5 text-xs text-white/70 min-w-0">
+                            <Mail className="h-3 w-3 shrink-0 mt-0.5" />
+                            <span className="break-all min-w-0">{prospect.email}</span>
+                          </div>
+                          {prospect.phone && (
+                            <div className="flex items-start gap-1.5 text-xs text-white/70 min-w-0">
+                              <Phone className="h-3 w-3 shrink-0 mt-0.5" />
+                              <span className="break-all min-w-0">{prospect.phone}</span>
+                            </div>
+                          )}
+                          {prospect.company && (
+                            <p className="text-xs text-white/60 break-words min-w-0">{prospect.company}</p>
+                          )}
+                        </div>
+                      </motion.div>
+                    ))}
+                    {column.items.length === 0 && (
+                      <p className="text-sm text-white/50 text-center py-10">Aucun prospect</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
       </div>
 
       {showQuoteModal && selectedProspect && (
@@ -1008,6 +1298,19 @@ export function CRMPipeline() {
                 </div>
               </div>
 
+              <div>
+                <Label className="text-white/80 text-sm font-medium">Message personnalisé</Label>
+                <p className="text-xs text-white/50 mb-1">Ce message sera affiché dans l’email envoyé au prospect.</p>
+                <Textarea
+                  value={quoteModalCustomMessage}
+                  onChange={(e) => setQuoteModalCustomMessage(e.target.value)}
+                  onBlur={() => userId && setStoredPipelineMessage(userId, "quote", quoteModalCustomMessage)}
+                  placeholder={DEFAULT_QUOTE_EMAIL_MESSAGE}
+                  className="mt-1 min-h-[100px] bg-black/20 border-white/20 text-white placeholder:text-white/40 resize-y"
+                  rows={4}
+                />
+              </div>
+
               <div className="border border-white/10 rounded-lg p-4 bg-black/20 backdrop-blur-md">
                 <p className="text-sm font-medium mb-2">Aperçu</p>
                 {quoteModalPdfFile ? (
@@ -1093,6 +1396,18 @@ export function CRMPipeline() {
                   </div>
                 )}
               </div>
+              <div>
+                <Label className="text-white/80 text-sm font-medium">Message personnalisé</Label>
+                <p className="text-xs text-white/50 mb-1">Ce message sera affiché dans l’email envoyé au prospect.</p>
+                <Textarea
+                  value={invoiceModalCustomMessage}
+                  onChange={(e) => setInvoiceModalCustomMessage(e.target.value)}
+                  onBlur={() => userId && setStoredPipelineMessage(userId, "invoice", invoiceModalCustomMessage)}
+                  placeholder={DEFAULT_INVOICE_EMAIL_MESSAGE}
+                  className="mt-1 min-h-[100px] bg-black/20 border-white/20 text-white placeholder:text-white/40 resize-y"
+                  rows={4}
+                />
+              </div>
               <div className="flex gap-2 justify-end">
                 <Button
                   variant="outline"
@@ -1129,11 +1444,12 @@ export function CRMPipeline() {
                 </p>
               </div>
               <div>
-                <label className="text-sm font-medium mb-2 block">Message (modifiable):</label>
+                <label className="text-sm font-medium mb-2 block">Message (modifiable, enregistré pour cette étape):</label>
                 <textarea
                   className="w-full px-3 py-2 rounded-md border bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50 min-h-[150px]"
                   value={followupMessage}
                   onChange={(e) => setFollowupMessage(e.target.value)}
+                  onBlur={() => userId && selectedColumn && setStoredPipelineMessage(userId, selectedColumn, followupMessage)}
                   placeholder="Message de relance..."
                 />
               </div>
@@ -1163,6 +1479,41 @@ export function CRMPipeline() {
           </Card>
         </div>
       )}
+
+      <AlertDialog open={!!prospectToRemove} onOpenChange={(open) => !open && setProspectToRemove(null)}>
+        <AlertDialogContent className="bg-black/20 backdrop-blur-xl border border-white/10 text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">Retirer le prospect du pipeline ?</AlertDialogTitle>
+            <AlertDialogDescription className="text-white/70">
+              Êtes-vous sûr de vouloir retirer {prospectToRemove ? (
+                <>« {prospectToRemove.name} » ({prospectToRemove.email})</>
+              ) : null} du pipeline CRM ? Cette action est irréversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-white/20 text-white hover:bg-white/10">
+              Annuler
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                handleConfirmRemoveProspect()
+              }}
+              disabled={removingId !== null}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {prospectToRemove && removingId === prospectToRemove.id ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Suppression...
+                </>
+              ) : (
+                "Supprimer"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

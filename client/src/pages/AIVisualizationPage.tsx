@@ -1,21 +1,24 @@
 import { useState, useRef } from 'react';
 import { PageWrapper } from '@/components/PageWrapper';
 import { useAuth } from '@/context/AuthContext';
+import { useTeamEffectiveUserId } from '@/context/TeamEffectiveUserIdContext';
 import { uploadFile } from '@/lib/supabaseStorage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { UserAccountButton } from '@/components/UserAccountButton';
-import { 
-  Wand2, 
-  Upload, 
-  Image as ImageIcon, 
+import {
+  Wand2,
+  Upload,
+  Image as ImageIcon,
   Sparkles,
   Download,
   RefreshCw,
-  CheckCircle
+  CheckCircle,
+  AlertCircle
 } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
 interface UploadedImage {
   file: File;
@@ -24,13 +27,39 @@ interface UploadedImage {
 
 export default function AIVisualizationPage() {
   const { user } = useAuth();
+  const effectiveUserId = useTeamEffectiveUserId();
+  const userId = effectiveUserId ?? user?.id ?? null;
   const [step, setStep] = useState<'upload' | 'configure' | 'generating' | 'result'>('upload');
   const [uploadedImage, setUploadedImage] = useState<UploadedImage | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [selectedProjectType, setSelectedProjectType] = useState('');
   const [selectedStyle, setSelectedStyle] = useState('');
   const [progress, setProgress] = useState(0);
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function getBase64FromPreview(preview: string): Promise<{ imageBase64: string; mimeType: string }> {
+    if (preview.startsWith('data:')) {
+      const match = preview.match(/^data:([^;]+);base64,(.+)$/);
+      const mimeType = match?.[1]?.trim() || 'image/jpeg';
+      const imageBase64 = match?.[2]?.trim() || preview.split(',')[1]?.trim() || '';
+      return { imageBase64, mimeType };
+    }
+    const res = await fetch(preview);
+    const blob = await res.blob();
+    const mimeType = blob.type || 'image/jpeg';
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        const base64 = dataUrl.replace(/^data:[^;]+;base64,/, '').trim();
+        resolve({ imageBase64: base64, mimeType });
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
 
   const projectTypes = [
     { id: 'piscine', name: 'Piscine & Spa', icon: '🏊‍♂️', description: 'Piscines creusées, hors-sol, spas' },
@@ -49,11 +78,11 @@ export default function AIVisualizationPage() {
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (user?.id) {
+    if (userId) {
       setUploadingImage(true);
       try {
         const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const path = `${user.id}/visualizations/${Date.now()}-${safeName}`;
+        const path = `${userId}/visualizations/${Date.now()}-${safeName}`;
         const url = await uploadFile(path, file);
         setUploadedImage({ file, preview: url });
         setStep('configure');
@@ -82,21 +111,95 @@ export default function AIVisualizationPage() {
     event.target.value = '';
   };
 
-  const generateVisualization = () => {
+  const generateVisualization = async () => {
+    if (!uploadedImage) return;
     setStep('generating');
     setProgress(0);
-    
-    // Simulate AI generation progress
-    const interval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setStep('result');
-          return 100;
-        }
-        return prev + 10;
+    setGenerationError(null);
+    setGeneratedImageUrl(null);
+    const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '::1'
+      ? `http://127.0.0.1:${window.location.port || '5000'}`
+      : window.location.origin;
+    const apiUrl = `${apiBase}/api/generate-visualization`;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AIVisualizationPage.tsx:generateVisualization',message:'generateVisualization start',data:{origin:window.location.origin,apiUrl,hostname:window.location.hostname},timestamp:Date.now(),hypothesisId:'H1,H2,H3',runId:'run4'})}).catch(()=>{});
+    // #endregion
+    try {
+      const pingRes = await fetch(`${apiBase}/api/ai-status`, { method: 'GET' });
+      if (!pingRes.ok) {
+        setGenerationError('Le serveur ne répond pas. Vérifiez que "npm run dev" est bien lancé.');
+        toast({ title: 'Erreur', description: 'Serveur inaccessible.', variant: 'destructive' });
+        return;
+      }
+      let body: { imageUrl?: string; imageBase64?: string; mimeType?: string; projectType: string; style: string };
+      if (uploadedImage.preview.startsWith('http')) {
+        body = { imageUrl: uploadedImage.preview, projectType: selectedProjectType, style: selectedStyle };
+      } else {
+        const { imageBase64, mimeType } = await getBase64FromPreview(uploadedImage.preview);
+        body = { imageBase64, mimeType, projectType: selectedProjectType, style: selectedStyle };
+      }
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 90_000);
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: controller.signal,
       });
-    }, 500);
+      clearTimeout(timeoutId);
+      const data = await res.json().catch(() => ({})) as { message?: string; imageUrl?: string; images?: Array<{ url?: string }> };
+      if (!res.ok) {
+        const message = typeof data?.message === 'string' ? data.message : 'La génération a échoué.';
+        setGenerationError(message);
+        toast({ title: 'Erreur', description: message, variant: 'destructive' });
+        return;
+      }
+      let imageUrl = typeof data?.imageUrl === 'string' ? data.imageUrl : undefined;
+      if (!imageUrl && Array.isArray(data?.images) && data.images[0] && typeof data.images[0].url === 'string') {
+        imageUrl = data.images[0].url;
+      }
+      const isValidImageUrl = imageUrl && (imageUrl.startsWith('http') || imageUrl.startsWith('data:'));
+      if (isValidImageUrl) {
+        setGeneratedImageUrl(imageUrl);
+        setStep('result');
+      } else {
+        const msg = typeof data?.message === 'string' ? data.message : 'Le serveur n\'a pas renvoyé d\'image.';
+        setGenerationError(msg);
+        toast({ title: 'Erreur', description: 'Réponse invalide du serveur.', variant: 'destructive' });
+      }
+    } catch (err) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AIVisualizationPage.tsx:generateVisualization-catch',message:'fetch or flow error',data:{errMessage:err instanceof Error?err.message:String(err),errName:err instanceof Error?err.name:''},timestamp:Date.now(),hypothesisId:'H1,H4,H5',runId:'post-fix'})}).catch(()=>{});
+      // #endregion
+      const message = err instanceof Error ? err.message : 'Erreur réseau. Réessayez.';
+      const isAbort = err instanceof Error && err.name === 'AbortError';
+      setGenerationError(isAbort ? 'Délai dépassé. La génération peut prendre jusqu\'à 90 secondes.' : message);
+      toast({ title: 'Erreur', description: isAbort ? 'Délai dépassé.' : message, variant: 'destructive' });
+    }
+  };
+
+  const handleDownloadGenerated = async () => {
+    if (!generatedImageUrl) return;
+    try {
+      if (generatedImageUrl.startsWith('data:')) {
+        const a = document.createElement('a');
+        a.href = generatedImageUrl;
+        a.download = `rendu-ia-${Date.now()}.png`;
+        a.click();
+        toast({ title: 'Téléchargement démarré' });
+        return;
+      }
+      const res = await fetch(generatedImageUrl);
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `rendu-ia-${Date.now()}.png`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast({ title: 'Téléchargement démarré' });
+    } catch {
+      window.open(generatedImageUrl, '_blank');
+    }
   };
 
   const resetProcess = () => {
@@ -105,6 +208,8 @@ export default function AIVisualizationPage() {
     setSelectedProjectType('');
     setSelectedStyle('');
     setProgress(0);
+    setGeneratedImageUrl(null);
+    setGenerationError(null);
   };
 
   return (
@@ -276,25 +381,43 @@ export default function AIVisualizationPage() {
           {/* Step 3: Generating */}
           {step === 'generating' && (
             <div className="max-w-2xl mx-auto space-y-6">
-              <Card className="hover-elevate text-center">
-                <CardHeader>
-                  <div className="w-16 h-16 mx-auto rounded-xl bg-black/20 backdrop-blur-md border border-white/10 flex items-center justify-center mb-4">
-                    <RefreshCw className="h-8 w-8 text-white animate-spin" />
-                  </div>
-                  <CardTitle>Génération en cours...</CardTitle>
-                  <p className="text-white/70">
-                    Notre IA analyse votre terrain et génère le rendu professionnel
-                  </p>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <Progress value={progress} className="w-full" data-testid="generation-progress" />
-                  <p className="text-sm text-muted-foreground">
-                    {progress < 30 && "Analyse de l'image..."}
-                    {progress >= 30 && progress < 60 && "Application du style..."}
-                    {progress >= 60 && progress < 90 && "Génération du rendu..."}
-                    {progress >= 90 && "Finalisation..."}
-                  </p>
-                </CardContent>
+              <Card className="hover-elevate text-center bg-black/20 backdrop-blur-xl border border-white/10 text-white">
+                {generationError ? (
+                  <>
+                    <CardHeader>
+                      <div className="w-16 h-16 mx-auto rounded-xl bg-red-500/20 border border-red-500/30 flex items-center justify-center mb-4">
+                        <AlertCircle className="h-8 w-8 text-red-400" />
+                      </div>
+                      <CardTitle>Échec de la génération</CardTitle>
+                      <p className="text-white/70">{generationError}</p>
+                    </CardHeader>
+                    <CardContent>
+                      <Button onClick={generateVisualization} data-testid="button-retry">
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Réessayer la génération
+                      </Button>
+                      <Button variant="outline" className="ml-3" onClick={() => { setGenerationError(null); setStep('configure'); }}>
+                        Retour à la configuration
+                      </Button>
+                    </CardContent>
+                  </>
+                ) : (
+                  <>
+                    <CardHeader>
+                      <div className="w-16 h-16 mx-auto rounded-xl bg-black/20 backdrop-blur-md border border-white/10 flex items-center justify-center mb-4">
+                        <RefreshCw className="h-8 w-8 text-white animate-spin" />
+                      </div>
+                      <CardTitle>Génération en cours...</CardTitle>
+                      <p className="text-white/70">
+                        Notre IA analyse votre terrain et génère le rendu professionnel (cela peut prendre jusqu'à 90 secondes).
+                      </p>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <Progress value={undefined} className="w-full h-2 [&>div]:animate-pulse" data-testid="generation-progress" />
+                      <p className="text-sm text-muted-foreground">Analyse et application du style en cours...</p>
+                    </CardContent>
+                  </>
+                )}
               </Card>
             </div>
           )}
@@ -309,7 +432,13 @@ export default function AIVisualizationPage() {
                     <CardTitle>Visualisation générée avec succès !</CardTitle>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" data-testid="button-download">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      data-testid="button-download"
+                      onClick={handleDownloadGenerated}
+                      disabled={!generatedImageUrl}
+                    >
                       <Download className="h-4 w-4 mr-2" />
                       Télécharger
                     </Button>
@@ -335,15 +464,28 @@ export default function AIVisualizationPage() {
                     {/* After */}
                     <div className="space-y-3">
                       <h3 className="text-lg font-semibold">Après - Rendu IA</h3>
-                      <div className="w-full h-80 bg-black/20 backdrop-blur-xl border border-white/10 rounded-lg flex items-center justify-center">
-                        <div className="text-center space-y-2">
-                          <Sparkles className="h-12 w-12 mx-auto text-white" />
-                          <p className="text-lg font-medium">Rendu IA généré</p>
-                          <p className="text-sm text-muted-foreground">
-                            Ici apparaîtrait le rendu professionnel<br />
-                            avec votre {selectedProjectType} en style {selectedStyle}
-                          </p>
-                        </div>
+                      <div className="w-full h-80 bg-black/20 backdrop-blur-xl border border-white/10 rounded-lg flex items-center justify-center overflow-hidden">
+                        {generatedImageUrl ? (
+                          <img
+                            src={generatedImageUrl}
+                            alt="Rendu IA"
+                            className="w-full h-full object-cover rounded-lg"
+                            data-testid="after-image"
+                          />
+                        ) : (
+                          <div className="text-center space-y-2 p-4">
+                            <Sparkles className="h-12 w-12 mx-auto text-white" />
+                            <p className="text-lg font-medium">Rendu IA</p>
+                            <p className="text-sm text-muted-foreground">
+                              {generationError ? generationError : 'Chargement du rendu...'}
+                            </p>
+                            {generationError && (
+                              <Button size="sm" onClick={generateVisualization} className="mt-2">
+                                Réessayer la génération
+                              </Button>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <Badge className="bg-black/20 backdrop-blur-md border border-white/10 text-white">
                         Généré par IA

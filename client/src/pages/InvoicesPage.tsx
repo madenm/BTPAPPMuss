@@ -8,13 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { UserAccountButton } from '@/components/UserAccountButton';
 import { useAuth } from '@/context/AuthContext';
+import { useTeamEffectiveUserId } from '@/context/TeamEffectiveUserIdContext';
 import { useChantiers } from '@/context/ChantiersContext';
 import { useToast } from '@/hooks/use-toast';
 import {
   FileText,
   Plus,
   Search,
-  Eye,
   Edit,
   Mail,
   Download,
@@ -63,6 +63,8 @@ function formatDate(dateStr: string): string {
 
 export default function InvoicesPage() {
   const { user } = useAuth();
+  const effectiveUserId = useTeamEffectiveUserId();
+  const userId = effectiveUserId ?? user?.id ?? null;
   const { clients, chantiers } = useChantiers();
   const { toast } = useToast();
   const [invoices, setInvoices] = useState<InvoiceWithPayments[]>([]);
@@ -84,7 +86,7 @@ export default function InvoicesPage() {
   }, []);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!userId) return;
 
     const loadInvoices = async () => {
       setLoading(true);
@@ -95,7 +97,7 @@ export default function InvoicesPage() {
         if (filterStatus !== 'all') filters.status = filterStatus;
         if (filterYear !== 'all') filters.year = parseInt(filterYear);
 
-        const data = await fetchInvoicesForUser(user.id, filters);
+        const data = await fetchInvoicesForUser(userId, filters);
         setInvoices(data);
       } catch (error) {
         console.error('Error loading invoices:', error);
@@ -110,7 +112,7 @@ export default function InvoicesPage() {
     };
 
     loadInvoices();
-  }, [user?.id, filterClientId, filterChantierId, filterStatus, filterYear, toast]);
+  }, [userId, filterClientId, filterChantierId, filterStatus, filterYear, toast]);
 
   const filteredInvoices = useMemo(() => {
     if (!searchQuery.trim()) return invoices;
@@ -142,7 +144,7 @@ export default function InvoicesPage() {
     setIsInvoiceDialogOpen(false);
     setEditingInvoice(null);
     // Recharger les factures
-    if (user?.id) {
+    if (userId) {
       const loadInvoices = async () => {
         try {
           const filters: any = {};
@@ -151,7 +153,7 @@ export default function InvoicesPage() {
           if (filterStatus !== 'all') filters.status = filterStatus;
           if (filterYear !== 'all') filters.year = parseInt(filterYear);
 
-          const data = await fetchInvoicesForUser(user.id, filters);
+          const data = await fetchInvoicesForUser(userId, filters);
           setInvoices(data);
         } catch (error) {
           console.error('Error reloading invoices:', error);
@@ -351,14 +353,6 @@ export default function InvoicesPage() {
                         </TableCell>
                         <TableCell className="text-right p-6">
                           <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleViewInvoice(invoice)}
-                              className="text-white hover:bg-white/10 transition-colors"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
                             {(invoice.status === 'brouillon' ||
                               (invoice.status === 'envoyée' && remainingAmount > 0)) && (
                               <Button

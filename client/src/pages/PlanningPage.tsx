@@ -16,7 +16,9 @@ import {
   calculateEndDate,
   getDaysInMonth,
   monthNames,
+  toNoteDateKey,
 } from '@/lib/planningUtils';
+import { fetchPlanningNotesForRange, upsertPlanningNote, deletePlanningNote } from '@/lib/supabasePlanningNotes';
 
 export default function PlanningPage() {
   const { chantiers, updateChantier } = useChantiers();
@@ -28,6 +30,8 @@ export default function PlanningPage() {
   const [pickerYear, setPickerYear] = useState(() => new Date().getFullYear());
   const [assignmentsByChantierId, setAssignmentsByChantierId] = useState<Record<string, TeamMember[]>>({});
   const [assignmentsRefreshKey, setAssignmentsRefreshKey] = useState(0);
+  const [notesByDate, setNotesByDate] = useState<Record<string, string>>({});
+  const [notesRefreshKey, setNotesRefreshKey] = useState(0);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -87,6 +91,44 @@ export default function PlanningPage() {
       cancelled = true;
     };
   }, [chantiersInView, assignmentsRefreshKey]);
+
+  // Charger les notes du planning pour le mois affiché
+  useEffect(() => {
+    const start = toNoteDateKey(new Date(year, month, 1));
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const end = toNoteDateKey(new Date(year, month, lastDay));
+    let cancelled = false;
+    fetchPlanningNotesForRange(start, end).then((notes) => {
+      if (cancelled) return;
+      const map: Record<string, string> = {};
+      notes.forEach((n) => {
+        map[n.note_date] = n.content;
+      });
+      setNotesByDate(map);
+    });
+    return () => { cancelled = true; };
+  }, [year, month, notesRefreshKey]);
+
+  const handleSavePlanningNote = useCallback(async (noteDate: string, content: string) => {
+    try {
+      if (content.trim()) {
+        await upsertPlanningNote(noteDate, content);
+        toast({ title: 'Note enregistrée' });
+      } else {
+        await deletePlanningNote(noteDate);
+        toast({ title: 'Note supprimée' });
+      }
+      setNotesByDate((prev) => {
+        const next = { ...prev };
+        if (content.trim()) next[noteDate] = content.trim();
+        else delete next[noteDate];
+        return next;
+      });
+      setNotesRefreshKey((k) => k + 1);
+    } catch {
+      toast({ title: 'Erreur', description: 'Impossible d\'enregistrer la note', variant: 'destructive' });
+    }
+  }, [toast]);
 
   const handleChangeStatut = useCallback(
     async (chantier: Chantier, newStatut: 'planifié' | 'en cours' | 'terminé') => {
@@ -260,6 +302,8 @@ export default function PlanningPage() {
             updatingChantierId={updatingChantierId}
             onEditChantier={setEditingChantier}
             onStatusChange={handleChangeStatut}
+            notesByDate={notesByDate}
+            onSaveNote={handleSavePlanningNote}
           />
         )}
 

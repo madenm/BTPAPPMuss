@@ -60,6 +60,7 @@ export function ChantiersProvider({ children }: { children: ReactNode }) {
   // Utiliser useContext directement pour éviter l'erreur si AuthProvider n'est pas encore monté
   const authContext = useContext(AuthContext);
   const user = authContext?.user ?? null;
+  const ownerId = user?.id ?? (typeof window !== 'undefined' ? window.__AOS_TEAM_EFFECTIVE_USER_ID__ : null);
 
   const [clients, setClients] = useState<Client[]>([]);
   const [chantiers, setChantiers] = useState<Chantier[]>([]);
@@ -69,22 +70,22 @@ export function ChantiersProvider({ children }: { children: ReactNode }) {
   const [chantiersRefreshKey, setChantiersRefreshKey] = useState(0);
   const [clientsRefreshKey, setClientsRefreshKey] = useState(0);
 
-  // Charger les clients de l'utilisateur connecté
+  // Charger les clients : utilisateur connecté ou membre d'équipe (owner id via global)
   useEffect(() => {
-    if (!user) {
+    if (!ownerId) {
       setClients([]);
       return;
     }
     const loadClients = async () => {
       try {
-        const data = await fetchClientsForUser(user.id);
+        const data = await fetchClientsForUser(ownerId);
         setClients(data);
       } catch (e) {
         console.error('Error loading clients', e);
       }
     };
     void loadClients();
-  }, [user?.id, clientsRefreshKey]);
+  }, [ownerId, clientsRefreshKey]);
 
   // Charger les chantiers : utilisateur connecté (Supabase) ou membre d'équipe (localStorage)
   useEffect(() => {
@@ -110,8 +111,8 @@ export function ChantiersProvider({ children }: { children: ReactNode }) {
         const teamMemberForLog = teamMemberJson ? (JSON.parse(teamMemberJson) as { id: string }) : null;
         fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ChantiersContext.tsx:load:branch', message: 'which load branch', data: { hasUser: !!user, isTeamMember, teamMemberId: teamMemberForLog?.id }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'C,D,E' }) }).catch(() => {});
         // #endregion
-        if (user) {
-          const data = await fetchChantiersForUser(user.id);
+        if (ownerId) {
+          const data = await fetchChantiersForUser(ownerId);
           if (isTeamMember) {
             try {
               const teamMember = JSON.parse(teamMemberJson!) as { id: string; can_view_all_chantiers?: boolean };
@@ -187,7 +188,7 @@ export function ChantiersProvider({ children }: { children: ReactNode }) {
     };
 
     void load();
-  }, [user?.id, chantiersRefreshKey]);
+  }, [ownerId, chantiersRefreshKey]);
 
   const refreshChantiers = useCallback(() => {
     setChantiersRefreshKey(k => k + 1);
@@ -198,59 +199,59 @@ export function ChantiersProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addClient = async (payload: NewClientPayload): Promise<Client> => {
-    if (!user) {
-      console.error('addClient called without authenticated user');
+    if (!ownerId) {
+      console.error('addClient called without authenticated user or effective owner');
       throw new Error('User not authenticated');
     }
-    const created = await insertClientRemote(user.id, payload);
+    const created = await insertClientRemote(ownerId, payload);
     setClients(prev => [created, ...prev]);
     return created;
   };
 
   const updateClient = async (id: string, payload: UpdateClientPayload): Promise<Client> => {
-    if (!user) {
-      console.error('updateClient called without authenticated user');
+    if (!ownerId) {
+      console.error('updateClient called without authenticated user or effective owner');
       throw new Error('User not authenticated');
     }
-    const updated = await updateClientRemote(user.id, id, payload);
+    const updated = await updateClientRemote(ownerId, id, payload);
     setClients(prev => prev.map(c => (c.id === id ? updated : c)));
     return updated;
   };
 
   const deleteClient = async (id: string): Promise<void> => {
-    if (!user) {
-      console.error('deleteClient called without authenticated user');
+    if (!ownerId) {
+      console.error('deleteClient called without authenticated user or effective owner');
       throw new Error('User not authenticated');
     }
-    await softDeleteClientRemote(user.id, id);
+    await softDeleteClientRemote(ownerId, id);
     setClients(prev => prev.filter(c => c.id !== id));
   };
 
   const addChantier = async (payload: NewChantierPayload): Promise<Chantier> => {
-    if (!user) {
-      console.error('addChantier called without authenticated user');
+    if (!ownerId) {
+      console.error('addChantier called without authenticated user or effective owner');
       throw new Error('User not authenticated');
     }
-    const created = await insertChantierRemote(user.id, payload);
+    const created = await insertChantierRemote(ownerId, payload);
     setChantiers(prev => [created, ...prev]);
     return created;
   };
 
   const updateChantier = async (id: string, updates: Partial<Chantier>) => {
-    if (!user) {
-      console.error('updateChantier called without authenticated user');
+    if (!ownerId) {
+      console.error('updateChantier called without authenticated user or effective owner');
       return;
     }
-    const updated = await updateChantierRemote(id, user.id, updates);
+    const updated = await updateChantierRemote(id, ownerId, updates);
     setChantiers(prev => prev.map(c => (c.id === id ? updated : c)));
   };
 
   const deleteChantier = async (id: string) => {
-    if (!user) {
-      console.error('deleteChantier called without authenticated user');
+    if (!ownerId) {
+      console.error('deleteChantier called without authenticated user or effective owner');
       throw new Error('User not authenticated');
     }
-    await softDeleteChantierRemote(id, user.id);
+    await softDeleteChantierRemote(id, ownerId);
     setChantiers(prev => prev.filter(c => c.id !== id));
   };
 

@@ -46,7 +46,7 @@ export function PageWrapper({ children }: PageWrapperProps) {
             animate="animate"
             exit="exit"
             variants={contentVariants}
-            className="py-6 lg:py-8 px-0"
+            className="py-6 lg:py-8 pl-[5.5rem] pr-4 sm:pr-6 lg:pr-8"
           >
             {children}
           </motion.div>

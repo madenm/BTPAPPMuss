@@ -141,7 +141,7 @@ export default function Sidebar() {
             className="mb-4"
           >
             <h2 className="text-3xl font-bold mb-2 text-gray-900 dark:text-white">
-              Aos Renov
+              ChantierPro
             </h2>
             <p className="text-sm mb-2 text-gray-600 dark:text-gray-400">
               Construire pour durer

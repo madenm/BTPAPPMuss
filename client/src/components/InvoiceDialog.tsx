@@ -5,10 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { useAuth } from '@/context/AuthContext';
+import { useTeamEffectiveUserId } from '@/context/TeamEffectiveUserIdContext';
 import { useChantiers } from '@/context/ChantiersContext';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Trash2, X } from 'lucide-react';
+import { Plus, Trash2, X, Calendar as CalendarIcon } from 'lucide-react';
 import {
   insertInvoice,
   updateInvoice,
@@ -30,6 +33,20 @@ interface InvoiceDialogProps {
 
 function dateToISO(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function formatDateToDDMMYYYY(iso?: string): string {
+  if (!iso) return '';
+  const part = iso.slice(0, 10);
+  const [y, m, d] = part.split('-').map(Number);
+  if (y == null || m == null || d == null || isNaN(y) || isNaN(m) || isNaN(d)) return '';
+  return `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
+}
+
+function isoToDate(iso: string): Date | undefined {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso.slice(0, 10))) return undefined;
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return new Date(y, m - 1, d);
 }
 
 function calculateDueDate(invoiceDate: string, paymentTerms: string): string {
@@ -56,6 +73,8 @@ export function InvoiceDialog({
   onSaved,
 }: InvoiceDialogProps) {
   const { user } = useAuth();
+  const effectiveUserId = useTeamEffectiveUserId();
+  const userId = effectiveUserId ?? user?.id ?? null;
   const { clients, chantiers } = useChantiers();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
@@ -69,6 +88,8 @@ export function InvoiceDialog({
     { id: '1', description: '', quantity: 1, unitPrice: 0, total: 0 },
   ]);
   const [notes, setNotes] = useState('');
+  const [invoiceDatePickerOpen, setInvoiceDatePickerOpen] = useState(false);
+  const [dueDatePickerOpen, setDueDatePickerOpen] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -84,9 +105,9 @@ export function InvoiceDialog({
       } else if (quoteId) {
         // Mode création depuis devis
         const loadQuote = async () => {
-          if (!user?.id) return;
+          if (!userId) return;
           try {
-            const quote = await fetchQuoteById(user.id, quoteId);
+            const quote = await fetchQuoteById(userId, quoteId);
             if (quote) {
               setSelectedClientId(quote.chantier_id ? chantiers.find((c) => c.id === quote.chantier_id)?.clientId || '' : '');
               setSelectedChantierId(quote.chantier_id || '');
@@ -111,7 +132,7 @@ export function InvoiceDialog({
         setNotes('');
       }
     }
-  }, [open, invoice, quoteId, chantierId, clientId, user?.id, chantiers]);
+  }, [open, invoice, quoteId, chantierId, clientId, userId, chantiers]);
 
   useEffect(() => {
     if (paymentTerms && invoiceDate) {
@@ -164,7 +185,7 @@ export function InvoiceDialog({
   const total = subtotal + tva;
 
   const handleSave = async () => {
-    if (!user?.id) return;
+    if (!userId) return;
 
     if (!selectedClientId) {
       toast({
@@ -205,13 +226,13 @@ export function InvoiceDialog({
       };
 
       if (invoice) {
-        await updateInvoice(user.id, invoice.id, payload);
+        await updateInvoice(userId, invoice.id, payload);
         toast({
           title: 'Succès',
           description: 'Facture modifiée avec succès',
         });
       } else {
-        await insertInvoice(user.id, payload);
+        await insertInvoice(userId, payload);
         toast({
           title: 'Succès',
           description: 'Facture créée avec succès',
@@ -287,12 +308,40 @@ export function InvoiceDialog({
           <div className="grid grid-cols-3 gap-4">
             <div>
               <Label className="text-white">Date d'émission *</Label>
-              <Input
-                type="date"
-                value={invoiceDate}
-                onChange={(e) => setInvoiceDate(e.target.value)}
-                className="bg-black/20 backdrop-blur-md border-white/10 text-white"
-              />
+              <Popover open={invoiceDatePickerOpen} onOpenChange={setInvoiceDatePickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start text-left font-normal h-9 bg-black/20 backdrop-blur-md border-white/10 text-white hover:bg-black/30 hover:border-white/20"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4 opacity-70" />
+                    {invoiceDate ? formatDateToDDMMYYYY(invoiceDate) : 'JJ/MM/AAAA'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 bg-black/90 border-white/10" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={isoToDate(invoiceDate) ?? undefined}
+                    onSelect={(d) => {
+                      if (d) {
+                        setInvoiceDate(dateToISO(d));
+                        setDueDate(calculateDueDate(dateToISO(d), paymentTerms));
+                        setInvoiceDatePickerOpen(false);
+                      }
+                    }}
+                    classNames={{
+                      day: "text-white hover:bg-white/20",
+                      caption_label: "text-white",
+                      nav_button: "text-white",
+                      head_cell: "text-white/70",
+                      day_outside: "text-white/40",
+                      day_today: "bg-white/20 text-white",
+                      day_selected: "bg-violet-500 text-white",
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
             <div>
               <Label className="text-white">Conditions de paiement</Label>
@@ -311,12 +360,39 @@ export function InvoiceDialog({
             </div>
             <div>
               <Label className="text-white">Date d'échéance *</Label>
-              <Input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="bg-black/20 backdrop-blur-md border-white/10 text-white"
-              />
+              <Popover open={dueDatePickerOpen} onOpenChange={setDueDatePickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start text-left font-normal h-9 bg-black/20 backdrop-blur-md border-white/10 text-white hover:bg-black/30 hover:border-white/20"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4 opacity-70" />
+                    {dueDate ? formatDateToDDMMYYYY(dueDate) : 'JJ/MM/AAAA'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 bg-black/90 border-white/10" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={isoToDate(dueDate) ?? undefined}
+                    onSelect={(d) => {
+                      if (d) {
+                        setDueDate(dateToISO(d));
+                        setDueDatePickerOpen(false);
+                      }
+                    }}
+                    classNames={{
+                      day: "text-white hover:bg-white/20",
+                      caption_label: "text-white",
+                      nav_button: "text-white",
+                      head_cell: "text-white/70",
+                      day_outside: "text-white/40",
+                      day_today: "bg-white/20 text-white",
+                      day_selected: "bg-violet-500 text-white",
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
 

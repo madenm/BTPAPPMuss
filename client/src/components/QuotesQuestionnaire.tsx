@@ -33,7 +33,7 @@ export function QuotesQuestionnaire({ projectType, answers, onChange }: QuotesQu
             type="button"
             className="flex items-center justify-between w-full text-left text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
           >
-            <span>Questions complémentaires (optionnel)</span>
+            <span className="font-bold">Questions complémentaires (optionnel)</span>
             <ChevronDown className="h-4 w-4 shrink-0 collapsible-icon" />
           </button>
         </CollapsibleTrigger>

@@ -59,8 +59,8 @@ const TestimonialCard = ({ testimonial, delay }: { testimonial: Testimonial, del
 // --- MAIN COMPONENT ---
 
 export const SignInPage: React.FC<SignInPageProps> = ({
-  title = <span className="font-light text-foreground tracking-tighter">Welcome</span>,
-  description = "Access your account and continue your journey with us",
+  title = <span className="font-light text-foreground tracking-tighter">Bienvenue</span>,
+  description = "Accédez à votre compte et poursuivez votre parcours avec nous",
   heroImageSrc,
   testimonials = [],
   onSignIn,
@@ -109,25 +109,25 @@ export const SignInPage: React.FC<SignInPageProps> = ({
             >
               {isSignUp && (
                 <div className="animate-element animate-delay-250">
-                  <label className="text-sm font-medium text-white/70">Full Name</label>
+                  <label className="text-sm font-medium text-white/70">Nom complet</label>
                   <GlassInputWrapper>
-                    <input name="fullName" type="text" placeholder="Enter your full name" className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none text-white placeholder:text-white/50" />
+                    <input name="fullName" type="text" placeholder="Entrez votre nom complet" className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none text-white placeholder:text-white/50" />
                   </GlassInputWrapper>
                 </div>
               )}
 
               <div className="animate-element animate-delay-300">
-                <label className="text-sm font-medium text-white/70">Email Address</label>
+                <label className="text-sm font-medium text-white/70">Adresse e-mail</label>
                 <GlassInputWrapper>
-                  <input name="email" type="email" placeholder="Enter your email address" className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none text-white placeholder:text-white/50" />
+                  <input name="email" type="email" placeholder="Entrez votre adresse e-mail" className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none text-white placeholder:text-white/50" />
                 </GlassInputWrapper>
               </div>
 
               <div className="animate-element animate-delay-400">
-                <label className="text-sm font-medium text-white/70">Password</label>
+                <label className="text-sm font-medium text-white/70">Mot de passe</label>
                 <GlassInputWrapper>
                   <div className="relative">
-                    <input name="password" type={showPassword ? 'text' : 'password'} placeholder="Enter your password" className="w-full bg-transparent text-sm p-4 pr-12 rounded-2xl focus:outline-none text-white placeholder:text-white/50" />
+                    <input name="password" type={showPassword ? 'text' : 'password'} placeholder="Entrez votre mot de passe" className="w-full bg-transparent text-sm p-4 pr-12 rounded-2xl focus:outline-none text-white placeholder:text-white/50" />
                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-3 flex items-center">
                       {showPassword ? <EyeOff className="w-5 h-5 text-white/70 hover:text-white transition-colors" /> : <Eye className="w-5 h-5 text-white/70 hover:text-white transition-colors" />}
                     </button>
@@ -145,9 +145,9 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                       checked={rememberMe}
                       onChange={(e) => setRememberMe(e.target.checked)}
                     />
-                    <span className="text-white/90">Keep me signed in</span>
+                    <span className="text-white/90">Rester connecté</span>
                   </label>
-                  <a href="#" onClick={(e) => { e.preventDefault(); onResetPassword?.(); }} className="hover:underline text-violet-400 transition-colors">Reset password</a>
+                  <a href="#" onClick={(e) => { e.preventDefault(); onResetPassword?.(); }} className="hover:underline text-violet-400 transition-colors">Réinitialiser le mot de passe</a>
                 </div>
               )}
 
@@ -160,7 +160,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                     : 'bg-violet-500 hover:bg-violet-600'
                 }`}
               >
-                {loading ? 'Chargement...' : (isSignUp ? 'Create Account' : 'Sign In')}
+                {loading ? 'Chargement...' : (isSignUp ? 'Créer un compte' : 'Se connecter')}
               </button>
             </form>
 
@@ -168,11 +168,11 @@ export const SignInPage: React.FC<SignInPageProps> = ({
               <div className="animate-element animate-delay-650 text-center text-sm text-white/70">
                 {isSignUp ? (
                   <>
-                    Already have an account? <a href="#" onClick={(e) => { e.preventDefault(); onToggleMode(); }} className="text-violet-400 hover:underline transition-colors">Sign In</a>
+                    Vous avez déjà un compte ? <a href="#" onClick={(e) => { e.preventDefault(); onToggleMode(); }} className="text-violet-400 hover:underline transition-colors">Se connecter</a>
                   </>
                 ) : (
                   <>
-                    New to our platform? <a href="#" onClick={(e) => { e.preventDefault(); onToggleMode(); }} className="text-violet-400 hover:underline transition-colors">Create Account</a>
+                    Nouveau sur la plateforme ? <a href="#" onClick={(e) => { e.preventDefault(); onToggleMode(); }} className="text-violet-400 hover:underline transition-colors">Créer un compte</a>
                   </>
                 )}
               </div>
@@ -182,19 +182,19 @@ export const SignInPage: React.FC<SignInPageProps> = ({
               <>
                 <div className="animate-element animate-delay-700 relative flex items-center justify-center">
                   <span className="w-full border-t border-white/20"></span>
-                  <span className="px-4 text-sm text-white/70 bg-black/20 backdrop-blur-md absolute">Or continue with</span>
+                  <span className="px-4 text-sm text-white/70 bg-black/20 backdrop-blur-md absolute">Ou continuer avec</span>
                 </div>
 
                 <button onClick={onGoogleSignIn} type="button" className="animate-element animate-delay-800 w-full flex items-center justify-center gap-3 border border-white/20 rounded-2xl py-4 hover:bg-white/10 bg-black/20 backdrop-blur-sm text-white transition-colors">
                   <GoogleIcon />
-                  Continue with Google
+                  Continuer avec Google
                 </button>
               </>
             )}
 
             {!onToggleMode && onCreateAccount && (
               <p className="animate-element animate-delay-900 text-center text-sm text-white/70">
-                New to our platform? <a href="#" onClick={(e) => { e.preventDefault(); onCreateAccount?.(); }} className="text-violet-400 hover:underline transition-colors">Create Account</a>
+                Nouveau sur la plateforme ? <a href="#" onClick={(e) => { e.preventDefault(); onCreateAccount?.(); }} className="text-violet-400 hover:underline transition-colors">Créer un compte</a>
               </p>
             )}
           </div>

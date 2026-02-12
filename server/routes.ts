@@ -1,8 +1,12 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { appendFileSync, mkdirSync, existsSync } from "fs";
-import { join } from "path";
+import { join, resolve, dirname } from "path";
+import { fileURLToPath } from "url";
 import { storage } from "./storage";
+
+const __dirnameServer = dirname(fileURLToPath(import.meta.url));
+const WORKSPACE_CURSOR_LOG = resolve(__dirnameServer, "..", "..", ".cursor", "debug.log");
 
 function debugLog(payload: Record<string, unknown>) {
   try {
@@ -17,6 +21,7 @@ function debugLog(payload: Record<string, unknown>) {
 import { Resend } from "resend";
 import { GoogleGenAI } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
+import { fal } from "@fal-ai/client";
 
 // Lazy init: resolve client on first use (after .env is loaded).
 let _gemini: GoogleGenAI | null | undefined = undefined;
@@ -30,12 +35,30 @@ function getGeminiClient(): GoogleGenAI | null {
   return _gemini;
 }
 
+function getFalKey(): string | null {
+  const key = (process.env.FAL_KEY || "").trim();
+  if (!key) return null;
+  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+    return key.slice(1, -1).trim() || null;
+  }
+  return key;
+}
+
 /** Extract JSON from response text (raw JSON or ```json ... ``` block). */
 function extractJsonFromResponse(text: string): string {
   const trimmed = text.trim();
   const codeBlockMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (codeBlockMatch?.[1]) return codeBlockMatch[1].trim();
   return trimmed;
+}
+
+/** Shape of Gemini generateContent response when asking for image output. */
+interface GeminiImageResponse {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{ text?: string; inlineData?: { mimeType?: string; data?: string } }>;
+    };
+  }>;
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -68,8 +91,235 @@ export async function registerRoutes(app: Express): Promise<Server> {
     autre: "Autre",
   };
 
+  const VISUALIZATION_PROJECT_LABELS: Record<string, string> = {
+    piscine: "Piscine & Spa",
+    paysage: "Aménagement paysager",
+    menuiserie: "Menuiserie extérieure",
+    terrasse: "Terrasse & Patio",
+  };
+  const VISUALIZATION_STYLE_LABELS: Record<string, string> = {
+    moderne: "Moderne",
+    traditionnel: "Traditionnel",
+    tropical: "Tropical",
+    mediterraneen: "Méditerranéen",
+  };
+
   app.get("/api/ai-status", (_req: Request, res: Response) => {
-    res.json({ available: !!getGeminiClient() });
+    res.json({
+      available: !!getGeminiClient(),
+      visualizationAvailable: !!getFalKey() || !!getGeminiClient(),
+    });
+  });
+
+  app.post("/api/generate-visualization", async (req: Request, res: Response) => {
+    // #region agent log
+    try {
+      const logDir = dirname(WORKSPACE_CURSOR_LOG);
+      if (!existsSync(logDir)) mkdirSync(logDir, { recursive: true });
+      appendFileSync(WORKSPACE_CURSOR_LOG, JSON.stringify({ location: "routes.ts:generate-visualization-entry", message: "POST hit", data: {}, timestamp: Date.now(), hypothesisId: "H0" }) + "\n");
+    } catch (_) {}
+    // #endregion
+    const falKey = getFalKey();
+    const geminiClient = getGeminiClient();
+    if (!geminiClient && !falKey) {
+      res.status(503).json({
+        message:
+          "Visualisation IA indisponible. Configurez GEMINI_API_KEY dans .env (clé sur https://aistudio.google.com/app/apikey) puis redémarrez le serveur.",
+      });
+      return;
+    }
+    const { imageBase64, imageUrl: imageUrlFromClient, mimeType, projectType, style } = req.body as {
+      imageBase64?: string;
+      imageUrl?: string;
+      mimeType?: string;
+      projectType?: string;
+      style?: string;
+    };
+    if (typeof projectType !== "string" || !projectType.trim()) {
+      res.status(400).json({ message: "projectType (string) est requis." });
+      return;
+    }
+    if (typeof style !== "string" || !style.trim()) {
+      res.status(400).json({ message: "style (string) est requis." });
+      return;
+    }
+    let imageInput: string;
+    let imageBase64ForGemini: string;
+    let imageMimeForGemini: string;
+    if (typeof imageUrlFromClient === "string" && imageUrlFromClient.startsWith("http")) {
+      imageInput = imageUrlFromClient;
+      if (geminiClient) {
+        try {
+          const resp = await fetch(imageUrlFromClient);
+          const buf = await resp.arrayBuffer();
+          imageBase64ForGemini = Buffer.from(buf).toString("base64");
+          imageMimeForGemini = (resp.headers.get("content-type") || "image/jpeg").split(";")[0].trim();
+        } catch {
+          res.status(400).json({ message: "Impossible de charger l'image depuis l'URL fournie." });
+          return;
+        }
+      } else {
+        imageBase64ForGemini = "";
+        imageMimeForGemini = "image/jpeg";
+      }
+    } else if (typeof imageBase64 === "string" && imageBase64.trim()) {
+      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "").trim();
+      const mime = typeof mimeType === "string" && mimeType.trim() ? mimeType.trim() : "image/jpeg";
+      imageInput = `data:${mime};base64,${base64Data}`;
+      imageBase64ForGemini = base64Data;
+      imageMimeForGemini = mime;
+    } else {
+      res.status(400).json({ message: "imageBase64 ou imageUrl (URL publique) est requis." });
+      return;
+    }
+
+    const projectLabel = VISUALIZATION_PROJECT_LABELS[projectType] ?? projectType;
+    const styleLabel = VISUALIZATION_STYLE_LABELS[style] ?? style;
+    const prompt = `Rendu professionnel de cet espace extérieur avec ${projectLabel} en style ${styleLabel}, photoréaliste, haute qualité, architecture et aménagement soignés.`;
+
+    // #region agent log
+    try {
+      const logDir = dirname(WORKSPACE_CURSOR_LOG);
+      if (!existsSync(logDir)) mkdirSync(logDir, { recursive: true });
+      appendFileSync(WORKSPACE_CURSOR_LOG, JSON.stringify({ location: "routes.ts:generate-visualization-provider", message: "provider choice", data: { useGemini: !!geminiClient, hasFal: !!falKey }, timestamp: Date.now(), hypothesisId: "H1" }) + "\n");
+    } catch (_) {}
+    // #endregion
+
+    // --- Option 1: Gemini (prioritaire) — image + texte → image ---
+    if (geminiClient) {
+      try {
+        const response = await geminiClient.models.generateContent({
+          model: "gemini-2.5-flash-image",
+          contents: [
+            { text: prompt },
+            { inlineData: { mimeType: imageMimeForGemini, data: imageBase64ForGemini } },
+          ],
+          config: {
+            responseModalities: ["TEXT", "IMAGE"],
+          },
+        });
+        const candidates = (response as GeminiImageResponse).candidates;
+        let imageUrl: string | undefined;
+        if (candidates?.[0]?.content?.parts) {
+          for (const part of candidates[0].content.parts) {
+            if (part.inlineData?.data) {
+              const mime = part.inlineData.mimeType || "image/png";
+              imageUrl = `data:${mime};base64,${part.inlineData.data}`;
+              break;
+            }
+          }
+        }
+        if (!imageUrl) {
+          res.status(502).json({ message: "Gemini n'a pas renvoyé d'image. Réessayez ou utilisez une autre photo." });
+          return;
+        }
+        res.json({ imageUrl });
+        return;
+      } catch (err) {
+        const errObj = err as { message?: string; status?: number; statusCode?: number; response?: { status?: number } };
+        const status = typeof errObj?.status === "number" ? errObj.status : typeof errObj?.statusCode === "number" ? errObj.statusCode : typeof errObj?.response?.status === "number" ? errObj.response.status : undefined;
+        // #region agent log
+        try {
+          const logDir = dirname(WORKSPACE_CURSOR_LOG);
+          if (!existsSync(logDir)) mkdirSync(logDir, { recursive: true });
+          appendFileSync(WORKSPACE_CURSOR_LOG, JSON.stringify({ location: "routes.ts:generate-visualization-gemini-catch", message: "Gemini error", data: { status, errMessage: errObj?.message }, timestamp: Date.now(), hypothesisId: "H2" }) + "\n");
+        } catch (_) {}
+        // #endregion
+        let message = typeof errObj?.message === "string" ? errObj.message : "Erreur Gemini (visualisation).";
+        if (status === 429) message = "Quota Gemini dépassé. Réessayez plus tard.";
+        if (status === 401 || status === 403) message = "Accès refusé par l'API Gemini (403). Vérifiez : 1) GEMINI_API_KEY valide sur https://aistudio.google.com/app/apikey 2) Génération d'images disponible pour votre région 3) Facturation activée si demandée par Google.";
+        const httpStatus = status === 429 ? 429 : status === 401 || status === 403 ? status : 502;
+        res.status(httpStatus).json({ message });
+        return;
+      }
+    }
+
+    // --- Option 2: fal.ai ---
+    fal.config({ credentials: falKey! });
+
+    try {
+      const result = await fal.run("fal-ai/image-to-image", {
+        input: {
+          model_name: "stabilityai/stable-diffusion-xl-base-1.0",
+          prompt,
+          image_url: imageInput,
+          strength: 0.75,
+          num_inference_steps: 30,
+        },
+        startTimeout: 120,
+      });
+      const data = result.data as Record<string, unknown>;
+      let imageUrl: string | undefined;
+      if (data?.images && Array.isArray(data.images) && data.images.length > 0) {
+        const first = data.images[0];
+        imageUrl = typeof first === "object" && first !== null && typeof (first as { url?: string }).url === "string"
+          ? (first as { url: string }).url
+          : undefined;
+      }
+      if (!imageUrl && data && typeof (data as { image?: { url?: string } }).image?.url === "string") {
+        imageUrl = (data as { image: { url: string } }).image.url;
+      }
+      if (!imageUrl || typeof imageUrl !== "string" || !imageUrl.startsWith("http")) {
+        res.status(502).json({ message: "Le service de génération n'a pas renvoyé d'image." });
+        return;
+      }
+      res.json({ imageUrl });
+    } catch (err) {
+      const errObj = err as { message?: string; status?: number; body?: { message?: string; detail?: string } };
+      const fal403Or429 = errObj?.status === 403 || errObj?.status === 429;
+      if (fal403Or429 && geminiClient) {
+        let base64 = imageBase64ForGemini;
+        let mime = imageMimeForGemini;
+        if (!base64 && imageInput.startsWith("data:")) {
+          const match = imageInput.match(/^data:([^;]+);base64,(.+)$/);
+          mime = match?.[1]?.trim() || "image/jpeg";
+          base64 = match?.[2]?.trim() || "";
+        } else if (!base64 && imageInput.startsWith("http")) {
+          try {
+            const resp = await fetch(imageInput);
+            const buf = await resp.arrayBuffer();
+            base64 = Buffer.from(buf).toString("base64");
+            mime = (resp.headers.get("content-type") || "image/jpeg").split(";")[0].trim();
+          } catch (_) {
+            base64 = "";
+          }
+        }
+        if (base64 && mime) {
+          try {
+            const response = await geminiClient.models.generateContent({
+              model: "gemini-2.5-flash-image",
+              contents: [{ text: prompt }, { inlineData: { mimeType: mime, data: base64 } }],
+              config: { responseModalities: ["TEXT", "IMAGE"] },
+            });
+            const candidates = (response as GeminiImageResponse).candidates;
+            let imageUrl: string | undefined;
+            if (candidates?.[0]?.content?.parts) {
+              for (const part of candidates[0].content.parts) {
+                if (part.inlineData?.data) {
+                  const outMime = part.inlineData.mimeType || "image/png";
+                  imageUrl = `data:${outMime};base64,${part.inlineData.data}`;
+                  break;
+                }
+              }
+            }
+            if (imageUrl) {
+              res.json({ imageUrl });
+              return;
+            }
+          } catch (_) {}
+        }
+      }
+      let message = typeof errObj?.message === "string" ? errObj.message : "Erreur du service de génération d'image.";
+      if (errObj?.body && typeof errObj.body === "object") {
+        const bodyMsg = errObj.body.message ?? (typeof errObj.body.detail === "string" ? errObj.body.detail : "");
+        if (bodyMsg) message = bodyMsg;
+      }
+      if (errObj?.status === 401) message = "Clé FAL invalide. Vérifiez FAL_KEY dans .env (https://fal.ai/dashboard/keys).";
+      if (errObj?.status === 403) message = "Solde fal.ai épuisé. Rechargez votre compte sur https://fal.ai/dashboard/billing";
+      if (errObj?.status === 429) message = "Quota fal.ai dépassé. Réessayez plus tard.";
+      const status = errObj?.status === 401 || errObj?.status === 403 || errObj?.status === 429 ? errObj.status : 502;
+      res.status(status).json({ message });
+    }
   });
 
   app.post("/api/parse-quote-description", async (req: Request, res: Response) => {

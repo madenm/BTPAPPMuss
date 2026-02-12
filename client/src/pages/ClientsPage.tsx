@@ -123,83 +123,83 @@ function ClientFormModal({ open, onOpenChange, client, onSave, isSaving }: Clien
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[400px] bg-white border border-[#E5E7EB] rounded-lg shadow-lg p-6">
+      <DialogContent className="max-w-[400px] bg-black/20 backdrop-blur-xl border border-white/10 text-white rounded-xl p-6">
         <DialogHeader>
-          <DialogTitle className="text-gray-900">
+          <DialogTitle className="text-white">
             {isEdit ? `Modifier : ${client.name}` : 'Ajouter un nouveau client'}
           </DialogTitle>
-          <DialogDescription className="text-gray-600">
+          <DialogDescription className="text-white/70">
             {isEdit ? 'Modifiez les informations du client.' : 'Remplissez les champs pour créer un client.'}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 mt-4">
           <div>
-            <Label className="text-gray-700">Nom complet *</Label>
+            <Label className="text-white">Nom complet *</Label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Paul Dupont"
-              className={`mt-1 border-[#E5E7EB] ${errors.name ? 'border-red-500' : ''}`}
+              className={`mt-1 bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50 ${errors.name ? 'border-red-400' : ''}`}
             />
-            {errors.name && <p className="text-xs text-red-500 mt-0.5">{errors.name}</p>}
+            {errors.name && <p className="text-xs text-red-300 mt-0.5">{errors.name}</p>}
           </div>
           <div>
-            <Label className="text-gray-700">Email *</Label>
+            <Label className="text-white">Email *</Label>
             <Input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="dupont@email.com"
-              className={`mt-1 border-[#E5E7EB] ${errors.email ? 'border-red-500' : ''}`}
+              className={`mt-1 bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50 ${errors.email ? 'border-red-400' : ''}`}
             />
-            {errors.email && <p className="text-xs text-red-500 mt-0.5">{errors.email}</p>}
+            {errors.email && <p className="text-xs text-red-300 mt-0.5">{errors.email}</p>}
           </div>
           <div>
-            <Label className="text-gray-700">Téléphone *</Label>
+            <Label className="text-white">Téléphone *</Label>
             <Input
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="06 12 34 56 78"
-              className={`mt-1 border-[#E5E7EB] ${errors.phone ? 'border-red-500' : ''}`}
+              className={`mt-1 bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50 ${errors.phone ? 'border-red-400' : ''}`}
             />
-            {errors.phone && <p className="text-xs text-red-500 mt-0.5">{errors.phone}</p>}
+            {errors.phone && <p className="text-xs text-red-300 mt-0.5">{errors.phone}</p>}
           </div>
           <div>
-            <Label className="text-gray-700">Adresse</Label>
+            <Label className="text-white">Adresse</Label>
             <Input
               value={streetAddress}
               onChange={(e) => setStreetAddress(e.target.value)}
               placeholder="15 rue de la Paix..."
-              className="mt-1 border-[#E5E7EB]"
+              className="mt-1 bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
             />
           </div>
           <div>
-            <Label className="text-gray-700">Code postal</Label>
+            <Label className="text-white">Code postal</Label>
             <Input
               value={postalCode}
               onChange={(e) => setPostalCode(e.target.value)}
               placeholder="75000"
               maxLength={10}
-              className={`mt-1 border-[#E5E7EB] ${errors.postalCode ? 'border-red-500' : ''}`}
+              className={`mt-1 bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50 ${errors.postalCode ? 'border-red-400' : ''}`}
             />
-            {errors.postalCode && <p className="text-xs text-red-500 mt-0.5">{errors.postalCode}</p>}
+            {errors.postalCode && <p className="text-xs text-red-300 mt-0.5">{errors.postalCode}</p>}
           </div>
           <div>
-            <Label className="text-gray-700">Ville</Label>
+            <Label className="text-white">Ville</Label>
             <Input
               value={city}
               onChange={(e) => setCity(e.target.value)}
               placeholder="Paris"
-              className="mt-1 border-[#E5E7EB]"
+              className="mt-1 bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
             />
           </div>
         </div>
         <DialogFooter className="gap-2 mt-6">
-          <Button variant="outline" onClick={() => onOpenChange(false)} className="border-[#E5E7EB]">
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="border-white/20 text-white hover:bg-white/10">
             Annuler
           </Button>
-          <Button onClick={handleSave} disabled={isSaving} className="bg-[#3B82F6] hover:bg-[#2563EB]">
+          <Button onClick={handleSave} disabled={isSaving} className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30 disabled:opacity-50">
             {isSaving ? 'Enregistrement...' : 'Sauvegarder'}
           </Button>
         </DialogFooter>
@@ -286,33 +286,36 @@ export default function ClientsPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-white border-b border-[#E5E7EB] px-6 py-4">
+      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-6 py-4 rounded-tl-3xl ml-20">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Gestion des clients</h1>
-            <p className="text-sm text-gray-600">Recherchez, éditez et gérez vos clients</p>
+            <h1 className="text-2xl font-bold text-white">Gestion des clients</h1>
+            <p className="text-sm text-white/70">Recherchez, éditez et gérez vos clients</p>
           </div>
           <UserAccountButton variant="inline" />
         </div>
       </header>
 
-      <main className="flex-1 p-6 bg-[#FAFBFC]">
+      <main className="flex-1 p-6 ml-20">
         <div className="space-y-4 mb-6">
-          <Input
-            placeholder="Rechercher par nom ou email..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="max-w-md border-[#E5E7EB] bg-white"
-          />
+          <div className="relative flex-1 min-w-[200px] max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50 pointer-events-none" />
+            <Input
+              placeholder="Rechercher par nom ou email..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 bg-black/20 border-white/10 text-white placeholder:text-white/50 h-9"
+            />
+          </div>
           <div className="flex flex-wrap items-center gap-3">
             <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as FilterStatus)}>
-              <SelectTrigger className="w-[160px] border-[#E5E7EB] bg-white">
+              <SelectTrigger className="w-[160px] h-9 bg-black/20 border-white/10 text-white">
                 <SelectValue placeholder="Filtre" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous</SelectItem>
-                <SelectItem value="actifs">Actifs</SelectItem>
-                <SelectItem value="terminés">Terminés</SelectItem>
+              <SelectContent className="bg-black/20 backdrop-blur-xl border-white/10">
+                <SelectItem value="all" className="text-white">Tous</SelectItem>
+                <SelectItem value="actifs" className="text-white">Actifs</SelectItem>
+                <SelectItem value="terminés" className="text-white">Terminés</SelectItem>
               </SelectContent>
             </Select>
             <Button
@@ -320,7 +323,7 @@ export default function ClientsPage() {
                 setEditingClient(null);
                 setIsModalOpen(true);
               }}
-              className="bg-[#3B82F6] hover:bg-[#2563EB]"
+              className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30"
             >
               <Plus className="h-4 w-4 mr-2" />
               Ajouter client
@@ -329,9 +332,9 @@ export default function ClientsPage() {
         </div>
 
         {filteredClients.length === 0 ? (
-          <Card className="bg-white border border-[#E5E7EB] p-12 text-center">
-            <p className="text-gray-600">Aucun client trouvé.</p>
-            <Button className="mt-4 bg-[#3B82F6] hover:bg-[#2563EB]" onClick={() => setIsModalOpen(true)}>
+          <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white p-12 text-center">
+            <p className="text-white/70">Aucun client trouvé.</p>
+            <Button className="mt-4 bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30" onClick={() => setIsModalOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Ajouter un client
             </Button>
@@ -341,21 +344,21 @@ export default function ClientsPage() {
             {filteredClients.map((client) => (
               <Card
                 key={client.id}
-                className="bg-white border border-[#E5E7EB] rounded-lg p-4 transition-all duration-200 hover:bg-gray-50 hover:shadow-[0_1px_3px_rgba(0,0,0,0.05)]"
+                className="bg-black/20 backdrop-blur-xl border border-white/10 text-white rounded-lg p-4 transition-all duration-200 hover:shadow-lg hover:scale-[1.01]"
               >
                 <CardContent className="p-0">
-                  <p className="font-semibold text-base text-gray-900 truncate">{client.name}</p>
+                  <p className="font-semibold text-base text-white truncate">{client.name}</p>
                   <div className="mt-2 space-y-1">
-                    <div className="flex items-center gap-2 text-sm text-gray-700">
-                      <Mail className="h-4 w-4 shrink-0 text-gray-500" />
+                    <div className="flex items-center gap-2 text-sm text-white/70">
+                      <Mail className="h-4 w-4 shrink-0 text-white/50" />
                       <span className="truncate">{client.email}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-700">
-                      <Phone className="h-4 w-4 shrink-0 text-gray-500" />
+                    <div className="flex items-center gap-2 text-sm text-white/70">
+                      <Phone className="h-4 w-4 shrink-0 text-white/50" />
                       <span>{client.phone}</span>
                     </div>
                   </div>
-                  <p className="mt-2 text-xs text-gray-500">Créé : {formatCreatedAt(client.created_at)}</p>
+                  <p className="mt-2 text-xs text-white/50">Créé : {formatCreatedAt(client.created_at)}</p>
                   <div className="mt-4 flex gap-2">
                     <Button
                       variant="outline"
@@ -365,7 +368,7 @@ export default function ClientsPage() {
                         setEditingClient(client);
                         setIsModalOpen(true);
                       }}
-                      className="border-[#E5E7EB] bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded"
+                      className="h-8 text-white border-white/20 hover:bg-white/10"
                     >
                       <Pencil className="h-3.5 w-3.5 mr-1" />
                       Modifier
@@ -377,7 +380,7 @@ export default function ClientsPage() {
                         e.stopPropagation();
                         setDeleteTarget(client);
                       }}
-                      className="border-[#E5E7EB] bg-gray-100 hover:bg-red-50 hover:text-red-600 hover:border-red-200 text-gray-700 px-3 py-1.5 rounded"
+                      className="h-8 text-red-300 border-red-500/50 hover:bg-red-500/20"
                     >
                       <Trash2 className="h-3.5 w-3.5 mr-1" />
                       Supprimer
@@ -399,15 +402,15 @@ export default function ClientsPage() {
       />
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent className="max-w-[380px] bg-white border border-[#E5E7EB]">
+        <AlertDialogContent className="max-w-[380px] bg-black/20 backdrop-blur-xl border border-white/10 text-white">
           <AlertDialogHeader>
-            <AlertDialogTitle>Supprimer ce client ?</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className="text-white">Supprimer ce client ?</AlertDialogTitle>
+            <AlertDialogDescription className="text-white/70">
               Êtes-vous sûr de supprimer &quot;{deleteTarget?.name}&quot; ? Cette action est définitive.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="border-[#E5E7EB]">Annuler</AlertDialogCancel>
+            <AlertDialogCancel className="border-white/20 text-white hover:bg-white/10">Annuler</AlertDialogCancel>
             <AlertDialogAction
               onClick={async (e) => {
                 e.preventDefault();
@@ -415,7 +418,7 @@ export default function ClientsPage() {
                 if (ok) setDeleteTarget(null);
               }}
               disabled={isDeleting}
-              className="bg-[#EF4444] hover:bg-[#DC2626]"
+              className="bg-red-600 hover:bg-red-700 text-white"
             >
               {isDeleting ? 'Suppression...' : 'Supprimer'}
             </AlertDialogAction>

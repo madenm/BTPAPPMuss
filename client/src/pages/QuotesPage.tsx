@@ -63,7 +63,7 @@ const DEFAULT_THEME_COLOR = '#8b5cf6';
 
 export default function QuotesPage() {
   const { user } = useAuth();
-  const { clients, chantiers, updateChantier } = useChantiers();
+  const { clients, chantiers, addChantier, addClient, updateChantier, refreshChantiers } = useChantiers();
   const { logoUrl, themeColor, profile } = useUserSettings();
   const accentColor = themeColor || DEFAULT_THEME_COLOR;
   const [, setLocation] = useLocation();
@@ -107,6 +107,7 @@ export default function QuotesPage() {
   const itemsCardRef = useRef<HTMLDivElement>(null);
   const lastAppliedQuoteIdRef = useRef<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isCreatingChantier, setIsCreatingChantier] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -241,6 +242,29 @@ export default function QuotesPage() {
       setQuoteLoadState('loaded');
     });
   }, [user?.id, chantiers, toast, setLocation]);
+
+  // Garder le chantier sélectionné cohérent avec le client : ne jamais afficher un chantier d'un autre client
+  useEffect(() => {
+    if (!selectedChantierId) return;
+    if (!selectedClientId) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'QuotesPage.tsx:effect-clear-chantier',message:'Clearing chantier (no client)',data:{selectedChantierId,clearingDescription:true},timestamp:Date.now(),hypothesisId:'H2',runId:'post-fix'})}).catch(()=>{});
+      // #endregion
+      setSelectedChantierId(null);
+      setProjectDescription('');
+      return;
+    }
+    if (chantiers.length === 0) return;
+    const ch = chantiers.find((c) => c.id === selectedChantierId);
+    // Ne réinitialiser que si le chantier est en liste et appartient à un autre client (pas si absent, ex. chantier venant d'être créé)
+    if (ch && ch.clientId !== selectedClientId) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'QuotesPage.tsx:effect-clear-chantier',message:'Clearing chantier (wrong client)',data:{selectedClientId,selectedChantierId,chantierClientId:ch?.clientId,clearingDescription:true},timestamp:Date.now(),hypothesisId:'H2',runId:'post-fix'})}).catch(()=>{});
+      // #endregion
+      setSelectedChantierId(null);
+      setProjectDescription('');
+    }
+  }, [selectedClientId, selectedChantierId, chantiers]);
 
   const addItem = () => {
     const newItem: QuoteItem = {
@@ -415,7 +439,15 @@ export default function QuotesPage() {
     }
     setStep(nextStep);
   };
-  const handlePrev = () => setStep((s) => Math.max(1, s - 1));
+  const handlePrev = () => {
+    // #region agent log
+    const prevStep = step;
+    const selClient = selectedClientId ? clients.find(c => c.id === selectedClientId) : null;
+    const selChantier = selectedChantierId ? chantiers.find(c => c.id === selectedChantierId) : null;
+    fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'QuotesPage.tsx:handlePrev',message:'Before prev',data:{prevStep,selectedClientId,selectedChantierId,clientInfoName:clientInfo.name,clientInfoEmail:clientInfo.email,projectType,selectedClientName:selClient?.name,selectedChantierNom:selChantier?.nom,selectedChantierType:selChantier?.typeChantier},timestamp:Date.now(),hypothesisId:'H1,H4'})}).catch(()=>{});
+    // #endregion
+    setStep((s) => Math.max(1, s - 1));
+  };
   const canGoNextFromStep1 = Boolean(clientInfo.name?.trim() && clientInfo.email?.trim());
 
   const handleNewQuote = () => {
@@ -585,6 +617,108 @@ export default function QuotesPage() {
       });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const projectTypeLabels: Record<string, string> = {
+    piscine: 'Piscine & Spa', paysage: 'Aménagement Paysager', menuiserie: 'Menuiserie Sur-Mesure',
+    renovation: 'Rénovation', plomberie: 'Plomberie', maconnerie: 'Maçonnerie', terrasse: 'Terrasse & Patio',
+    chauffage: 'Chauffage & Climatisation', isolation: 'Isolation de la charpente', electricite: 'Électricité',
+    peinture: 'Peinture & Revêtements', autre: 'Autre',
+  };
+
+  const handleCreateChantierFromQuote = async () => {
+    if (!user?.id || !editingQuoteId) return;
+    const clientName = clientInfo.name?.trim();
+    const clientEmail = clientInfo.email?.trim();
+    if (!clientName || !clientEmail) {
+      toast({
+        title: 'Client requis',
+        description: 'Renseignez le nom et l\'email du client avant de créer le chantier.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setIsCreatingChantier(true);
+    try {
+      let clientId: string;
+      let resolvedClientName: string;
+      if (selectedClientId) {
+        const c = clients.find((x) => x.id === selectedClientId);
+        if (c) {
+          clientId = c.id;
+          resolvedClientName = c.name;
+        } else {
+          const existing = clients.find((x) => (x.email ?? '').toLowerCase() === clientEmail.toLowerCase());
+          if (existing) {
+            clientId = existing.id;
+            resolvedClientName = existing.name;
+          } else {
+            const created = await addClient({ name: clientName, email: clientEmail, phone: clientInfo.phone ?? '' });
+            clientId = created.id;
+            resolvedClientName = created.name;
+          }
+        }
+      } else {
+        const existing = clients.find((x) => (x.email ?? '').toLowerCase() === clientEmail.toLowerCase());
+        if (existing) {
+          clientId = existing.id;
+          resolvedClientName = existing.name;
+        } else {
+          const created = await addClient({ name: clientName, email: clientEmail, phone: clientInfo.phone ?? '' });
+          clientId = created.id;
+          resolvedClientName = created.name;
+        }
+      }
+      const totalTtc = items.reduce((sum, item) => sum + getItemTotal(item), 0) * 1.2;
+      const typeLabel = (projectTypeLabels[projectType] ?? projectType) || 'Autre';
+      const chantierPayload = {
+        nom: `${typeLabel} - ${resolvedClientName}`,
+        clientId,
+        clientName: resolvedClientName,
+        dateDebut: new Date().toISOString().slice(0, 10),
+        duree: 'À définir',
+        images: [] as string[],
+        statut: 'planifié' as const,
+        typeChantier: projectType || 'autre',
+        montantDevis: Math.round(totalTtc * 100) / 100,
+        notes: projectDescription?.trim() ? projectDescription.trim().split('\n')[0] : null,
+      };
+      const createdChantier = await addChantier(chantierPayload);
+      refreshChantiers();
+      const currentSubtotal = items.reduce((sum, item) => sum + getItemTotal(item), 0);
+      const currentTotal = currentSubtotal * 1.2;
+      const quotePayload = {
+        chantier_id: createdChantier.id,
+        client_name: clientInfo.name,
+        client_email: clientInfo.email,
+        client_phone: clientInfo.phone,
+        client_address: clientInfo.address,
+        project_type: projectType,
+        project_description: projectDescription,
+        total_ht: currentSubtotal,
+        total_ttc: currentTotal,
+        validity_days: parseInt(validityDays) || 30,
+        items,
+        status: editingQuoteStatus ?? undefined,
+      };
+      await updateQuote(user.id, editingQuoteId, quotePayload);
+      setSelectedChantierId(createdChantier.id);
+      setSelectedClientId(clientId);
+      toast({
+        title: 'Chantier créé',
+        description: 'Le chantier a été créé et le devis lui est désormais associé. Vous pouvez ouvrir la fiche chantier.',
+      });
+    } catch (err) {
+      console.error('Error creating chantier from quote:', err);
+      const message = err instanceof Error ? err.message : 'Erreur inconnue';
+      toast({
+        title: 'Erreur',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCreatingChantier(false);
     }
   };
 
@@ -960,6 +1094,14 @@ export default function QuotesPage() {
                           phone: client.phone,
                         }));
                         setSelectClientOpen(false);
+                        const currentChantier = selectedChantierId ? chantiers.find(c => c.id === selectedChantierId) : null;
+                        if (currentChantier && currentChantier.clientId !== client.id) {
+                          // #region agent log
+                          fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'QuotesPage.tsx:client-onClick-clear-chantier',message:'Client selected, clearing chantier (other client)',data:{newClientId:client.id,newClientName:client.name,clearedChantierId:selectedChantierId,clearedChantierNom:currentChantier?.nom,clearingDescription:true},timestamp:Date.now(),hypothesisId:'H1',runId:'post-fix'})}).catch(()=>{});
+                          // #endregion
+                          setSelectedChantierId(null);
+                          setProjectDescription('');
+                        }
                       }}
                       className="w-full text-left p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex flex-col gap-1"
                       data-testid={`select-client-${client.id}`}
@@ -1018,6 +1160,9 @@ export default function QuotesPage() {
                               const desc = chantier.notes
                                 ? `${chantier.nom}\n${chantier.notes}`
                                 : chantier.nom;
+                              // #region agent log
+                              fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'QuotesPage.tsx:chantier-onClick-set-desc',message:'Chantier selected, setting description',data:{chantierId:chantier.id,chantierNom:chantier.nom,descPreview:desc.slice(0,50)},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
+                              // #endregion
                               setSelectedChantierId(chantier.id);
                               setProjectDescription(desc);
                               setProjectType(valueToSet);
@@ -1104,8 +1249,14 @@ export default function QuotesPage() {
                         data-testid="input-client-name"
                         value={clientInfo.name}
                         onChange={(e) => {
-                          setClientInfo(prev => ({ ...prev, name: e.target.value }));
+                          const newName = e.target.value;
+                          // #region agent log
+                          const selClient = selectedClientId ? clients.find(c => c.id === selectedClientId) : null;
+                          fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'QuotesPage.tsx:clientNameChange',message:'Client name changed',data:{newName,selectedClientId,selectedClientName:selClient?.name,clientInfoEmail:clientInfo.email},timestamp:Date.now(),hypothesisId:'H3',runId:'post-fix'})}).catch(()=>{});
+                          // #endregion
+                          setClientInfo(prev => ({ ...prev, name: newName }));
                           setHighlightMissing(prev => ({ ...prev, clientName: false }));
+                          if (selectedClientId && selClient && newName.trim() !== selClient.name) setSelectedClientId(null);
                         }}
                         placeholder="Nom du client"
                         className={`cursor-text rounded-xl border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 ${highlightMissing.clientName ? 'border-amber-400 dark:border-amber-500/80 bg-amber-50/20 dark:bg-amber-950/10' : ''}`}
@@ -1119,8 +1270,11 @@ export default function QuotesPage() {
                         data-testid="input-client-email"
                         value={clientInfo.email}
                         onChange={(e) => {
-                          setClientInfo(prev => ({ ...prev, email: e.target.value }));
+                          const newEmail = e.target.value;
+                          setClientInfo(prev => ({ ...prev, email: newEmail }));
                           setHighlightMissing(prev => ({ ...prev, clientEmail: false }));
+                          const selClient = selectedClientId ? clients.find(c => c.id === selectedClientId) : null;
+                          if (selectedClientId && selClient && newEmail.trim() !== (selClient.email ?? '')) setSelectedClientId(null);
                         }}
                         placeholder="email@exemple.com"
                         className={`cursor-text rounded-xl border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 ${highlightMissing.clientEmail ? 'border-amber-400 dark:border-amber-500/80 bg-amber-50/20 dark:bg-amber-950/10' : ''}`}
@@ -1197,27 +1351,34 @@ export default function QuotesPage() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {/* Affichage du client et du chantier sélectionnés */}
-                    {(selectedClientId || selectedChantierId) && (
+                    {/* Affichage du client et du chantier / type (sélection ou formulaire) */}
+                    {(selectedClientId || selectedChantierId || clientInfo.name?.trim() || projectType) && (
                       <div className="flex flex-wrap gap-3 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700">
-                        {selectedClientId && (() => {
-                          const selectedClient = clients.find(c => c.id === selectedClientId);
-                          return selectedClient ? (
+                        {(() => {
+                          const selectedClient = selectedClientId ? clients.find(c => c.id === selectedClientId) : null;
+                          const displayClientName = selectedClient ? selectedClient.name : (clientInfo.name?.trim() || null);
+                          // #region agent log
+                          fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'QuotesPage.tsx:badge-render-step2',message:'Badge step2',data:{selectedClientId,selectedChantierId,clientInfoName:clientInfo.name,projectType,displayClientName,selectedChantierNom:selectedChantierId?chantiers.find(c=>c.id===selectedChantierId)?.nom:null},timestamp:Date.now(),hypothesisId:'H1,H5',runId:'post-fix'})}).catch(()=>{});
+                          // #endregion
+                          return displayClientName ? (
                             <div className="flex items-center gap-2">
                               <User className="h-4 w-4 text-violet-500" />
                               <span className="text-sm text-gray-700 dark:text-gray-300">
-                                <span className="font-medium">Client :</span> {selectedClient.name}
+                                <span className="font-medium">Client :</span> {displayClientName}
                               </span>
                             </div>
                           ) : null;
                         })()}
-                        {selectedChantierId && (() => {
-                          const selectedChantier = chantiers.find(c => c.id === selectedChantierId);
-                          return selectedChantier ? (
+                        {(() => {
+                          const selectedChantier = selectedChantierId ? chantiers.find(c => c.id === selectedChantierId) : null;
+                          const chantierBelongsToClient = selectedChantier && selectedClientId && selectedChantier.clientId === selectedClientId;
+                          const projectTypeLabels: Record<string, string> = { piscine: 'Piscine & Spa', paysage: 'Aménagement Paysager', menuiserie: 'Menuiserie Sur-Mesure', renovation: 'Rénovation', plomberie: 'Plomberie', maconnerie: 'Maçonnerie', terrasse: 'Terrasse & Patio', chauffage: 'Chauffage & Climatisation', isolation: 'Isolation de la charpente', electricite: 'Électricité', peinture: 'Peinture & Revêtements', autre: 'Autre' };
+                          const displayChantierOrType = chantierBelongsToClient ? selectedChantier!.nom : (projectType ? projectTypeLabels[projectType] ?? projectType : null);
+                          return displayChantierOrType ? (
                             <div className="flex items-center gap-2">
                               <Building className="h-4 w-4 text-violet-500" />
                               <span className="text-sm text-gray-700 dark:text-gray-300">
-                                <span className="font-medium">Chantier :</span> {selectedChantier.nom}
+                                <span className="font-medium">{selectedChantierId ? 'Chantier :' : 'Type :'}</span> {displayChantierOrType}
                               </span>
                             </div>
                           ) : null;
@@ -1227,7 +1388,24 @@ export default function QuotesPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="project-type" className="text-gray-700 dark:text-gray-300">Type de projet</Label>
-                        <Select value={projectType} onValueChange={setProjectType}>
+                        <Select value={projectType} onValueChange={(newValue) => {
+                          // #region agent log
+                          const selChantier = selectedChantierId ? chantiers.find(c => c.id === selectedChantierId) : null;
+                          fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'QuotesPage.tsx:projectTypeChange',message:'Project type changed',data:{newValue,selectedChantierId,selectedChantierType:selChantier?.typeChantier,selectedChantierNom:selChantier?.nom},timestamp:Date.now(),hypothesisId:'H2',runId:'post-fix'})}).catch(()=>{});
+                          // #endregion
+                          setProjectType(newValue);
+                          if (selectedChantierId && selChantier) {
+                            const validTypes = ['piscine', 'paysage', 'menuiserie', 'renovation', 'plomberie', 'maconnerie', 'terrasse', 'chauffage', 'isolation', 'electricite', 'peinture', 'autre'];
+                            const chantierType = selChantier.typeChantier && validTypes.includes(selChantier.typeChantier) ? selChantier.typeChantier : 'autre';
+                            if (chantierType !== newValue) {
+                              // #region agent log
+                              fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'QuotesPage.tsx:projectType-clear-chantier',message:'Project type change clearing chantier',data:{newValue,chantierType,clearedChantierId:selectedChantierId,clearingDescription:true},timestamp:Date.now(),hypothesisId:'H4',runId:'post-fix'})}).catch(()=>{});
+                              // #endregion
+                              setSelectedChantierId(null);
+                              setProjectDescription('');
+                            }
+                          }
+                        }}>
                           <SelectTrigger data-testid="select-project-type" className="rounded-xl border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
                             <SelectValue placeholder="Sélectionner le type" />
                           </SelectTrigger>
@@ -1559,25 +1737,60 @@ export default function QuotesPage() {
                     <ArrowLeft className="h-4 w-4 mr-2" />
                     Précédent
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSaveQuote}
-                    disabled={isSaving || !canSaveQuote()}
-                    className="bg-violet-500 hover:bg-violet-600 text-white rounded-xl disabled:opacity-50"
-                    data-testid="button-save-quote"
-                  >
-                    {isSaving ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Sauvegarde...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="h-4 w-4 mr-2" />
-                        Sauvegarder le devis
-                      </>
-                    )}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {selectedChantierId ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setLocation(`/dashboard/projects?edit=${selectedChantierId}`)}
+                        className="rounded-xl border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 shadow-sm dark:border-gray-600 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
+                        type="button"
+                      >
+                        <Building className="h-4 w-4 mr-2" />
+                        Accéder au chantier
+                      </Button>
+                    ) : editingQuoteId ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCreateChantierFromQuote}
+                        disabled={isCreatingChantier || !clientInfo.name?.trim() || !clientInfo.email?.trim()}
+                        className="rounded-xl border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 shadow-sm dark:border-gray-600 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
+                        type="button"
+                      >
+                        {isCreatingChantier ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Création...
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Créer un chantier pour ce devis
+                          </>
+                        )}
+                      </Button>
+                    ) : null}
+                    <Button
+                      size="sm"
+                      onClick={handleSaveQuote}
+                      disabled={isSaving || !canSaveQuote()}
+                      className="bg-violet-500 hover:bg-violet-600 text-white rounded-xl disabled:opacity-50"
+                      data-testid="button-save-quote"
+                    >
+                      {isSaving ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Sauvegarde...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-4 w-4 mr-2" />
+                          Sauvegarder le devis
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </motion.div>
             )}

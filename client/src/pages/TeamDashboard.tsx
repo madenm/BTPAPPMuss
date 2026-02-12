@@ -7,11 +7,17 @@ import { Badge } from '@/components/ui/badge'
 import TeamSidebar from '@/components/TeamSidebar'
 import { GlobalBackground } from '@/components/GlobalBackground'
 import { UserAccountButton } from '@/components/UserAccountButton'
-import { Building, Calendar, Clock, ChevronLeft, ChevronRight, FileText } from 'lucide-react'
+import { Building, Calendar, Clock, ChevronLeft, ChevronRight, FileText, LayoutGrid, Receipt, Users, UserCircle, Sparkles } from 'lucide-react'
 import { useChantiers } from '@/context/ChantiersContext'
 import type { Chantier } from '@/context/ChantiersContext'
 import QuotesPage from '@/pages/QuotesPage'
+import CRMPipelinePage from '@/pages/CRMPipelinePage'
+import InvoicesPage from '@/pages/InvoicesPage'
+import TeamPage from '@/pages/TeamPage'
+import ClientsPage from '@/pages/ClientsPage'
+import AIVisualizationPage from '@/pages/AIVisualizationPage'
 import { refreshTeamMember, type TeamMember } from '@/lib/supabase'
+import { TeamEffectiveUserIdProvider } from '@/context/TeamEffectiveUserIdContext'
 
 // Helpers pour le planning (alignés sur PlanningPage)
 function parseLocalDate(dateStr: string): Date {
@@ -152,10 +158,15 @@ export default function TeamDashboard() {
       }
       return 'overview' as const;
     }
+    if (location === '/team-dashboard/crm' && teamMemberForCheck?.can_access_crm) return 'crm' as const;
+    if (location === '/team-dashboard/invoices' && teamMemberForCheck?.can_manage_invoices) return 'invoices' as const;
+    if (location === '/team-dashboard/team' && teamMemberForCheck?.can_manage_team) return 'team' as const;
+    if (location === '/team-dashboard/clients' && teamMemberForCheck?.can_manage_clients) return 'clients' as const;
+    if (location === '/team-dashboard/ai-visualization' && teamMemberForCheck?.can_use_ai_visualization) return 'ai-visualization' as const;
     return 'overview' as const
   }, [location])
-  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'planning' | 'quotes'>(tabFromPath)
-  const { chantiers, refreshChantiers, loading } = useChantiers()
+  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'planning' | 'quotes' | 'crm' | 'invoices' | 'team' | 'clients' | 'ai-visualization'>(tabFromPath)
+  const { chantiers, refreshChantiers, refreshClients, loading } = useChantiers()
   const [teamMember, setTeamMember] = useState<TeamMember | null>(null)
 
   useEffect(() => {
@@ -172,8 +183,31 @@ export default function TeamDashboard() {
       setLocation('/team-dashboard');
     } else if (tabFromPath === 'quotes' && !teamMember.can_create_quotes) {
       setLocation('/team-dashboard');
+    } else if (tabFromPath === 'crm' && !teamMember.can_access_crm) {
+      setLocation('/team-dashboard');
+    } else if (tabFromPath === 'invoices' && !teamMember.can_manage_invoices) {
+      setLocation('/team-dashboard');
+    } else if (tabFromPath === 'team' && !teamMember.can_manage_team) {
+      setLocation('/team-dashboard');
+    } else if (tabFromPath === 'clients' && !teamMember.can_manage_clients) {
+      setLocation('/team-dashboard');
+    } else if (tabFromPath === 'ai-visualization' && !teamMember.can_use_ai_visualization) {
+      setLocation('/team-dashboard');
     }
   }, [tabFromPath, teamMember, setLocation])
+
+  // Exposer l'user_id du propriétaire pour que getCurrentUserId() renvoie cet id en mode membre d'équipe
+  useEffect(() => {
+    if (teamMember?.user_id) {
+      window.__AOS_TEAM_EFFECTIVE_USER_ID__ = teamMember.user_id;
+      refreshClients();
+    } else {
+      window.__AOS_TEAM_EFFECTIVE_USER_ID__ = null;
+    }
+    return () => {
+      window.__AOS_TEAM_EFFECTIVE_USER_ID__ = null;
+    };
+  }, [teamMember?.user_id, refreshClients])
 
   useEffect(() => {
     const storedMember = localStorage.getItem('teamMember')
@@ -213,7 +247,7 @@ export default function TeamDashboard() {
     ;(async () => {
       try {
         const member = JSON.parse(storedMember) as TeamMember
-        const code = sessionStorage.getItem('teamMemberLoginCode')
+        const code = sessionStorage.getItem('teamMemberLoginCode') || localStorage.getItem('teamMemberLoginCode')
         if (member.id && code) {
           const refreshed = await refreshTeamMember(member.id, code)
           if (refreshed) {
@@ -229,18 +263,15 @@ export default function TeamDashboard() {
     })()
   }, [refreshChantiers])
 
-  const goToTab = (tab: 'overview' | 'projects' | 'planning' | 'quotes') => {
-    // Vérifier les permissions avant de changer d'onglet
-    if (tab === 'projects' && !teamMember?.can_view_all_chantiers && !teamMember?.can_manage_chantiers) {
-      return; // Pas de permission pour voir les chantiers
-    }
-    if (tab === 'planning' && !teamMember?.can_view_planning && !teamMember?.can_manage_planning) {
-      return; // Pas de permission pour voir le planning
-    }
-    if (tab === 'quotes' && !teamMember?.can_create_quotes) {
-      return; // Pas de permission pour créer des devis
-    }
-    
+  const goToTab = (tab: 'overview' | 'projects' | 'planning' | 'quotes' | 'crm' | 'invoices' | 'team' | 'clients' | 'ai-visualization') => {
+    if (tab === 'projects' && !teamMember?.can_view_all_chantiers && !teamMember?.can_manage_chantiers) return;
+    if (tab === 'planning' && !teamMember?.can_view_planning && !teamMember?.can_manage_planning) return;
+    if (tab === 'quotes' && !teamMember?.can_create_quotes) return;
+    if (tab === 'crm' && !teamMember?.can_access_crm) return;
+    if (tab === 'invoices' && !teamMember?.can_manage_invoices) return;
+    if (tab === 'team' && !teamMember?.can_manage_team) return;
+    if (tab === 'clients' && !teamMember?.can_manage_clients) return;
+    if (tab === 'ai-visualization' && !teamMember?.can_use_ai_visualization) return;
     setActiveTab(tab)
     const path = tab === 'overview' ? '/team-dashboard' : `/team-dashboard/${tab}`
     setLocation(path)
@@ -354,10 +385,36 @@ export default function TeamDashboard() {
                     Créer un Devis
                   </Button>
                 )}
+                {teamMember?.can_access_crm && (
+                  <Button variant="ghost" size="sm" onClick={() => goToTab('crm')} className={activeTab === 'crm' ? 'bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}>
+                    <LayoutGrid className="h-4 w-4 mr-2" /> CRM
+                  </Button>
+                )}
+                {teamMember?.can_manage_invoices && (
+                  <Button variant="ghost" size="sm" onClick={() => goToTab('invoices')} className={activeTab === 'invoices' ? 'bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}>
+                    <Receipt className="h-4 w-4 mr-2" /> Factures
+                  </Button>
+                )}
+                {teamMember?.can_manage_team && (
+                  <Button variant="ghost" size="sm" onClick={() => goToTab('team')} className={activeTab === 'team' ? 'bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}>
+                    <Users className="h-4 w-4 mr-2" /> Équipe
+                  </Button>
+                )}
+                {teamMember?.can_manage_clients && (
+                  <Button variant="ghost" size="sm" onClick={() => goToTab('clients')} className={activeTab === 'clients' ? 'bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}>
+                    <UserCircle className="h-4 w-4 mr-2" /> Clients
+                  </Button>
+                )}
+                {teamMember?.can_use_ai_visualization && (
+                  <Button variant="ghost" size="sm" onClick={() => goToTab('ai-visualization')} className={activeTab === 'ai-visualization' ? 'bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}>
+                    <Sparkles className="h-4 w-4 mr-2" /> IA Visualisation
+                  </Button>
+                )}
               </div>
             </div>
 
             {/* Tab Content */}
+            <TeamEffectiveUserIdProvider value={teamMember?.user_id ?? null}>
             <main className="flex-1 p-6 space-y-6 overflow-auto ml-20">
               {activeTab === 'overview' && (
                 <div className="space-y-6">
@@ -561,6 +618,32 @@ export default function TeamDashboard() {
                 </div>
               )}
 
+              {activeTab === 'crm' && teamMember?.can_access_crm && (
+                <div className="min-h-[60vh]">
+                  <CRMPipelinePage />
+                </div>
+              )}
+              {activeTab === 'invoices' && teamMember?.can_manage_invoices && (
+                <div className="min-h-[60vh]">
+                  <InvoicesPage />
+                </div>
+              )}
+              {activeTab === 'team' && teamMember?.can_manage_team && (
+                <div className="min-h-[60vh]">
+                  <TeamPage />
+                </div>
+              )}
+              {activeTab === 'clients' && teamMember?.can_manage_clients && (
+                <div className="min-h-[60vh]">
+                  <ClientsPage />
+                </div>
+              )}
+              {activeTab === 'ai-visualization' && teamMember?.can_use_ai_visualization && (
+                <div className="min-h-[60vh]">
+                  <AIVisualizationPage />
+                </div>
+              )}
+
               {activeTab === 'planning' && (
                 <>
                   {!teamMember?.can_view_planning && !teamMember?.can_manage_planning ? (
@@ -708,6 +791,7 @@ export default function TeamDashboard() {
                 </>
               )}
             </main>
+            </TeamEffectiveUserIdProvider>
           </motion.div>
         </AnimatePresence>
       </div>

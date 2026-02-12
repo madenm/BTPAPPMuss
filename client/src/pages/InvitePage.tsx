@@ -81,6 +81,7 @@ export default function InvitePage() {
         localStorage.setItem('teamMember', JSON.stringify(member))
         localStorage.setItem('userType', 'team')
         sessionStorage.setItem('teamMemberLoginCode', code.trim())
+        localStorage.setItem('teamMemberLoginCode', code.trim())
 
         // Ne pas marquer l'invitation comme utilisée : le même lien reste valide pour les prochaines connexions
         setLocation("/team-dashboard")
