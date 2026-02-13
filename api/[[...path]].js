@@ -3,13 +3,14 @@
  * The app is built to dist/index.js and exports a Promise<Express>.
  * We wrap req with url, method, path, originalUrl so Express routing matches correctly.
  */
+const { initializeApp } = require("./index.js");
+
 let appCache = null;
 
 async function getApp() {
   if (!appCache) {
     try {
-      const mod = await import("../dist/index.js");
-      appCache = await mod.default;
+      appCache = await initializeApp();
     } catch (error) {
       console.error("[API Handler] Failed to load app:", error);
       throw error;
@@ -27,7 +28,7 @@ function readBody(req) {
   });
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const app = await getApp();
   const rawUrl = req.url || "";
   let pathForExpress = rawUrl;
@@ -43,9 +44,6 @@ export default async function handler(req, res) {
   }
   const method = (req.method || "GET").toUpperCase();
   const pathnameOnly = pathForExpress.split("?")[0];
-  // #region agent log
-  fetch("http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "api/[[...path]].js:handler", message: "Vercel handler", data: { rawUrl, reqMethod: method, pathForExpress, pathnameOnly }, timestamp: Date.now(), hypothesisId: "H2", runId: "run1" }) }).catch(() => {});
-  // #endregion
 
   let parsedBody = undefined;
   const contentType = (req.headers && (req.headers["content-type"] || req.headers["Content-Type"])) || "";
@@ -75,4 +73,7 @@ export default async function handler(req, res) {
   });
 }
 
-export const config = { api: { bodyParser: false } };
+module.exports = handler;
+
+const config = { api: { bodyParser: false } };
+module.exports.config = config;
