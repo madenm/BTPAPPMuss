@@ -1,6 +1,7 @@
 /**
  * Vercel serverless handler: forward all /api/* requests to the Express app.
  * The app is built to dist/index.js and exports a Promise<Express>.
+ * On modifie req en place (url, method) pour que le routeur Express matche correctement.
  */
 let appCache = null;
 
@@ -15,7 +16,6 @@ async function getApp() {
 export default async function handler(req, res) {
   const app = await getApp();
   const rawUrl = req.url || "";
-  // Sur Vercel req.url peut être l'URL complète (ex. https://.../api/...) : extraire le pathname pour Express
   let pathForExpress = rawUrl;
   if (rawUrl.includes("://")) {
     try {
@@ -28,11 +28,18 @@ export default async function handler(req, res) {
     pathForExpress = "/api" + (pathForExpress.startsWith("/") ? pathForExpress : "/" + pathForExpress);
   }
   const method = (req.method || "GET").toUpperCase();
-  const wrappedReq = Object.create(req, {
-    url: { value: pathForExpress, writable: false },
-    method: { value: method, writable: false },
-  });
+  try {
+    req.url = pathForExpress;
+    req.method = method;
+    if (req.originalUrl === undefined) req.originalUrl = pathForExpress;
+  } catch (_) {
+    // fallback si req est en lecture seule : wrapper
+    req = Object.create(req, {
+      url: { value: pathForExpress, writable: false },
+      method: { value: method, writable: false },
+    });
+  }
   return new Promise((resolve, reject) => {
-    app(wrappedReq, res, (err) => (err ? reject(err) : resolve(undefined)));
+    app(req, res, (err) => (err ? reject(err) : resolve(undefined)));
   });
 }
