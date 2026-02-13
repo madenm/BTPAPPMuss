@@ -1,12 +1,12 @@
 /**
- * CommonJS wrapper for the ESM Express app
- * Allows Vercel to load and cache the app properly
+ * ESM wrapper for the Express app
+ * Allows the Vercel handler to load and cache the app properly
  */
 
 let appInstance = null;
 let loadingPromise = null;
 
-async function loadApp() {
+export async function loadApp() {
   if (appInstance) {
     return appInstance;
   }
@@ -34,8 +34,3 @@ async function loadApp() {
   
   return loadingPromise;
 }
-
-// Immediately start loading in background
-loadApp().catch(err => console.error("[API] Background load failed:", err));
-
-module.exports = { loadApp };

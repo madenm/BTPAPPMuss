@@ -1,8 +1,8 @@
 /**
  * Vercel serverless handler: forward all /api/* requests to the Express app.
- * CommonJS wrapper that loads the ESM app and handles requests.
+ * ESM format for Vercel serverless functions.
  */
-const { loadApp } = require("./index.js");
+import { loadApp } from "./index.js";
 
 let appCache = null;
 
@@ -90,5 +90,5 @@ async function handler(req, res) {
   }
 }
 
-module.exports = handler;
-module.exports.config = { api: { bodyParser: false } };
+export default handler;
+export const config = { api: { bodyParser: false } };
