@@ -15,7 +15,18 @@ async function getApp() {
 export default async function handler(req, res) {
   const app = await getApp();
   const rawUrl = req.url || "";
-  const pathForExpress = rawUrl.startsWith("/api") ? rawUrl : "/api" + (rawUrl.startsWith("/") ? rawUrl : "/" + rawUrl);
+  // Sur Vercel req.url peut être l'URL complète (ex. https://.../api/...) : extraire le pathname pour Express
+  let pathForExpress = rawUrl;
+  if (rawUrl.includes("://")) {
+    try {
+      const u = new URL(rawUrl);
+      pathForExpress = u.pathname + (u.search || "");
+    } catch {
+      pathForExpress = rawUrl.startsWith("/api") ? rawUrl : "/api" + (rawUrl.startsWith("/") ? rawUrl : "/" + rawUrl);
+    }
+  } else if (!pathForExpress.startsWith("/api")) {
+    pathForExpress = "/api" + (pathForExpress.startsWith("/") ? pathForExpress : "/" + pathForExpress);
+  }
   const wrappedReq = Object.create(req, { url: { value: pathForExpress, writable: false } });
   return new Promise((resolve, reject) => {
     app(wrappedReq, res, (err) => (err ? reject(err) : resolve(undefined)));
