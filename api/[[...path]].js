@@ -27,7 +27,11 @@ export default async function handler(req, res) {
   } else if (!pathForExpress.startsWith("/api")) {
     pathForExpress = "/api" + (pathForExpress.startsWith("/") ? pathForExpress : "/" + pathForExpress);
   }
-  const wrappedReq = Object.create(req, { url: { value: pathForExpress, writable: false } });
+  const method = (req.method || "GET").toUpperCase();
+  const wrappedReq = Object.create(req, {
+    url: { value: pathForExpress, writable: false },
+    method: { value: method, writable: false },
+  });
   return new Promise((resolve, reject) => {
     app(wrappedReq, res, (err) => (err ? reject(err) : resolve(undefined)));
   });
