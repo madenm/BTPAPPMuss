@@ -4,26 +4,38 @@
  */
 
 let appInstance = null;
-let appPromise = null;
+let loadingPromise = null;
 
-async function initializeApp() {
-  if (appPromise) return appPromise;
+async function loadApp() {
+  if (appInstance) {
+    return appInstance;
+  }
   
-  appPromise = (async () => {
+  if (loadingPromise) {
+    return loadingPromise;
+  }
+  
+  loadingPromise = (async () => {
     try {
+      console.log("[API] Loading app from dist/index.js");
       // Dynamically import the ESM module
-      const appModule = await import("../dist/index.js");
-      // Get the default export (which is appPromise)
-      const app = await appModule.default;
-      appInstance = app;
-      return app;
+      const { default: appPromise } = await import("../dist/index.js");
+      console.log("[API] App promise imported, awaiting...");
+      // Resolve the promise to get the Express app
+      appInstance = await appPromise;
+      console.log("[API] App loaded successfully");
+      return appInstance;
     } catch (error) {
-      console.error("[API Index] Failed to initialize app:", error);
+      console.error("[API] Failed to load app:", error);
+      loadingPromise = null; // Reset on error so we can retry
       throw error;
     }
   })();
   
-  return appPromise;
+  return loadingPromise;
 }
 
-module.exports = { initializeApp };
+// Immediately start loading in background
+loadApp().catch(err => console.error("[API] Background load failed:", err));
+
+module.exports = { loadApp };
