@@ -4,9 +4,8 @@
   "outputDirectory": "dist/public",
   "installCommand": "npm install",
   "framework": null,
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/[[...path]].js" },
-    { "src": "/(.*)", "dest": "/index.html", "status": 200 }
+  "rewrites": [
+    { "source": "/((?!api|assets).*)", "destination": "/index.html" }
   ],
   "functions": {
     "api/[[...path]].js": { "memory": 1024, "maxDuration": 60 }
