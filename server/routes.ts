@@ -883,10 +883,8 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
       return;
     }
 
-    // En mode test (sans domaine) : rediriger vers RESEND_TEST_EMAIL ; avec SENDER_EMAIL/RESEND_FROM, envoyer au vrai destinataire
-    const resendTestEmailRawDevis = (process.env.RESEND_TEST_EMAIL || "").trim();
-    const hasCustomSenderDevis = !!(process.env.SENDER_EMAIL || "").trim() || !!(process.env.RESEND_FROM || "").trim();
-    const toAddress = !hasCustomSenderDevis && resendTestEmailRawDevis ? resendTestEmailRawDevis : to.trim();
+    // Toujours envoyer au destinataire indiqué (pas de redirection RESEND_TEST_EMAIL)
+    const toAddress = to.trim();
     const attachmentFilename = fileName && String(fileName).trim() ? String(fileName).trim() : "devis.pdf";
     const brevoApiKey = process.env.BREVO_API_KEY;
     const resendApiKey = process.env.RESEND_API_KEY;
@@ -1011,27 +1009,8 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
       return;
     }
 
-    // #region agent log
-    const resendTestEmailRaw = (process.env.RESEND_TEST_EMAIL || "").trim();
-    const senderEmailSet = !!(process.env.SENDER_EMAIL || "").trim();
-    const resendFromSet = !!(process.env.RESEND_FROM || "").trim();
-    agentLog({
-      hypothesisId: "H1",
-      runId: "followup-email",
-      location: "routes.ts:send-followup-email",
-      message: "Recipient and sender env check",
-      data: {
-        hasTo: true,
-        toLength: to.trim().length,
-        resendTestEmailSet: !!resendTestEmailRaw,
-        senderEmailSet,
-        resendFromSet,
-      },
-    });
-    // #endregion
-    // N'utiliser RESEND_TEST_EMAIL que en mode test (sans domaine) ; avec SENDER_EMAIL/RESEND_FROM, envoyer au vrai destinataire
-    const hasCustomSender = !!(process.env.SENDER_EMAIL || "").trim() || !!(process.env.RESEND_FROM || "").trim();
-    const toAddress = !hasCustomSender && resendTestEmailRaw ? resendTestEmailRaw : to.trim();
+    // Toujours envoyer au destinataire du prospect (pas de redirection RESEND_TEST_EMAIL) pour que l'UI et l'envoi correspondent
+    const toAddress = to.trim();
     const subjectText = subject && String(subject).trim() ? String(subject).trim() : "Relance - Votre devis";
     const html = (htmlContent && String(htmlContent).trim()) ? String(htmlContent).trim() : "<p>Bonjour, je souhaite faire un suivi concernant notre échange précédent.</p>";
 
@@ -1049,19 +1028,6 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
       const from = useDefaultSender
         ? (process.env.SENDER_EMAIL || process.env.RESEND_FROM || "onboarding@resend.dev")
         : fromAddr;
-      // #region agent log
-      agentLog({
-        hypothesisId: "H2",
-        runId: "followup-email",
-        location: "routes.ts:send-followup-email-resend",
-        message: "Computed toAddress and from",
-        data: {
-          toAddressEqualsTo: toAddress === to.trim(),
-          fromIsDefaultResend: from === "onboarding@resend.dev",
-          useDefaultSender,
-        },
-      });
-      // #endregion
 
       try {
         const resend = new Resend(resendApiKey);
@@ -1575,10 +1541,8 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
       return;
     }
 
-    // En mode test (sans domaine) : rediriger vers RESEND_TEST_EMAIL ; avec SENDER_EMAIL/RESEND_FROM, envoyer au vrai destinataire
-    const resendTestEmailRawInv = (process.env.RESEND_TEST_EMAIL || "").trim();
-    const hasCustomSenderInv = !!(process.env.SENDER_EMAIL || "").trim() || !!(process.env.RESEND_FROM || "").trim();
-    const toAddress = !hasCustomSenderInv && resendTestEmailRawInv ? resendTestEmailRawInv : to.trim();
+    // Toujours envoyer au destinataire indiqué (pas de redirection RESEND_TEST_EMAIL)
+    const toAddress = to.trim();
 
     try {
       const supabase = getSupabaseClient();
