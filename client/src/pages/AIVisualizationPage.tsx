@@ -9,10 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { UserAccountButton } from '@/components/UserAccountButton';
 import {
-  Wand2,
   Upload,
   Image as ImageIcon,
-  Sparkles,
   Download,
   RefreshCw,
   CheckCircle,
@@ -124,12 +122,6 @@ export default function AIVisualizationPage() {
     const apiUrl = `${apiBase}/api/generate-visualization`;
     debugIngest({ location: 'AIVisualizationPage.tsx:generateVisualization', message: 'generateVisualization start', data: { origin: window.location.origin, apiUrl, hostname: window.location.hostname }, hypothesisId: 'H1,H2,H3', runId: 'run4' });
     try {
-      const pingRes = await fetch(`${apiBase}/api/ai-status`, { method: 'GET' });
-      if (!pingRes.ok) {
-        setGenerationError('Le serveur ne répond pas. Vérifiez que "npm run dev" est bien lancé.');
-        toast({ title: 'Erreur', description: 'Serveur inaccessible.', variant: 'destructive' });
-        return;
-      }
       let body: { imageUrl?: string; imageBase64?: string; mimeType?: string; projectType: string; style: string };
       if (uploadedImage.preview.startsWith('http')) {
         body = { imageUrl: uploadedImage.preview, projectType: selectedProjectType, style: selectedStyle };
@@ -148,7 +140,8 @@ export default function AIVisualizationPage() {
       clearTimeout(timeoutId);
       const data = await res.json().catch(() => ({})) as { message?: string; imageUrl?: string; images?: Array<{ url?: string }> };
       if (!res.ok) {
-        const message = typeof data?.message === 'string' ? data.message : 'La génération a échoué.';
+        const raw = typeof data?.message === 'string' ? data.message : 'La génération a échoué.';
+        const message = /replicate|REPLICATE_API/i.test(raw) ? 'Impossible d\'obtenir l\'aperçu. Réessayez.' : raw;
         setGenerationError(message);
         toast({ title: 'Erreur', description: message, variant: 'destructive' });
         return;
@@ -162,7 +155,8 @@ export default function AIVisualizationPage() {
         setGeneratedImageUrl(imageUrl);
         setStep('result');
       } else {
-        const msg = typeof data?.message === 'string' ? data.message : 'Le serveur n\'a pas renvoyé d\'image.';
+        const raw = typeof data?.message === 'string' ? data.message : 'Le serveur n\'a pas renvoyé d\'image.';
+        const msg = /replicate|REPLICATE_API/i.test(raw) ? 'Impossible d\'obtenir l\'aperçu. Réessayez.' : raw;
         setGenerationError(msg);
         toast({ title: 'Erreur', description: 'Réponse invalide du serveur.', variant: 'destructive' });
       }
@@ -170,7 +164,7 @@ export default function AIVisualizationPage() {
       debugIngest({ location: 'AIVisualizationPage.tsx:generateVisualization-catch', message: 'fetch or flow error', data: { errMessage: err instanceof Error ? err.message : String(err), errName: err instanceof Error ? err.name : '' }, hypothesisId: 'H1,H4,H5', runId: 'post-fix' });
       const message = err instanceof Error ? err.message : 'Erreur réseau. Réessayez.';
       const isAbort = err instanceof Error && err.name === 'AbortError';
-      setGenerationError(isAbort ? 'Délai dépassé. La génération peut prendre jusqu\'à 90 secondes.' : message);
+      setGenerationError(isAbort ? 'Délai dépassé.' : message);
       toast({ title: 'Erreur', description: isAbort ? 'Délai dépassé.' : message, variant: 'destructive' });
     }
   };
@@ -181,7 +175,7 @@ export default function AIVisualizationPage() {
       if (generatedImageUrl.startsWith('data:')) {
         const a = document.createElement('a');
         a.href = generatedImageUrl;
-        a.download = `rendu-ia-${Date.now()}.png`;
+        a.download = `rendu-visualisation-${Date.now()}.png`;
         a.click();
         toast({ title: 'Téléchargement démarré' });
         return;
@@ -190,7 +184,7 @@ export default function AIVisualizationPage() {
       const blob = await res.blob();
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `rendu-ia-${Date.now()}.png`;
+      a.download = `rendu-visualisation-${Date.now()}.png`;
       a.click();
       URL.revokeObjectURL(a.href);
       toast({ title: 'Téléchargement démarré' });
@@ -211,20 +205,20 @@ export default function AIVisualizationPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-6 py-4 ml-20">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">
-              Visualisation IA
+      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 ml-0 md:ml-20">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0 sm:flex-nowrap">
+          <div className="min-w-0 w-full sm:flex-1 max-md:pl-14">
+            <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
+              Visualisation
             </h1>
-            <p className="text-sm text-white/70">Générez des rendus professionnels de vos projets</p>
+            <p className="text-xs sm:text-sm text-white/70 sm:truncate">Prévisualisez votre projet avec type et style</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 flex-wrap justify-end w-full sm:w-auto">
             {/* Step indicator */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
             <Badge variant={step === 'upload' ? 'default' : 'secondary'}>1. Upload</Badge>
-            <Badge variant={step === 'configure' ? 'default' : 'secondary'}>2. Configuration</Badge>
-            <Badge variant={step === 'generating' ? 'default' : 'secondary'}>3. Génération</Badge>
+            <Badge variant={step === 'configure' ? 'default' : 'secondary'}>2. Config</Badge>
+            <Badge variant={step === 'generating' ? 'default' : 'secondary'}>3. Génér.</Badge>
             <Badge variant={step === 'result' ? 'default' : 'secondary'}>4. Résultat</Badge>
             </div>
             <UserAccountButton variant="inline" />
@@ -232,7 +226,7 @@ export default function AIVisualizationPage() {
         </div>
       </header>
 
-      <main className="flex-1 p-6 ml-20">
+      <main className="flex-1 p-4 sm:p-6 ml-0 md:ml-20 overflow-x-hidden">
           {/* Step 1: Upload */}
           {step === 'upload' && (
             <div className="max-w-2xl mx-auto space-y-6">
@@ -366,8 +360,8 @@ export default function AIVisualizationPage() {
                       onClick={generateVisualization}
                       data-testid="button-generate"
                     >
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      Générer la visualisation
+                      <ImageIcon className="h-4 w-4 mr-2" />
+                      Obtenir l'aperçu
                     </Button>
                   )}
                 </div>
@@ -404,14 +398,14 @@ export default function AIVisualizationPage() {
                       <div className="w-16 h-16 mx-auto rounded-xl bg-black/20 backdrop-blur-md border border-white/10 flex items-center justify-center mb-4">
                         <RefreshCw className="h-8 w-8 text-white animate-spin" />
                       </div>
-                      <CardTitle>Génération en cours...</CardTitle>
+                      <CardTitle>Préparation de l'aperçu...</CardTitle>
                       <p className="text-white/70">
-                        Notre IA analyse votre terrain et génère le rendu professionnel (cela peut prendre jusqu'à 90 secondes).
+                        Préparation en cours.
                       </p>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <Progress value={undefined} className="w-full h-2 [&>div]:animate-pulse" data-testid="generation-progress" />
-                      <p className="text-sm text-muted-foreground">Analyse et application du style en cours...</p>
+                      <p className="text-sm text-muted-foreground">Préparation en cours...</p>
                     </CardContent>
                   </>
                 )}
@@ -426,7 +420,7 @@ export default function AIVisualizationPage() {
                 <CardHeader className="flex flex-row items-center justify-between">
                   <div className="flex items-center gap-3">
                     <CheckCircle className="h-6 w-6 text-green-500" />
-                    <CardTitle>Visualisation générée avec succès !</CardTitle>
+                    <CardTitle>Aperçu prêt</CardTitle>
                   </div>
                   <div className="flex gap-2">
                     <Button
@@ -460,21 +454,21 @@ export default function AIVisualizationPage() {
 
                     {/* After */}
                     <div className="space-y-3">
-                      <h3 className="text-lg font-semibold">Après - Rendu IA</h3>
+                      <h3 className="text-lg font-semibold">Après - Aperçu</h3>
                       <div className="w-full h-80 bg-black/20 backdrop-blur-xl border border-white/10 rounded-lg flex items-center justify-center overflow-hidden">
                         {generatedImageUrl ? (
                           <img
                             src={generatedImageUrl}
-                            alt="Rendu IA"
+                            alt="Aperçu"
                             className="w-full h-full object-cover rounded-lg"
                             data-testid="after-image"
                           />
                         ) : (
                           <div className="text-center space-y-2 p-4">
-                            <Sparkles className="h-12 w-12 mx-auto text-white" />
-                            <p className="text-lg font-medium">Rendu IA</p>
+                            <ImageIcon className="h-12 w-12 mx-auto text-white" />
+                            <p className="text-lg font-medium">Aperçu</p>
                             <p className="text-sm text-muted-foreground">
-                              {generationError ? generationError : 'Chargement du rendu...'}
+                              {generationError ? generationError : 'Chargement de l\'aperçu...'}
                             </p>
                             {generationError && (
                               <Button size="sm" onClick={generateVisualization} className="mt-2">
@@ -485,7 +479,7 @@ export default function AIVisualizationPage() {
                         )}
                       </div>
                       <Badge className="bg-black/20 backdrop-blur-md border border-white/10 text-white">
-                        Généré par IA
+                        Visualisation
                       </Badge>
                     </div>
                   </div>

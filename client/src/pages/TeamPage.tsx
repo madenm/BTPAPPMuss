@@ -374,16 +374,16 @@ export default function TeamPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-black/10 backdrop-blur-xl border-b border-white/10 px-6 py-4 rounded-tl-3xl ml-20">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">Gestion de l&apos;Équipe</h1>
-            <p className="text-sm text-white/70">Gérez les membres et leurs codes de connexion</p>
+      <header className="bg-black/10 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl ml-0 md:ml-20">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
+          <div className="min-w-0 w-full sm:flex-1 max-md:pl-14">
+            <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">Gestion de l&apos;Équipe</h1>
+            <p className="text-xs sm:text-sm text-white/70 sm:truncate">Gérez les membres et leurs codes de connexion</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 w-full sm:w-auto">
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen} modal={false}>
               <DialogTrigger asChild>
-                <Button className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30">
+                <Button className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30 max-md:min-h-[44px]">
                   <Plus className="h-4 w-4 mr-2" />
                   Ajouter un Membre
                 </Button>
@@ -507,7 +507,7 @@ export default function TeamPage() {
         </div>
       </header>
 
-      <main className="flex-1 p-6 space-y-6 ml-20">
+      <main className="flex-1 p-4 sm:p-6 space-y-6 ml-0 md:ml-20 overflow-x-hidden">
         {/* Widget Stats */}
         <Card className="bg-white/5 backdrop-blur-xl border border-white/10 text-white">
           <CardHeader>
@@ -619,134 +619,219 @@ export default function TeamPage() {
                 <p className="text-white/70">Aucun membre trouvé</p>
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-white/10">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-white/10 hover:bg-transparent">
-                      <TableHead className="text-white/80">Nom</TableHead>
-                      <TableHead className="text-white/80">Rôle</TableHead>
-                      <TableHead className="text-white/80">Email</TableHead>
-                      <TableHead className="text-white/80">Code</TableHead>
-                      <TableHead className="text-white/80">Chantiers</TableHead>
-                      <TableHead className="text-white/80">Statut</TableHead>
-                      <TableHead className="text-white/80 text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredMembers.map((member) => {
-                      const assignedIds = assignmentsMap[member.id] ?? [];
-                      const assignedChantiers = assignedIds.map((id) => chantierById(id)).filter(Boolean);
-                      return (
-                        <TableRow key={member.id} className="border-white/10 hover:bg-white/5">
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs font-medium">
-                                {getInitials(member.name)}
-                              </div>
-                              <span className="font-medium text-white">{member.name}</span>
+              <>
+                {/* Vue cartes - mobile uniquement */}
+                <div className="max-md:block md:hidden space-y-3">
+                  {filteredMembers.map((member) => {
+                    const assignedIds = assignmentsMap[member.id] ?? [];
+                    const assignedChantiers = assignedIds.map((id) => chantierById(id)).filter(Boolean);
+                    return (
+                      <div
+                        key={member.id}
+                        className="p-4 rounded-xl bg-white/5 border border-white/10 text-white"
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-sm font-medium shrink-0">
+                              {getInitials(member.name)}
                             </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary" className="bg-white/10 text-white border-0">
-                              {ROLE_ICONS[member.role] || ''} {member.role}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-sm text-white/90">
-                            {member.email}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              <span className="font-mono text-sm font-semibold">{member.login_code}</span>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-white/70 hover:text-white"
-                                onClick={() => copyToClipboard(member.login_code, 'Code')}
-                              >
-                                <Copy className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {assignedIds.length > 0 ? (
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-auto py-1 text-sm text-white/90 hover:text-white hover:bg-white/10"
-                                  >
-                                    {assignedIds.length}
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent align="start" className="bg-black/90 border-white/10 text-white w-72">
-                                  <p className="font-medium mb-2">Chantiers assignés</p>
-                                  <ul className="space-y-1 text-sm">
-                                    {assignedChantiers.map((c) => (
-                                      <li key={c!.id}>
-                                        🏠 {c!.nom} ({formatChantierDateRange(c!.dateDebut, c!.duree)})
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </PopoverContent>
-                              </Popover>
+                            <span className="font-medium truncate">{member.name}</span>
+                          </div>
+                          <Badge
+                            className={
+                              member.status === 'actif'
+                                ? 'bg-green-500/20 text-green-300 border-0 shrink-0'
+                                : 'bg-gray-500/20 text-gray-400 border-0 shrink-0'
+                            }
+                          >
+                            {member.status === 'actif' ? 'Actif' : 'Inactif'}
+                          </Badge>
+                        </div>
+                        <Badge variant="secondary" className="mb-2 bg-white/10 text-white border-0">
+                          {ROLE_ICONS[member.role] || ''} {member.role}
+                        </Badge>
+                        <div className="text-sm text-white/90 truncate mb-1">{member.email}</div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="font-mono text-sm font-semibold">{member.login_code}</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 min-w-[44px] text-white/70 hover:text-white"
+                            onClick={() => copyToClipboard(member.login_code, 'Code')}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="text-sm text-white/70 mb-3">
+                          Chantiers : {assignedIds.length > 0 ? assignedIds.length : '—'}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 min-h-[44px] text-white border-white/20 hover:bg-white/10"
+                            onClick={() => handleEditMember(member)}
+                          >
+                            <Edit2 className="h-4 w-4 mr-2" />
+                            Modifier
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="min-h-[44px] min-w-[44px] p-0 text-white border-white/20 hover:bg-white/10"
+                            onClick={() => handleGetInviteLink(member)}
+                            disabled={!!inviteLinkLoadingId}
+                          >
+                            {inviteLinkLoadingId === member.id ? (
+                              <span className="text-xs">...</span>
                             ) : (
-                              <span className="text-white/50">—</span>
+                              <Share2 className="h-4 w-4" />
                             )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              className={
-                                member.status === 'actif'
-                                  ? 'bg-green-500/20 text-green-300 border-0'
-                                  : 'bg-gray-500/20 text-gray-400 border-0'
-                              }
-                            >
-                              {member.status === 'actif' ? '✅ Actif' : '⏸️ Inactif'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-white/70 hover:text-white"
-                                onClick={() => handleEditMember(member)}
-                                title="Modifier"
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="min-h-[44px] min-w-[44px] p-0 text-red-300 border-red-500/50 hover:bg-red-500/20"
+                            onClick={() => handleDeleteMember(member.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Tableau - desktop */}
+                <div className="max-md:hidden overflow-x-auto rounded-lg border border-white/10">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-white/10 hover:bg-transparent">
+                        <TableHead className="text-white/80">Nom</TableHead>
+                        <TableHead className="text-white/80">Rôle</TableHead>
+                        <TableHead className="text-white/80">Email</TableHead>
+                        <TableHead className="text-white/80">Code</TableHead>
+                        <TableHead className="text-white/80">Chantiers</TableHead>
+                        <TableHead className="text-white/80">Statut</TableHead>
+                        <TableHead className="text-white/80 text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredMembers.map((member) => {
+                        const assignedIds = assignmentsMap[member.id] ?? [];
+                        const assignedChantiers = assignedIds.map((id) => chantierById(id)).filter(Boolean);
+                        return (
+                          <TableRow key={member.id} className="border-white/10 hover:bg-white/5">
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs font-medium">
+                                  {getInitials(member.name)}
+                                </div>
+                                <span className="font-medium text-white">{member.name}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary" className="bg-white/10 text-white border-0">
+                                {ROLE_ICONS[member.role] || ''} {member.role}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-white/90">
+                              {member.email}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <span className="font-mono text-sm font-semibold">{member.login_code}</span>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-white/70 hover:text-white"
+                                  onClick={() => copyToClipboard(member.login_code, 'Code')}
+                                >
+                                  <Copy className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {assignedIds.length > 0 ? (
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-auto py-1 text-sm text-white/90 hover:text-white hover:bg-white/10"
+                                    >
+                                      {assignedIds.length}
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent align="start" className="bg-black/90 border-white/10 text-white w-72">
+                                    <p className="font-medium mb-2">Chantiers assignés</p>
+                                    <ul className="space-y-1 text-sm">
+                                      {assignedChantiers.map((c) => (
+                                        <li key={c!.id}>
+                                          🏠 {c!.nom} ({formatChantierDateRange(c!.dateDebut, c!.duree)})
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </PopoverContent>
+                                </Popover>
+                              ) : (
+                                <span className="text-white/50">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                className={
+                                  member.status === 'actif'
+                                    ? 'bg-green-500/20 text-green-300 border-0'
+                                    : 'bg-gray-500/20 text-gray-400 border-0'
+                                }
                               >
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-white/70 hover:text-white"
-                                onClick={() => handleGetInviteLink(member)}
-                                disabled={!!inviteLinkLoadingId}
-                                title="Partager invitation"
-                              >
-                                {inviteLinkLoadingId === member.id ? (
-                                  <span className="text-xs">...</span>
-                                ) : (
-                                  <Share2 className="h-4 w-4" />
-                                )}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-white/70 hover:text-red-400"
-                                onClick={() => handleDeleteMember(member.id)}
-                                title="Supprimer"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
+                                {member.status === 'actif' ? '✅ Actif' : '⏸️ Inactif'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-white/70 hover:text-white"
+                                  onClick={() => handleEditMember(member)}
+                                  title="Modifier"
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-white/70 hover:text-white"
+                                  onClick={() => handleGetInviteLink(member)}
+                                  disabled={!!inviteLinkLoadingId}
+                                  title="Partager invitation"
+                                >
+                                  {inviteLinkLoadingId === member.id ? (
+                                    <span className="text-xs">...</span>
+                                  ) : (
+                                    <Share2 className="h-4 w-4" />
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-white/70 hover:text-red-400"
+                                  onClick={() => handleDeleteMember(member.id)}
+                                  title="Supprimer"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>

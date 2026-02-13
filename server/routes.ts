@@ -18,10 +18,22 @@ function debugLog(payload: Record<string, unknown>) {
     /* ignore */
   }
 }
+
+function agentLog(payload: Record<string, unknown>) {
+  try {
+    const dir = join(process.cwd(), ".cursor");
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    const line = JSON.stringify({ ...payload, timestamp: Date.now() }) + "\n";
+    appendFileSync(join(dir, "debug.log"), line);
+  } catch {
+    /* ignore */
+  }
+}
 import { Resend } from "resend";
 import { GoogleGenAI } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
-import { fal } from "@fal-ai/client";
+import OpenAI from "openai";
+import { toFile } from "openai/uploads";
 
 // Lazy init: resolve client on first use (after .env is loaded).
 let _gemini: GoogleGenAI | null | undefined = undefined;
@@ -35,14 +47,29 @@ function getGeminiClient(): GoogleGenAI | null {
   return _gemini;
 }
 
-function getFalKey(): string | null {
-  const key = (process.env.FAL_KEY || "").trim();
-  if (!key) return null;
-  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
-    return key.slice(1, -1).trim() || null;
+let _openai: OpenAI | null | undefined = undefined;
+function getOpenAIClient(): OpenAI | null {
+  if (_openai !== undefined) return _openai;
+  let key = (process.env.OPENAI_API_KEY || "").trim();
+  if (key && (key.startsWith('"') && key.endsWith('"') || key.startsWith("'") && key.endsWith("'"))) {
+    key = key.slice(1, -1).trim();
   }
-  return key;
+  _openai = key ? new OpenAI({ apiKey: key }) : null;
+  return _openai;
 }
+
+const VISUALIZATION_PROJECT_TYPE_LABELS: Record<string, string> = {
+  piscine: "Piscine & Spa",
+  paysage: "Aménagement paysager",
+  menuiserie: "Menuiserie Extérieure",
+  terrasse: "Terrasse & Patio",
+};
+const VISUALIZATION_STYLE_LABELS: Record<string, string> = {
+  moderne: "Moderne",
+  traditionnel: "Traditionnel",
+  tropical: "Tropical",
+  mediterraneen: "Méditerranéen",
+};
 
 /** Extract JSON from response text (raw JSON or ```json ... ``` block). */
 function extractJsonFromResponse(text: string): string {
@@ -50,15 +77,6 @@ function extractJsonFromResponse(text: string): string {
   const codeBlockMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (codeBlockMatch?.[1]) return codeBlockMatch[1].trim();
   return trimmed;
-}
-
-/** Shape of Gemini generateContent response when asking for image output. */
-interface GeminiImageResponse {
-  candidates?: Array<{
-    content?: {
-      parts?: Array<{ text?: string; inlineData?: { mimeType?: string; data?: string } }>;
-    };
-  }>;
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -91,43 +109,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     autre: "Autre",
   };
 
-  const VISUALIZATION_PROJECT_LABELS: Record<string, string> = {
-    piscine: "Piscine & Spa",
-    paysage: "Aménagement paysager",
-    menuiserie: "Menuiserie extérieure",
-    terrasse: "Terrasse & Patio",
-  };
-  const VISUALIZATION_STYLE_LABELS: Record<string, string> = {
-    moderne: "Moderne",
-    traditionnel: "Traditionnel",
-    tropical: "Tropical",
-    mediterraneen: "Méditerranéen",
-  };
-
   app.get("/api/ai-status", (_req: Request, res: Response) => {
     res.json({
       available: !!getGeminiClient(),
-      visualizationAvailable: !!getFalKey() || !!getGeminiClient(),
+      visualizationAvailable: !!getOpenAIClient(),
     });
   });
 
   app.post("/api/generate-visualization", async (req: Request, res: Response) => {
     // #region agent log
-    try {
-      const logDir = dirname(WORKSPACE_CURSOR_LOG);
-      if (!existsSync(logDir)) mkdirSync(logDir, { recursive: true });
-      appendFileSync(WORKSPACE_CURSOR_LOG, JSON.stringify({ location: "routes.ts:generate-visualization-entry", message: "POST hit", data: {}, timestamp: Date.now(), hypothesisId: "H0" }) + "\n");
-    } catch (_) {}
+    agentLog({
+      location: "routes.ts:generate-visualization:entry",
+      message: "generate-visualization called",
+      hypothesisId: "H1",
+      data: { hasOpenAIClient: !!getOpenAIClient() },
+    });
     // #endregion
-    const falKey = getFalKey();
-    const geminiClient = getGeminiClient();
-    if (!geminiClient && !falKey) {
-      res.status(503).json({
-        message:
-          "Visualisation IA indisponible. Configurez GEMINI_API_KEY dans .env (clé sur https://aistudio.google.com/app/apikey) puis redémarrez le serveur.",
-      });
-      return;
-    }
     const { imageBase64, imageUrl: imageUrlFromClient, mimeType, projectType, style } = req.body as {
       imageBase64?: string;
       imageUrl?: string;
@@ -143,182 +140,133 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(400).json({ message: "style (string) est requis." });
       return;
     }
-    let imageInput: string;
-    let imageBase64ForGemini: string;
-    let imageMimeForGemini: string;
+    let imageBuffer: Buffer;
+    let mime = (typeof mimeType === "string" && mimeType.trim()) ? mimeType.trim() : "image/jpeg";
     if (typeof imageUrlFromClient === "string" && imageUrlFromClient.startsWith("http")) {
-      imageInput = imageUrlFromClient;
-      if (geminiClient) {
-        try {
-          const resp = await fetch(imageUrlFromClient);
-          const buf = await resp.arrayBuffer();
-          imageBase64ForGemini = Buffer.from(buf).toString("base64");
-          imageMimeForGemini = (resp.headers.get("content-type") || "image/jpeg").split(";")[0].trim();
-        } catch {
+      try {
+        const imgRes = await fetch(imageUrlFromClient);
+        if (!imgRes.ok) {
           res.status(400).json({ message: "Impossible de charger l'image depuis l'URL fournie." });
           return;
         }
-      } else {
-        imageBase64ForGemini = "";
-        imageMimeForGemini = "image/jpeg";
+        const buf = await imgRes.arrayBuffer();
+        imageBuffer = Buffer.from(buf);
+        const contentType = imgRes.headers.get("content-type");
+        if (contentType?.includes("png")) mime = "image/png";
+        else if (contentType?.includes("webp")) mime = "image/webp";
+      } catch {
+        res.status(400).json({ message: "Impossible de charger l'image depuis l'URL fournie." });
+        return;
       }
     } else if (typeof imageBase64 === "string" && imageBase64.trim()) {
-      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "").trim();
-      const mime = typeof mimeType === "string" && mimeType.trim() ? mimeType.trim() : "image/jpeg";
-      imageInput = `data:${mime};base64,${base64Data}`;
-      imageBase64ForGemini = base64Data;
-      imageMimeForGemini = mime;
+      imageBuffer = Buffer.from(imageBase64.trim(), "base64");
     } else {
       res.status(400).json({ message: "imageBase64 ou imageUrl (URL publique) est requis." });
       return;
     }
-
-    const projectLabel = VISUALIZATION_PROJECT_LABELS[projectType] ?? projectType;
-    const styleLabel = VISUALIZATION_STYLE_LABELS[style] ?? style;
-    const prompt = `Rendu professionnel de cet espace extérieur avec ${projectLabel} en style ${styleLabel}, photoréaliste, haute qualité, architecture et aménagement soignés.`;
-
-    // #region agent log
-    try {
-      const logDir = dirname(WORKSPACE_CURSOR_LOG);
-      if (!existsSync(logDir)) mkdirSync(logDir, { recursive: true });
-      appendFileSync(WORKSPACE_CURSOR_LOG, JSON.stringify({ location: "routes.ts:generate-visualization-provider", message: "provider choice", data: { useGemini: !!geminiClient, hasFal: !!falKey }, timestamp: Date.now(), hypothesisId: "H1" }) + "\n");
-    } catch (_) {}
-    // #endregion
-
-    // --- Option 1: Gemini (prioritaire) — image + texte → image ---
-    if (geminiClient) {
-      try {
-        const response = await geminiClient.models.generateContent({
-          model: "gemini-2.5-flash-image",
-          contents: [
-            { text: prompt },
-            { inlineData: { mimeType: imageMimeForGemini, data: imageBase64ForGemini } },
-          ],
-          config: {
-            responseModalities: ["TEXT", "IMAGE"],
-          },
-        });
-        const candidates = (response as GeminiImageResponse).candidates;
-        let imageUrl: string | undefined;
-        if (candidates?.[0]?.content?.parts) {
-          for (const part of candidates[0].content.parts) {
-            if (part.inlineData?.data) {
-              const mime = part.inlineData.mimeType || "image/png";
-              imageUrl = `data:${mime};base64,${part.inlineData.data}`;
-              break;
-            }
-          }
-        }
-        if (!imageUrl) {
-          res.status(502).json({ message: "Gemini n'a pas renvoyé d'image. Réessayez ou utilisez une autre photo." });
-          return;
-        }
-        res.json({ imageUrl });
-        return;
-      } catch (err) {
-        const errObj = err as { message?: string; status?: number; statusCode?: number; response?: { status?: number } };
-        const status = typeof errObj?.status === "number" ? errObj.status : typeof errObj?.statusCode === "number" ? errObj.statusCode : typeof errObj?.response?.status === "number" ? errObj.response.status : undefined;
-        // #region agent log
-        try {
-          const logDir = dirname(WORKSPACE_CURSOR_LOG);
-          if (!existsSync(logDir)) mkdirSync(logDir, { recursive: true });
-          appendFileSync(WORKSPACE_CURSOR_LOG, JSON.stringify({ location: "routes.ts:generate-visualization-gemini-catch", message: "Gemini error", data: { status, errMessage: errObj?.message }, timestamp: Date.now(), hypothesisId: "H2" }) + "\n");
-        } catch (_) {}
-        // #endregion
-        let message = typeof errObj?.message === "string" ? errObj.message : "Erreur Gemini (visualisation).";
-        if (status === 429) message = "Quota Gemini dépassé. Réessayez plus tard.";
-        if (status === 401 || status === 403) message = "Accès refusé par l'API Gemini (403). Vérifiez : 1) GEMINI_API_KEY valide sur https://aistudio.google.com/app/apikey 2) Génération d'images disponible pour votre région 3) Facturation activée si demandée par Google.";
-        const httpStatus = status === 429 ? 429 : status === 401 || status === 403 ? status : 502;
-        res.status(httpStatus).json({ message });
-        return;
-      }
-    }
-
-    // --- Option 2: fal.ai ---
-    fal.config({ credentials: falKey! });
-
-    try {
-      const result = await fal.run("fal-ai/image-to-image", {
-        input: {
-          model_name: "stabilityai/stable-diffusion-xl-base-1.0",
-          prompt,
-          image_url: imageInput,
-          strength: 0.75,
-          num_inference_steps: 30,
-        },
-        startTimeout: 120,
+    const openai = getOpenAIClient();
+    if (!openai) {
+      res.json({
+        imageUrl: `data:${mime};base64,${imageBuffer.toString("base64")}`,
       });
-      const data = result.data as Record<string, unknown>;
-      let imageUrl: string | undefined;
-      if (data?.images && Array.isArray(data.images) && data.images.length > 0) {
-        const first = data.images[0];
-        imageUrl = typeof first === "object" && first !== null && typeof (first as { url?: string }).url === "string"
-          ? (first as { url: string }).url
-          : undefined;
+      return;
+    }
+    const ext = mime === "image/png" ? "png" : mime === "image/webp" ? "webp" : "jpg";
+    // #region agent log
+    agentLog({
+      location: "routes.ts:generate-visualization:image-ready",
+      message: "image buffer ready",
+      hypothesisId: "H3",
+      data: { bufferLength: imageBuffer.length, mime, ext },
+    });
+    // #endregion
+    const typeLabel = VISUALIZATION_PROJECT_TYPE_LABELS[projectType.trim()] ?? projectType.trim();
+    const styleLabel = VISUALIZATION_STYLE_LABELS[style.trim()] ?? style.trim();
+    const prompt = `Transforme ce lieu en projet ${typeLabel} avec un style ${styleLabel}. Montre le rendu final réaliste après travaux, en gardant la même perspective et le même cadrage.`;
+    try {
+      const file = await toFile(imageBuffer, `image.${ext}`, { type: mime });
+      let response: Awaited<ReturnType<typeof openai.images.edit>> | null = null;
+      const modelsToTry: Array<{ model: "dall-e-2" | "gpt-image-1-mini"; size: "1024x1024" | "auto"; response_format?: "b64_json" }> = [
+        { model: "dall-e-2", size: "1024x1024", response_format: "b64_json" },
+        { model: "gpt-image-1-mini", size: "auto" },
+      ];
+      let lastErr: unknown = null;
+      for (const opts of modelsToTry) {
+        try {
+          agentLog({
+            location: "routes.ts:generate-visualization:before-edit",
+            message: "calling openai.images.edit",
+            hypothesisId: "H4,H5",
+            data: { model: opts.model, promptLen: prompt.length },
+          });
+          const fileForCall = await toFile(imageBuffer, `image.${ext}`, { type: mime });
+          response = await openai.images.edit({
+            image: fileForCall,
+            prompt,
+            model: opts.model,
+            size: opts.size,
+            ...(opts.response_format ? { response_format: opts.response_format } : {}),
+          });
+          lastErr = null;
+          break;
+        } catch (err) {
+          lastErr = err;
+          continue;
+        }
       }
-      if (!imageUrl && data && typeof (data as { image?: { url?: string } }).image?.url === "string") {
-        imageUrl = (data as { image: { url: string } }).image.url;
-      }
-      if (!imageUrl || typeof imageUrl !== "string" || !imageUrl.startsWith("http")) {
-        res.status(502).json({ message: "Le service de génération n'a pas renvoyé d'image." });
+      if (!response) throw lastErr ?? new Error("Aucun modèle OpenAI disponible.");
+      const first = response.data?.[0];
+      const b64 = first && "b64_json" in first ? (first as { b64_json?: string }).b64_json : (first && "url" in first ? undefined : undefined);
+      const url = first && "url" in first ? (first as { url?: string }).url : undefined;
+      // #region agent log
+      agentLog({
+        location: "routes.ts:generate-visualization:response",
+        message: "openai response received",
+        hypothesisId: "H2",
+        data: {
+          hasData: !!response.data,
+          dataLength: response.data?.length ?? 0,
+          firstHasB64: !!(first && "b64_json" in first),
+          firstHasUrl: !!(first && "url" in first),
+          firstKeys: first ? Object.keys(first) : [],
+        },
+      });
+      // #endregion
+      if (b64 && typeof b64 === "string") {
+        res.json({ imageUrl: `data:image/png;base64,${b64}` });
         return;
       }
-      res.json({ imageUrl });
-    } catch (err) {
-      const errObj = err as { message?: string; status?: number; body?: { message?: string; detail?: string } };
-      const fal403Or429 = errObj?.status === 403 || errObj?.status === 429;
-      if (fal403Or429 && geminiClient) {
-        let base64 = imageBase64ForGemini;
-        let mime = imageMimeForGemini;
-        if (!base64 && imageInput.startsWith("data:")) {
-          const match = imageInput.match(/^data:([^;]+);base64,(.+)$/);
-          mime = match?.[1]?.trim() || "image/jpeg";
-          base64 = match?.[2]?.trim() || "";
-        } else if (!base64 && imageInput.startsWith("http")) {
-          try {
-            const resp = await fetch(imageInput);
-            const buf = await resp.arrayBuffer();
-            base64 = Buffer.from(buf).toString("base64");
-            mime = (resp.headers.get("content-type") || "image/jpeg").split(";")[0].trim();
-          } catch (_) {
-            base64 = "";
-          }
-        }
-        if (base64 && mime) {
-          try {
-            const response = await geminiClient.models.generateContent({
-              model: "gemini-2.5-flash-image",
-              contents: [{ text: prompt }, { inlineData: { mimeType: mime, data: base64 } }],
-              config: { responseModalities: ["TEXT", "IMAGE"] },
-            });
-            const candidates = (response as GeminiImageResponse).candidates;
-            let imageUrl: string | undefined;
-            if (candidates?.[0]?.content?.parts) {
-              for (const part of candidates[0].content.parts) {
-                if (part.inlineData?.data) {
-                  const outMime = part.inlineData.mimeType || "image/png";
-                  imageUrl = `data:${outMime};base64,${part.inlineData.data}`;
-                  break;
-                }
-              }
-            }
-            if (imageUrl) {
-              res.json({ imageUrl });
-              return;
-            }
-          } catch (_) {}
-        }
+      if (url && typeof url === "string") {
+        res.json({ imageUrl: url });
+        return;
       }
-      let message = typeof errObj?.message === "string" ? errObj.message : "Erreur du service de génération d'image.";
-      if (errObj?.body && typeof errObj.body === "object") {
-        const bodyMsg = errObj.body.message ?? (typeof errObj.body.detail === "string" ? errObj.body.detail : "");
-        if (bodyMsg) message = bodyMsg;
-      }
-      if (errObj?.status === 401) message = "Clé FAL invalide. Vérifiez FAL_KEY dans .env (https://fal.ai/dashboard/keys).";
-      if (errObj?.status === 403) message = "Solde fal.ai épuisé. Rechargez votre compte sur https://fal.ai/dashboard/billing";
-      if (errObj?.status === 429) message = "Quota fal.ai dépassé. Réessayez plus tard.";
-      const status = errObj?.status === 401 || errObj?.status === 403 || errObj?.status === 429 ? errObj.status : 502;
-      res.status(status).json({ message });
+      res.status(502).json({ message: "Le serveur OpenAI n'a pas renvoyé d'image. Réessayez." });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      const errName = err instanceof Error ? err.name : "";
+      const errStatus = err && typeof err === "object" && "status" in err ? (err as { status?: number }).status : undefined;
+      // #region agent log
+      agentLog({
+        location: "routes.ts:generate-visualization:catch",
+        message: "openai error",
+        hypothesisId: "H1,H4,H5",
+        data: { message, errName, errStatus },
+      });
+      // #endregion
+      const isRateLimit = /rate limit|quota|429/i.test(message);
+      const isBillingLimit = errStatus === 400 && /billing|limit has been reached|credits/i.test(message);
+      const is403 = errStatus === 403 || /forbidden|403/i.test(message);
+      const isAuth = /api_key|401|403|invalid/i.test(message);
+      const userMessage = isBillingLimit
+        ? "Limite de facturation OpenAI atteinte. Rechargez des crédits sur platform.openai.com (Billing) ou réessayez plus tard."
+        : is403
+          ? "OpenAI a refusé l'accès (403). Vérifiez que votre clé a accès à l'API Images et que votre compte a des crédits (platform.openai.com)."
+          : isAuth
+            ? "Clé OpenAI invalide ou expirée. Vérifiez OPENAI_API_KEY dans .env."
+            : isRateLimit
+              ? "Quota OpenAI dépassé. Réessayez plus tard."
+              : "La génération de l'image a échoué. Réessayez.";
+      res.status(502).json({ message: userMessage });
     }
   });
 

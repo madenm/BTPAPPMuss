@@ -165,16 +165,16 @@ export default function InvoicesPage() {
 
   return (
     <PageWrapper>
-      <main className="flex-1 p-6 space-y-6 ml-20">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-white">Factures</h1>
-            <p className="text-white/70 mt-1">Gérez vos factures et paiements</p>
+      <main className="flex-1 p-4 sm:p-6 space-y-6 ml-0 md:ml-20 overflow-x-hidden">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0 sm:flex-nowrap">
+          <div className="min-w-0 w-full sm:flex-1 max-md:pl-14">
+            <h1 className="text-lg sm:text-3xl font-bold text-white sm:truncate">Factures</h1>
+            <p className="text-white/70 mt-1 text-xs sm:text-base sm:truncate">Gérez vos factures et paiements</p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0 w-full sm:w-auto flex-wrap">
             <Button
               onClick={handleCreateInvoice}
-              className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30"
+              className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30 max-md:min-h-[44px]"
             >
               <Plus className="mr-2 h-4 w-4" />
               Nouvelle facture
@@ -187,17 +187,17 @@ export default function InvoicesPage() {
         <Card className="bg-black/20 backdrop-blur-xl border border-white/10">
           <CardContent className="p-4">
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-              <div className="relative">
+              <div className="relative min-w-0">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-white/50" />
                 <Input
                   placeholder="Rechercher..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+                  className="pl-10 bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50 w-full min-w-0"
                 />
               </div>
               <Select value={filterClientId} onValueChange={setFilterClientId}>
-                <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white">
+                <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white w-full min-w-0">
                   <SelectValue placeholder="Client" />
                 </SelectTrigger>
                 <SelectContent>
@@ -210,7 +210,7 @@ export default function InvoicesPage() {
                 </SelectContent>
               </Select>
               <Select value={filterChantierId} onValueChange={setFilterChantierId}>
-                <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white">
+                <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white w-full min-w-0">
                   <SelectValue placeholder="Chantier" />
                 </SelectTrigger>
                 <SelectContent>
@@ -223,7 +223,7 @@ export default function InvoicesPage() {
                 </SelectContent>
               </Select>
               <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white">
+                <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white w-full min-w-0">
                   <SelectValue placeholder="Statut" />
                 </SelectTrigger>
                 <SelectContent>
@@ -236,7 +236,7 @@ export default function InvoicesPage() {
                 </SelectContent>
               </Select>
               <Select value={filterYear} onValueChange={setFilterYear}>
-                <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white">
+                <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white w-full min-w-0">
                   <SelectValue placeholder="Année" />
                 </SelectTrigger>
                 <SelectContent>
@@ -262,21 +262,10 @@ export default function InvoicesPage() {
                 Aucune facture trouvée
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-white/10 bg-white/5">
-                    <TableHead className="text-white font-semibold">Numéro</TableHead>
-                    <TableHead className="text-white font-semibold">Date</TableHead>
-                    <TableHead className="text-white font-semibold">Client</TableHead>
-                    <TableHead className="text-white font-semibold">Chantier</TableHead>
-                    <TableHead className="text-white text-right font-semibold">Montant TTC</TableHead>
-                    <TableHead className="text-white text-right font-semibold">Payé / Restant</TableHead>
-                    <TableHead className="text-white font-semibold">Statut</TableHead>
-                    <TableHead className="text-white text-right font-semibold">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredInvoices.map((invoice, index) => {
+              <>
+                {/* Vue cartes - mobile uniquement */}
+                <div className="max-md:block md:hidden space-y-3">
+                  {filteredInvoices.map((invoice) => {
                     const paidAmount = invoice.paidAmount || 0;
                     const totalTtc = invoice.total_ttc;
                     const remainingAmount = invoice.remainingAmount || totalTtc;
@@ -286,91 +275,186 @@ export default function InvoicesPage() {
                                       invoice.status === 'envoyée' ? Clock :
                                       invoice.status === 'annulée' ? XCircle : FileText;
                     const StatusIcon = statusIcon;
-                    
                     return (
-                      <TableRow
+                      <div
                         key={invoice.id}
-                        className={`border-white/10 hover:bg-white/10 cursor-pointer transition-all duration-200 ${index % 2 === 0 ? 'bg-white/2' : ''}`}
+                        role="button"
+                        tabIndex={0}
                         onClick={() => handleViewInvoice(invoice)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleViewInvoice(invoice)}
+                        className="p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 cursor-pointer transition-all duration-200 text-white"
                       >
-                        <TableCell className="text-white font-medium p-6">
-                          <div className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-white/50" />
-                            {invoice.invoice_number}
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileText className="h-4 w-4 shrink-0 text-white/50" />
+                            <span className="font-medium truncate">{invoice.invoice_number}</span>
                           </div>
-                        </TableCell>
-                        <TableCell className="text-white/80 p-6">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-white/50" />
-                            {formatDate(invoice.invoice_date)}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-white p-6">
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-white/50" />
-                            {invoice.client_name}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-white/70 p-6">
-                          {invoice.chantier_id
-                            ? chantiers.find((c) => c.id === invoice.chantier_id)?.nom || '—'
-                            : '—'}
-                        </TableCell>
-                        <TableCell className="text-white text-right p-6">
-                          <div className="flex items-center justify-end gap-2">
-                            <Euro className="h-4 w-4 text-white/50" />
-                            <span className="text-lg font-semibold">{formatCurrency(totalTtc)}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-white/90 text-right p-6">
-                          <div className="space-y-2 min-w-[140px]">
-                            <div className="flex items-center justify-between gap-2 text-sm">
-                              <span className="text-white/70">Payé:</span>
-                              <span className="font-medium">{formatCurrency(paidAmount)}</span>
-                            </div>
-                            <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full transition-all duration-300 ${
-                                  paidPercentage >= 100 ? 'bg-green-500' :
-                                  paidPercentage > 0 ? 'bg-yellow-500' : 'bg-gray-500'
-                                }`}
-                                style={{ width: `${paidPercentage}%` }}
-                              />
-                            </div>
-                            <div className="flex items-center justify-between gap-2 text-xs">
-                              <span className="text-white/60">Reste:</span>
-                              <span className="text-white/80">{formatCurrency(remainingAmount)}</span>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="p-6">
                           <Badge
-                            className={`${STATUS_COLORS[invoice.status] || 'bg-gray-500'} text-white px-3 py-1.5 shadow-sm flex items-center gap-1.5 w-fit`}
+                            className={`${STATUS_COLORS[invoice.status] || 'bg-gray-500'} text-white px-2 py-1 text-xs flex items-center gap-1 shrink-0`}
                           >
-                            <StatusIcon className="h-3.5 w-3.5" />
+                            <StatusIcon className="h-3 w-3" />
                             {STATUS_LABELS[invoice.status] || invoice.status}
                           </Badge>
-                        </TableCell>
-                        <TableCell className="text-right p-6">
-                          <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                            {(invoice.status === 'brouillon' ||
-                              (invoice.status === 'envoyée' && remainingAmount > 0)) && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEditInvoice(invoice)}
-                                className="text-white hover:bg-white/10 transition-colors"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            )}
+                        </div>
+                        <div className="text-sm text-white/80 flex items-center gap-2 mb-1">
+                          <Calendar className="h-3.5 w-3.5 text-white/50 shrink-0" />
+                          {formatDate(invoice.invoice_date)}
+                        </div>
+                        <div className="text-sm text-white/90 flex items-center gap-2 mb-2">
+                          <User className="h-3.5 w-3.5 text-white/50 shrink-0" />
+                          <span className="truncate">{invoice.client_name}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 text-sm mb-2">
+                          <span className="text-white/70">Montant TTC</span>
+                          <span className="font-semibold flex items-center gap-1">
+                            <Euro className="h-3.5 w-3.5" />
+                            {formatCurrency(totalTtc)}
+                          </span>
+                        </div>
+                        <div className="space-y-1.5 mb-3">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-white/60">Payé: {formatCurrency(paidAmount)}</span>
+                            <span className="text-white/80">Reste: {formatCurrency(remainingAmount)}</span>
                           </div>
-                        </TableCell>
-                      </TableRow>
+                          <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full transition-all duration-300 ${
+                                paidPercentage >= 100 ? 'bg-green-500' :
+                                paidPercentage > 0 ? 'bg-yellow-500' : 'bg-gray-500'
+                              }`}
+                              style={{ width: `${paidPercentage}%` }}
+                            />
+                          </div>
+                        </div>
+                        {(invoice.status === 'brouillon' || (invoice.status === 'envoyée' && remainingAmount > 0)) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => { e.stopPropagation(); handleEditInvoice(invoice); }}
+                            className="w-full min-h-[44px] text-white border-white/20 hover:bg-white/10"
+                          >
+                            <Edit className="h-4 w-4 mr-2" />
+                            Modifier
+                          </Button>
+                        )}
+                      </div>
                     );
                   })}
-                </TableBody>
-              </Table>
+                </div>
+
+                {/* Tableau - desktop */}
+                <div className="max-md:hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-white/10 bg-white/5">
+                        <TableHead className="text-white font-semibold">Numéro</TableHead>
+                        <TableHead className="text-white font-semibold">Date</TableHead>
+                        <TableHead className="text-white font-semibold">Client</TableHead>
+                        <TableHead className="text-white font-semibold">Chantier</TableHead>
+                        <TableHead className="text-white text-right font-semibold">Montant TTC</TableHead>
+                        <TableHead className="text-white text-right font-semibold">Payé / Restant</TableHead>
+                        <TableHead className="text-white font-semibold">Statut</TableHead>
+                        <TableHead className="text-white text-right font-semibold">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredInvoices.map((invoice, index) => {
+                        const paidAmount = invoice.paidAmount || 0;
+                        const totalTtc = invoice.total_ttc;
+                        const remainingAmount = invoice.remainingAmount || totalTtc;
+                        const paidPercentage = totalTtc > 0 ? Math.min((paidAmount / totalTtc) * 100, 100) : 0;
+                        const statusIcon = invoice.status === 'payée' ? CheckCircle :
+                                          invoice.status === 'partiellement_payée' ? AlertCircle :
+                                          invoice.status === 'envoyée' ? Clock :
+                                          invoice.status === 'annulée' ? XCircle : FileText;
+                        const StatusIcon = statusIcon;
+                        
+                        return (
+                          <TableRow
+                            key={invoice.id}
+                            className={`border-white/10 hover:bg-white/10 cursor-pointer transition-all duration-200 ${index % 2 === 0 ? 'bg-white/2' : ''}`}
+                            onClick={() => handleViewInvoice(invoice)}
+                          >
+                            <TableCell className="text-white font-medium p-6">
+                              <div className="flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-white/50" />
+                                {invoice.invoice_number}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-white/80 p-6">
+                              <div className="flex items-center gap-2">
+                                <Calendar className="h-4 w-4 text-white/50" />
+                                {formatDate(invoice.invoice_date)}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-white p-6">
+                              <div className="flex items-center gap-2">
+                                <User className="h-4 w-4 text-white/50" />
+                                {invoice.client_name}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-white/70 p-6">
+                              {invoice.chantier_id
+                                ? chantiers.find((c) => c.id === invoice.chantier_id)?.nom || '—'
+                                : '—'}
+                            </TableCell>
+                            <TableCell className="text-white text-right p-6">
+                              <div className="flex items-center justify-end gap-2">
+                                <Euro className="h-4 w-4 text-white/50" />
+                                <span className="text-lg font-semibold">{formatCurrency(totalTtc)}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-white/90 text-right p-6">
+                              <div className="space-y-2 min-w-[140px]">
+                                <div className="flex items-center justify-between gap-2 text-sm">
+                                  <span className="text-white/70">Payé:</span>
+                                  <span className="font-medium">{formatCurrency(paidAmount)}</span>
+                                </div>
+                                <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full transition-all duration-300 ${
+                                      paidPercentage >= 100 ? 'bg-green-500' :
+                                      paidPercentage > 0 ? 'bg-yellow-500' : 'bg-gray-500'
+                                    }`}
+                                    style={{ width: `${paidPercentage}%` }}
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between gap-2 text-xs">
+                                  <span className="text-white/60">Reste:</span>
+                                  <span className="text-white/80">{formatCurrency(remainingAmount)}</span>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="p-6">
+                              <Badge
+                                className={`${STATUS_COLORS[invoice.status] || 'bg-gray-500'} text-white px-3 py-1.5 shadow-sm flex items-center gap-1.5 w-fit`}
+                              >
+                                <StatusIcon className="h-3.5 w-3.5" />
+                                {STATUS_LABELS[invoice.status] || invoice.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right p-6">
+                              <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                                {(invoice.status === 'brouillon' ||
+                                  (invoice.status === 'envoyée' && remainingAmount > 0)) && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleEditInvoice(invoice)}
+                                    className="text-white hover:bg-white/10 transition-colors"
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>

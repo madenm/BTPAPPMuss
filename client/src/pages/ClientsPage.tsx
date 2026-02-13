@@ -286,30 +286,32 @@ export default function ClientsPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-6 py-4 rounded-tl-3xl ml-20">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">Gestion des clients</h1>
-            <p className="text-sm text-white/70">Recherchez, éditez et gérez vos clients</p>
+      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl ml-0 md:ml-20">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
+          <div className="min-w-0 w-full sm:flex-1 max-md:pl-14">
+            <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">Gestion des clients</h1>
+            <p className="text-xs sm:text-sm text-white/70 sm:truncate">Recherchez, éditez et gérez vos clients</p>
           </div>
-          <UserAccountButton variant="inline" />
+          <div className="flex-shrink-0 w-full sm:w-auto">
+            <UserAccountButton variant="inline" />
+          </div>
         </div>
       </header>
 
-      <main className="flex-1 p-6 ml-20">
-        <div className="space-y-4 mb-6">
-          <div className="relative flex-1 min-w-[200px] max-w-md">
+      <main className="flex-1 p-4 sm:p-6 ml-0 md:ml-20 overflow-x-hidden">
+        <div className="space-y-4 mb-6 flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-0 w-full sm:min-w-[200px] sm:max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50 pointer-events-none" />
             <Input
               placeholder="Rechercher par nom ou email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 bg-black/20 border-white/10 text-white placeholder:text-white/50 h-9"
+              className="pl-9 bg-black/20 border-white/10 text-white placeholder:text-white/50 h-9 w-full"
             />
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 min-w-0">
             <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as FilterStatus)}>
-              <SelectTrigger className="w-[160px] h-9 bg-black/20 border-white/10 text-white">
+              <SelectTrigger className="w-full sm:w-[160px] h-9 bg-black/20 border-white/10 text-white min-w-0">
                 <SelectValue placeholder="Filtre" />
               </SelectTrigger>
               <SelectContent className="bg-black/20 backdrop-blur-xl border-white/10">
@@ -323,7 +325,7 @@ export default function ClientsPage() {
                 setEditingClient(null);
                 setIsModalOpen(true);
               }}
-              className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30"
+              className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30 max-md:min-h-[44px]"
             >
               <Plus className="h-4 w-4 mr-2" />
               Ajouter client
@@ -334,7 +336,7 @@ export default function ClientsPage() {
         {filteredClients.length === 0 ? (
           <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white p-12 text-center">
             <p className="text-white/70">Aucun client trouvé.</p>
-            <Button className="mt-4 bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30" onClick={() => setIsModalOpen(true)}>
+            <Button className="mt-4 min-h-[44px] max-md:min-h-[44px] bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30" onClick={() => setIsModalOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Ajouter un client
             </Button>
@@ -368,7 +370,7 @@ export default function ClientsPage() {
                         setEditingClient(client);
                         setIsModalOpen(true);
                       }}
-                      className="h-8 text-white border-white/20 hover:bg-white/10"
+                      className="h-8 max-md:min-h-[44px] text-white border-white/20 hover:bg-white/10"
                     >
                       <Pencil className="h-3.5 w-3.5 mr-1" />
                       Modifier
@@ -380,7 +382,7 @@ export default function ClientsPage() {
                         e.stopPropagation();
                         setDeleteTarget(client);
                       }}
-                      className="h-8 text-red-300 border-red-500/50 hover:bg-red-500/20"
+                      className="h-8 max-md:min-h-[44px] text-red-300 border-red-500/50 hover:bg-red-500/20"
                     >
                       <Trash2 className="h-3.5 w-3.5 mr-1" />
                       Supprimer

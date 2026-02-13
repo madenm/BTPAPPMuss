@@ -371,21 +371,23 @@ export default function EstimationPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-6 py-4 rounded-tl-3xl ml-20">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">
+      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl ml-0 md:ml-20">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
+          <div className="min-w-0 w-full sm:flex-1 max-md:pl-14">
+            <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
               Estimation Automatique des Chantiers
             </h1>
-            <p className="text-sm text-white/70">
+            <p className="text-xs sm:text-sm text-white/70 sm:truncate">
               Étape {step}/3 - {step === 1 ? 'Photo de la zone' : step === 2 ? 'Questions' : 'Résultats de l\'estimation'}
             </p>
           </div>
-          <UserAccountButton variant="inline" />
+          <div className="flex-shrink-0 w-full sm:w-auto">
+            <UserAccountButton variant="inline" />
+          </div>
         </div>
       </header>
 
-      <main className="flex-1 py-6 ml-20">
+      <main className="flex-1 py-4 sm:py-6 ml-0 md:ml-20 px-4 sm:px-0">
         <AnimatePresence mode="wait">
           {step === 1 && (
             <motion.div
@@ -393,34 +395,34 @@ export default function EstimationPage() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="max-w-4xl mx-auto"
+              className="max-w-4xl mx-auto w-full"
             >
               <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Upload className="h-5 w-5 text-white/70" />
-                    Photo de la zone du chantier
+                <CardHeader className="px-4 sm:px-6">
+                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                    <Upload className="h-4 w-4 sm:h-5 sm:w-5 text-white/70 flex-shrink-0" />
+                    <span className="break-words">Photo de la zone du chantier</span>
                   </CardTitle>
-                  <p className="text-sm text-white/60 mt-1">
+                  <p className="text-xs sm:text-sm text-white/60 mt-1">
                     Insérez une photo de la zone où aura lieu le chantier. Elle sera analysée par l’IA.
                   </p>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 px-4 sm:px-6">
                   <div
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
-                    className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors ${
+                    className={`border-2 border-dashed rounded-lg p-6 sm:p-12 text-center transition-colors ${
                       isDragging
                         ? 'border-white/40 bg-white/10'
                         : 'border-white/20 hover:border-white/30'
                     }`}
                   >
-                    <Upload className="h-12 w-12 mx-auto mb-4 text-white/70" />
-                    <p className="text-lg font-medium text-white mb-2">
+                    <Upload className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3 sm:mb-4 text-white/70" />
+                    <p className="text-sm sm:text-lg font-medium text-white mb-1 sm:mb-2">
                       Glissez-déposez une photo ici
                     </p>
-                    <p className="text-sm text-white/60 mb-4">
+                    <p className="text-xs sm:text-sm text-white/60 mb-3 sm:mb-4">
                       ou cliquez pour sélectionner un fichier
                     </p>
                     <input

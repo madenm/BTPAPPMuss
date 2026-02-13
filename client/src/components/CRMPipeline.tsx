@@ -949,11 +949,11 @@ export function CRMPipeline() {
         {/* Ligne 1 : Devis */}
         <div>
           <p className="text-xs font-medium text-white/60 uppercase tracking-wider mb-3">Devis</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-md:flex max-md:overflow-x-auto max-md:gap-4 max-md:snap-x max-md:snap-mandatory max-md:pb-2 max-md:overflow-y-visible">
             {quoteColumns.map((column) => (
               <Card
                 key={column.id}
-                className="bg-black/20 backdrop-blur-xl border border-white/10 text-white min-w-0 overflow-hidden flex flex-col"
+                className="bg-black/20 backdrop-blur-xl border border-white/10 text-white min-w-0 overflow-hidden flex flex-col max-md:min-w-[280px] max-md:snap-start max-md:flex-shrink-0"
                 onDragOver={handleDragOver}
                 onDrop={() => handleDrop(column.id)}
               >
@@ -1022,7 +1022,7 @@ export function CRMPipeline() {
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="absolute right-1 top-1 h-6 w-6 rounded opacity-0 group-hover:opacity-100 hover:opacity-100 disabled:opacity-100 hover:bg-white/10 text-white/70 hover:text-white transition-opacity"
+                          className="absolute right-1 top-1 h-6 w-6 max-md:h-11 max-md:min-h-[44px] max-md:min-w-[44px] max-md:w-11 rounded opacity-0 group-hover:opacity-100 hover:opacity-100 disabled:opacity-100 hover:bg-white/10 text-white/70 hover:text-white transition-opacity"
                           onClick={(e) => handleRemoveProspectClick(prospect, e)}
                           disabled={removingId === prospect.id}
                           title="Retirer du pipeline"
@@ -1064,11 +1064,11 @@ export function CRMPipeline() {
         {/* Ligne 2 : Factures */}
         <div>
           <p className="text-xs font-medium text-white/60 uppercase tracking-wider mb-3">Factures</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-md:flex max-md:overflow-x-auto max-md:gap-4 max-md:snap-x max-md:snap-mandatory max-md:pb-2 max-md:overflow-y-visible">
             {invoiceColumns.map((column) => (
               <Card
                 key={column.id}
-                className="bg-black/20 backdrop-blur-xl border border-white/10 text-white min-w-0 overflow-hidden flex flex-col"
+                className="bg-black/20 backdrop-blur-xl border border-white/10 text-white min-w-0 overflow-hidden flex flex-col max-md:min-w-[280px] max-md:snap-start max-md:flex-shrink-0"
                 onDragOver={handleDragOver}
                 onDrop={() => handleDrop(column.id)}
               >
@@ -1135,7 +1135,7 @@ export function CRMPipeline() {
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="absolute right-1 top-1 h-6 w-6 rounded opacity-0 group-hover:opacity-100 hover:opacity-100 disabled:opacity-100 hover:bg-white/10 text-white/70 hover:text-white transition-opacity"
+                          className="absolute right-1 top-1 h-6 w-6 max-md:h-11 max-md:min-h-[44px] max-md:min-w-[44px] max-md:w-11 rounded opacity-0 group-hover:opacity-100 hover:opacity-100 disabled:opacity-100 hover:bg-white/10 text-white/70 hover:text-white transition-opacity"
                           onClick={(e) => handleRemoveProspectClick(prospect, e)}
                           disabled={removingId === prospect.id}
                           title="Retirer du pipeline"

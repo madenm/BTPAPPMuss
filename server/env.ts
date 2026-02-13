@@ -10,7 +10,9 @@ import { config as loadEnv } from "dotenv";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..");
 loadEnv({ path: path.join(projectRoot, ".env") });
-// Fallback: if GEMINI_API_KEY still missing, try .env from cwd (e.g. when run from workspace root)
-if (!(process.env.GEMINI_API_KEY || "").trim()) {
+// Fallback: if keys still missing, try .env from cwd (e.g. when run from workspace root)
+const hasGemini = !!(process.env.GEMINI_API_KEY || "").trim();
+const hasOpenAI = !!(process.env.OPENAI_API_KEY || "").trim();
+if (!hasGemini || !hasOpenAI) {
   loadEnv({ path: path.join(process.cwd(), ".env") });
 }

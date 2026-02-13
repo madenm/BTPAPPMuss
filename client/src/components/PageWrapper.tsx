@@ -46,7 +46,7 @@ export function PageWrapper({ children }: PageWrapperProps) {
             animate="animate"
             exit="exit"
             variants={contentVariants}
-            className="py-6 lg:py-8 pl-[5.5rem] pr-4 sm:pr-6 lg:pr-8"
+            className="py-4 sm:py-6 lg:py-8 pl-4 pr-4 sm:pl-[5.5rem] sm:pr-6 lg:pr-8 max-w-[100vw] overflow-x-hidden max-md:pb-[env(safe-area-inset-bottom)]"
           >
             {children}
           </motion.div>

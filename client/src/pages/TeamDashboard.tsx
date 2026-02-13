@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge'
 import TeamSidebar from '@/components/TeamSidebar'
 import { GlobalBackground } from '@/components/GlobalBackground'
 import { UserAccountButton } from '@/components/UserAccountButton'
-import { Building, Calendar, Clock, ChevronLeft, ChevronRight, FileText, LayoutGrid, Receipt, Users, UserCircle, Sparkles } from 'lucide-react'
+import { Building, Calendar, Clock, ChevronLeft, ChevronRight, FileText, LayoutGrid, Receipt, Users, UserCircle, Menu } from 'lucide-react'
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { useChantiers } from '@/context/ChantiersContext'
 import type { Chantier } from '@/context/ChantiersContext'
 import QuotesPage from '@/pages/QuotesPage'
@@ -15,7 +16,6 @@ import CRMPipelinePage from '@/pages/CRMPipelinePage'
 import InvoicesPage from '@/pages/InvoicesPage'
 import TeamPage from '@/pages/TeamPage'
 import ClientsPage from '@/pages/ClientsPage'
-import AIVisualizationPage from '@/pages/AIVisualizationPage'
 import { refreshTeamMember, type TeamMember } from '@/lib/supabase'
 import { TeamEffectiveUserIdProvider } from '@/context/TeamEffectiveUserIdContext'
 import { debugIngest } from '@/lib/debugIngest'
@@ -163,10 +163,9 @@ export default function TeamDashboard() {
     if (location === '/team-dashboard/invoices' && teamMemberForCheck?.can_manage_invoices) return 'invoices' as const;
     if (location === '/team-dashboard/team' && teamMemberForCheck?.can_manage_team) return 'team' as const;
     if (location === '/team-dashboard/clients' && teamMemberForCheck?.can_manage_clients) return 'clients' as const;
-    if (location === '/team-dashboard/ai-visualization' && teamMemberForCheck?.can_use_ai_visualization) return 'ai-visualization' as const;
     return 'overview' as const
   }, [location])
-  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'planning' | 'quotes' | 'crm' | 'invoices' | 'team' | 'clients' | 'ai-visualization'>(tabFromPath)
+  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'planning' | 'quotes' | 'crm' | 'invoices' | 'team' | 'clients'>(tabFromPath)
   const { chantiers, refreshChantiers, refreshClients, loading } = useChantiers()
   const [teamMember, setTeamMember] = useState<TeamMember | null>(null)
 
@@ -191,8 +190,6 @@ export default function TeamDashboard() {
     } else if (tabFromPath === 'team' && !teamMember.can_manage_team) {
       setLocation('/team-dashboard');
     } else if (tabFromPath === 'clients' && !teamMember.can_manage_clients) {
-      setLocation('/team-dashboard');
-    } else if (tabFromPath === 'ai-visualization' && !teamMember.can_use_ai_visualization) {
       setLocation('/team-dashboard');
     }
   }, [tabFromPath, teamMember, setLocation])
@@ -264,7 +261,7 @@ export default function TeamDashboard() {
     })()
   }, [refreshChantiers])
 
-  const goToTab = (tab: 'overview' | 'projects' | 'planning' | 'quotes' | 'crm' | 'invoices' | 'team' | 'clients' | 'ai-visualization') => {
+  const goToTab = (tab: 'overview' | 'projects' | 'planning' | 'quotes' | 'crm' | 'invoices' | 'team' | 'clients') => {
     if (tab === 'projects' && !teamMember?.can_view_all_chantiers && !teamMember?.can_manage_chantiers) return;
     if (tab === 'planning' && !teamMember?.can_view_planning && !teamMember?.can_manage_planning) return;
     if (tab === 'quotes' && !teamMember?.can_create_quotes) return;
@@ -272,7 +269,6 @@ export default function TeamDashboard() {
     if (tab === 'invoices' && !teamMember?.can_manage_invoices) return;
     if (tab === 'team' && !teamMember?.can_manage_team) return;
     if (tab === 'clients' && !teamMember?.can_manage_clients) return;
-    if (tab === 'ai-visualization' && !teamMember?.can_use_ai_visualization) return;
     setActiveTab(tab)
     const path = tab === 'overview' ? '/team-dashboard' : `/team-dashboard/${tab}`
     setLocation(path)
@@ -293,49 +289,61 @@ export default function TeamDashboard() {
     debugIngest({ location: 'TeamDashboard.tsx:chantiers', message: 'chantiers in UI', data: { chantiersLength: chantiers.length, chantierIds: chantiers.map((c) => c.id), myChantiersLength: myChantiers.length }, sessionId: 'debug-session', hypothesisId: 'C,D' });
   }, [chantiers, myChantiers.length]);
 
+  const [teamMenuOpen, setTeamMenuOpen] = useState(false);
+
   return (
     <>
       <GlobalBackground />
       <div className="flex min-h-screen relative overflow-hidden">
-        {/* Sidebar */}
+        {/* Sidebar - desktop only */}
         <TeamSidebar />
 
         {/* Main Content */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={location}
-            initial={{ opacity: 0, y: 20, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.98 }}
-            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="flex-1 flex flex-col relative z-10 ml-64 rounded-l-3xl overflow-hidden"
-          >
-            <header className="bg-black/10 backdrop-blur-xl border-b border-white/10 px-6 py-4 rounded-tl-3xl ml-20">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-2xl font-bold text-white">
-                    Dashboard Membre d'Équipe
-                  </h1>
-                  <p className="text-sm text-white/70">
-                    {teamMember ? (
-                      <>
-                        Bienvenue, {teamMember.name}
-                        {teamMember.role && (
-                          <span className="ml-2 text-white/50">• Connecté en tant qu'{teamMember.role}</span>
-                        )}
-                      </>
-                    ) : (
-                      'Chargement...'
-                    )}
-                  </p>
+        <Sheet open={teamMenuOpen} onOpenChange={setTeamMenuOpen}>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location}
+              initial={{ opacity: 0, y: 20, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.98 }}
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              className="flex-1 flex flex-col relative z-10 ml-0 md:ml-64 rounded-l-3xl overflow-hidden"
+            >
+              <header className="bg-black/10 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl ml-0 md:ml-20">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
+                  <div className="flex items-center gap-2 min-w-0 w-full sm:flex-1">
+                    <SheetTrigger asChild>
+                      <Button variant="ghost" size="icon" className="md:hidden shrink-0 h-10 w-10 min-h-[44px] min-w-[44px] text-white hover:bg-white/10">
+                        <Menu className="h-5 w-5" />
+                      </Button>
+                    </SheetTrigger>
+                    <div className="min-w-0 flex-1">
+                    <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
+                      Dashboard Membre d'Équipe
+                    </h1>
+                    <p className="text-xs sm:text-sm text-white/70 sm:truncate">
+                      {teamMember ? (
+                        <>
+                          Bienvenue, {teamMember.name}
+                          {teamMember.role && (
+                            <span className="ml-2 text-white/50">• Connecté en tant qu'{teamMember.role}</span>
+                          )}
+                        </>
+                      ) : (
+                        'Chargement...'
+                      )}
+                    </p>
+                  </div>
                 </div>
-                <UserAccountButton variant="inline" />
+                <div className="flex-shrink-0 w-full sm:w-auto">
+                  <UserAccountButton variant="inline" />
+                </div>
               </div>
             </header>
 
             {/* Tabs Navigation */}
-            <div className="bg-black/10 backdrop-blur-xl border-b border-white/10 px-6 rounded-tl-3xl">
-              <div className="flex gap-2 overflow-x-auto">
+            <div className="bg-black/10 backdrop-blur-xl border-b border-white/10 px-4 sm:px-6 rounded-tl-3xl ml-0 md:ml-20">
+              <div className="flex gap-2 overflow-x-auto min-w-0">
                 {/* Vue d'ensemble - toujours accessible */}
                 <Button
                   variant="ghost"
@@ -404,17 +412,12 @@ export default function TeamDashboard() {
                     <UserCircle className="h-4 w-4 mr-2" /> Clients
                   </Button>
                 )}
-                {teamMember?.can_use_ai_visualization && (
-                  <Button variant="ghost" size="sm" onClick={() => goToTab('ai-visualization')} className={activeTab === 'ai-visualization' ? 'bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}>
-                    <Sparkles className="h-4 w-4 mr-2" /> IA Visualisation
-                  </Button>
-                )}
               </div>
             </div>
 
             {/* Tab Content */}
             <TeamEffectiveUserIdProvider value={teamMember?.user_id ?? null}>
-            <main className="flex-1 p-6 space-y-6 overflow-auto ml-20">
+            <main className="flex-1 p-4 sm:p-6 space-y-6 overflow-auto ml-0 md:ml-20 overflow-x-hidden">
               {activeTab === 'overview' && (
                 <div className="space-y-6">
                   {(() => {
@@ -637,11 +640,6 @@ export default function TeamDashboard() {
                   <ClientsPage />
                 </div>
               )}
-              {activeTab === 'ai-visualization' && teamMember?.can_use_ai_visualization && (
-                <div className="min-h-[60vh]">
-                  <AIVisualizationPage />
-                </div>
-              )}
 
               {activeTab === 'planning' && (
                 <>
@@ -793,6 +791,10 @@ export default function TeamDashboard() {
             </TeamEffectiveUserIdProvider>
           </motion.div>
         </AnimatePresence>
+          <SheetContent side="left" className="w-[min(20rem,85vw)] p-0 bg-black/20 backdrop-blur-xl border-white/10 rounded-r-3xl border-r md:hidden">
+            <TeamSidebar variant="drawer" onNavigate={() => setTeamMenuOpen(false)} />
+          </SheetContent>
+        </Sheet>
       </div>
     </>
   )

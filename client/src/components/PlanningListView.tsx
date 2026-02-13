@@ -102,13 +102,13 @@ export function PlanningListView({
   );
 
   return (
-    <Card className="bg-white border border-gray-200 text-gray-900">
-      <CardHeader>
-        <CardTitle className="text-lg">
+    <Card className="bg-white border border-gray-200 text-gray-900 min-w-0 overflow-hidden">
+      <CardHeader className="px-4 sm:px-6">
+        <CardTitle className="text-base sm:text-lg break-words">
           CHANTIERS DE {monthLabel.toUpperCase()} {year} ({sortedChantiers.length} chantier{sortedChantiers.length !== 1 ? 's' : ''})
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-4 sm:px-6 min-w-0">
         {sortedChantiers.length === 0 ? (
           <div className="text-center py-12 text-gray-600">
             <p className="mb-4">Aucun chantier en {monthLabel} {year}.</p>
@@ -135,49 +135,49 @@ export function PlanningListView({
               return (
                 <div
                   key={chantier.id}
-                  className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow"
+                  className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm hover:shadow-md transition-shadow min-w-0 overflow-hidden"
                 >
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex-1 space-y-3">
+                    <div className="flex-1 min-w-0 space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-lg font-semibold text-gray-900">
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 break-words">
                           <span className="mr-2" aria-hidden>{icon}</span>
                           {chantier.nom}
                         </h3>
                         <span
-                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium border ${getStatusBadgeClasses(chantier.statut)}`}
+                          className={`inline-flex items-center gap-1 px-2.5 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium border shrink-0 ${getStatusBadgeClasses(chantier.statut)}`}
                         >
                           <span aria-hidden>{getStatusIcon(chantier.statut)}</span>
                           {chantier.statut}
                         </span>
                       </div>
 
-                      <div className="flex flex-col gap-2 text-sm text-gray-600">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 shrink-0 text-gray-500" />
-                          <span>{dateRangeLabel}</span>
+                      <div className="flex flex-col gap-2 text-sm text-gray-600 min-w-0">
+                        <div className="flex items-start gap-2 min-w-0">
+                          <Calendar className="h-4 w-4 shrink-0 text-gray-500 mt-0.5" />
+                          <span className="break-words">{dateRangeLabel}</span>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
                           <User className="h-4 w-4 shrink-0 text-gray-500" />
-                          <span>Client : {chantier.clientName}</span>
+                          <span className="truncate">Client : {chantier.clientName}</span>
                         </div>
                         {typeof chantier.montantDevis === 'number' && chantier.montantDevis > 0 && (
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
                             <DollarSign className="h-4 w-4 shrink-0 text-gray-500" />
-                            <span>
+                            <span className="break-all">
                               Montant :{' '}
                               {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(chantier.montantDevis)} TTC
                             </span>
                           </div>
                         )}
                         {members.length > 0 && (
-                          <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2 min-w-0">
                             <Users className="h-4 w-4 shrink-0 text-gray-500" />
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-wrap gap-2 min-w-0">
                               {members.map((m) => (
                                 <span
                                   key={m.id}
-                                  className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-sm"
+                                  className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-sm break-words"
                                 >
                                   {m.name} - {m.role || 'Membre'}
                                 </span>
@@ -186,9 +186,9 @@ export function PlanningListView({
                           </div>
                         )}
                         {chantier.notes && (
-                          <div className="flex items-start gap-2">
+                          <div className="flex items-start gap-2 min-w-0">
                             <FileText className="h-4 w-4 shrink-0 text-gray-500 mt-0.5" />
-                            <p className="text-gray-600 line-clamp-2">
+                            <p className="text-gray-600 line-clamp-2 min-w-0 break-words">
                               {notesPreview}
                               {notesTruncated ? '…' : ''}
                             </p>
@@ -197,15 +197,15 @@ export function PlanningListView({
                       </div>
                     </div>
 
-                    <div className="flex flex-col gap-2 sm:flex-row shrink-0">
+                    <div className="flex flex-col gap-2 sm:flex-row shrink-0 w-full sm:w-auto">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => onEditChantier(chantier)}
-                        className="border-gray-300 text-gray-700"
+                        className="border-gray-300 text-gray-700 w-full sm:w-auto justify-center"
                       >
-                        <Pencil className="h-4 w-4 mr-2" />
-                        Modifier le chantier
+                        <Pencil className="h-4 w-4 mr-2 shrink-0" />
+                        <span className="truncate">Modifier le chantier</span>
                       </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -213,10 +213,10 @@ export function PlanningListView({
                             variant="outline"
                             size="sm"
                             disabled={!!isUpdating}
-                            className="border-gray-300 text-gray-700"
+                            className="border-gray-300 text-gray-700 w-full sm:w-auto justify-center"
                           >
-                            <ChevronDown className="h-4 w-4 mr-2" />
-                            Changer statut
+                            <ChevronDown className="h-4 w-4 mr-2 shrink-0" />
+                            <span className="truncate">Changer statut</span>
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="bg-white border border-gray-200 text-gray-900 shadow-lg">

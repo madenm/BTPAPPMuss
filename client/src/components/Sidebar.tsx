@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { Link, useLocation } from 'wouter';
-import { Menu, X, ChevronLeft, Home, Calculator, Building, Calendar, Workflow, FileText, Wand2, Users, User, Receipt } from 'lucide-react';
+import { Menu, X, ChevronLeft, Home, Calculator, Building, Calendar, Workflow, FileText, Users, User, Receipt } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function Sidebar() {
@@ -18,7 +18,6 @@ export default function Sidebar() {
     { icon: Workflow, label: 'CRM Pipeline', path: '/dashboard/crm' },
     { icon: FileText, label: 'Générateur de Devis', path: '/dashboard/quotes' },
     { icon: Receipt, label: 'Factures', path: '/dashboard/invoices' },
-    { icon: Wand2, label: 'Visualisation IA', path: '/dashboard/ai-visualization' },
     { icon: Users, label: 'Équipe', path: '/dashboard/team' },
     { icon: User, label: 'Clients', path: '/dashboard/clients' },
   ];
@@ -89,7 +88,7 @@ export default function Sidebar() {
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-6 left-6 z-50 p-3 rounded-xl transition-colors shadow-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
+        className="fixed top-6 left-6 z-50 p-3 rounded-xl transition-colors shadow-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 max-md:top-[env(safe-area-inset-top,1rem)] max-md:left-4"
       >
         {isOpen ? <X size={24} /> : <Menu size={24} />}
       </motion.button>

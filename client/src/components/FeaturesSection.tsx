@@ -13,8 +13,8 @@ export default function FeaturesSection() {
     },
     {
       icon: <Wand2 className="h-8 w-8 text-white" />,
-      title: "Visualisation IA",
-      description: "Uploadez une photo du terrain, sélectionnez votre projet et l'IA génère un rendu professionnel pour impressionner vos clients.",
+      title: "Visualisation",
+      description: "Uploadez une photo du terrain, sélectionnez votre projet et obtenez un aperçu pour impressionner vos clients.",
       color: "bg-black/10 backdrop-blur-md border border-white/5",
     },
     {
@@ -120,16 +120,16 @@ export default function FeaturesSection() {
           </div>
           <div className="space-y-6 order-1 lg:order-2">
             <h3 className="text-2xl md:text-3xl font-bold text-foreground">
-              Visualisation IA de Projets
+              Visualisation de Projets
             </h3>
             <p className="text-lg text-muted-foreground">
               Impressionnez vos clients avec des rendus professionnels de leurs futurs projets. 
-              Uploadez une photo du terrain et obtenez une visualisation réaliste en quelques minutes.
+              Uploadez une photo du terrain et obtenez un aperçu de votre projet.
             </p>
             <ul className="space-y-3">
               <li className="flex items-center gap-3">
                 <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                <span className="text-muted-foreground">IA spécialisée pour piscines, paysage et menuiserie</span>
+                <span className="text-muted-foreground">Piscines, paysage, menuiserie et terrasses</span>
               </li>
               <li className="flex items-center gap-3">
                 <div className="w-2 h-2 bg-white/50 rounded-full"></div>

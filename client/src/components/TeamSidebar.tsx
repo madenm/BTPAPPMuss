@@ -11,14 +11,19 @@ import {
   Receipt,
   Users,
   UserCircle,
-  Sparkles,
 } from 'lucide-react';
 import type { TeamMember } from '@/lib/supabase';
 
-export default function TeamSidebar() {
+interface TeamSidebarProps {
+  variant?: 'fixed' | 'drawer';
+  onNavigate?: () => void;
+}
+
+export default function TeamSidebar({ variant = 'fixed', onNavigate }: TeamSidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [location] = useLocation();
   const [teamMember, setTeamMember] = useState<TeamMember | null>(null);
+  const isDrawer = variant === 'drawer';
 
   const loadMemberFromStorage = useCallback(() => {
     const storedMember = localStorage.getItem('teamMember');
@@ -95,15 +100,9 @@ export default function TeamSidebar() {
   if (teamMember?.can_manage_clients) {
     menuItems.push({ icon: UserCircle, label: 'Clients', path: '/team-dashboard/clients', active: location === '/team-dashboard/clients' });
   }
-  if (teamMember?.can_use_ai_visualization) {
-    menuItems.push({ icon: Sparkles, label: 'IA Visualisation', path: '/team-dashboard/ai-visualization', active: location === '/team-dashboard/ai-visualization' });
-  }
 
-  return (
-    <div className={cn(
-      "fixed left-0 top-0 h-screen bg-black/20 backdrop-blur-xl border-r border-white/10 transition-all duration-300 flex flex-col z-50 rounded-r-3xl",
-      collapsed ? "w-16" : "w-64"
-    )}>
+  const content = (
+    <>
       {/* Header */}
       <div className="p-4 border-b border-white/10">
         <div className="flex flex-col">
@@ -118,30 +117,51 @@ export default function TeamSidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-2">
-        {!collapsed && (
+      <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+        {(!collapsed || isDrawer) && (
           <div className="text-xs font-medium text-white/60 uppercase tracking-wide mb-4">
             Navigation
           </div>
         )}
         
         {menuItems.map((item) => (
-          <Link key={item.path} href={item.path}>
+          <Link
+            key={item.path}
+            href={item.path}
+            onClick={onNavigate}
+          >
             <Button
               variant="ghost"
               className={cn(
-                "w-full justify-start gap-3 h-10 text-white",
-                collapsed && "justify-center",
+                "w-full justify-start gap-3 h-10 text-white min-h-[44px] max-md:min-h-[44px]",
+                !isDrawer && collapsed && "justify-center",
                 item.active && "bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30",
                 !item.active && "hover:bg-white/10"
               )}
             >
               <item.icon className="h-4 w-4" />
-              {!collapsed && <span>{item.label}</span>}
+              {(!collapsed || isDrawer) && <span>{item.label}</span>}
             </Button>
           </Link>
         ))}
       </nav>
+    </>
+  );
+
+  if (isDrawer) {
+    return (
+      <div className="flex flex-col h-full bg-black/20 backdrop-blur-xl border-r border-white/10 rounded-r-3xl">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn(
+      "fixed left-0 top-0 h-screen bg-black/20 backdrop-blur-xl border-r border-white/10 transition-all duration-300 flex flex-col z-50 rounded-r-3xl max-md:hidden",
+      collapsed ? "w-16" : "w-64"
+    )}>
+      {content}
     </div>
   );
 }

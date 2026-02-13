@@ -162,21 +162,23 @@ export default function PlanningPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-white border-b border-gray-200 px-6 py-4 rounded-tl-3xl ml-20">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Planning des Chantiers</h1>
-            <p className="text-sm text-gray-600">Calendrier intégré pour organiser vos interventions</p>
+      <header className="bg-white border-b border-gray-200 px-2 py-3 sm:px-6 sm:py-4 rounded-tl-3xl ml-0 md:ml-20">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
+          <div className="min-w-0 w-full sm:flex-1 max-md:pl-14">
+            <h1 className="text-lg sm:text-2xl font-bold text-gray-900 sm:truncate">Planning des Chantiers</h1>
+            <p className="text-xs sm:text-sm text-gray-600 sm:truncate">Calendrier intégré pour organiser vos interventions</p>
           </div>
-          <UserAccountButton variant="inline" />
+          <div className="flex-shrink-0 w-full sm:w-auto">
+            <UserAccountButton variant="inline" />
+          </div>
         </div>
       </header>
 
-      <main className="flex-1 p-6 space-y-6 ml-20">
+      <main className="flex-1 px-2 py-4 sm:p-6 space-y-4 sm:space-y-6 ml-0 md:ml-20 overflow-x-hidden">
         {/* Contrôles du calendrier */}
-        <Card className="bg-white border border-gray-200 text-gray-900">
-          <CardHeader>
-            <div className="flex items-center justify-between flex-wrap gap-4">
+        <Card className="bg-white border border-gray-200 text-gray-900 min-w-0 overflow-hidden">
+          <CardHeader className="px-2 sm:px-6">
+            <div className="flex items-center justify-between flex-wrap gap-3 sm:gap-4 min-w-0">
               <div className="flex items-center gap-4">
                 <button
                   type="button"

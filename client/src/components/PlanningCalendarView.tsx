@@ -233,8 +233,8 @@ export function PlanningCalendarView({
   }, [onSaveNote, draftNote, closeDayPopover]);
 
   return (
-    <Card className="bg-white border border-[#E5E7EB] text-gray-900 shadow-none">
-      <CardContent className="p-5">
+    <Card className="bg-white border border-[#E5E7EB] text-gray-900 shadow-none min-w-0 overflow-hidden">
+      <CardContent className="px-2 py-4 sm:p-5">
         {/* Legend - Notion style */}
         <div className="text-xs text-gray-600 pb-2 tracking-wide">
           <span>⏳ Planifié</span>
@@ -249,17 +249,20 @@ export function PlanningCalendarView({
           </p>
         )}
 
-        {/* Week header - même structure que la grille (gap 0) pour alignement */}
-        <div className="grid grid-cols-7 gap-0 border-b border-[#E5E7EB] bg-[#FAFBFC] -mx-5 px-5 py-4">
-          {dayNames.map((day) => (
-            <div key={day} className="text-center text-sm font-semibold text-gray-700 tracking-wide border-r border-[#E5E7EB]/70 last:border-r-0">
-              {day}
+        {/* Mobile: grille 7 colonnes qui tient en largeur, cellules simplifiées. Desktop: grille avec scroll si besoin, contenu détaillé. */}
+        <div className="md:overflow-x-auto md:-mx-5 md:px-0">
+          <div className="md:min-w-[630px] md:pr-5">
+            {/* Week header */}
+            <div className="grid grid-cols-7 gap-0 border-b border-[#E5E7EB] bg-[#FAFBFC] px-1 md:px-5 py-2 md:py-4">
+              {dayNames.map((day) => (
+                <div key={day} className="text-center text-[10px] md:text-sm font-semibold text-gray-700 tracking-wide border-r border-[#E5E7EB]/70 last:border-r-0 min-w-0">
+                  {day}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        {/* Calendar grid - gap 0 pour que les couleurs s'enchaînent entre les jours */}
-        <div className="grid grid-cols-7 gap-0 mt-4 border-t border-[#E5E7EB]">
+            {/* Calendar grid */}
+            <div className="grid grid-cols-7 gap-0 mt-1 md:mt-4 border-t border-[#E5E7EB]">
           {days.map((day, index) => {
             if (day.isPlaceholder) {
               const isLastInRow = index % 7 === 6;
@@ -267,7 +270,7 @@ export function PlanningCalendarView({
                 <div
                   key={index}
                   className={
-                    'relative min-h-[120px] md:min-h-[140px] bg-[#FAFAFA] border-r border-[#E5E7EB]/70 ' +
+                    'relative min-h-[52px] md:min-h-[140px] bg-[#FAFAFA] border-r border-[#E5E7EB]/70 ' +
                     (isLastInRow ? 'border-r-0' : '')
                   }
                   aria-hidden
@@ -284,17 +287,17 @@ export function PlanningCalendarView({
 
             const isLastInRow = index % 7 === 6;
             const cellClass =
-              'relative min-h-[120px] md:min-h-[140px] py-2 px-1 transition-all duration-200 cursor-pointer border-r border-[#E5E7EB]/70 ' +
+              'relative min-h-[52px] md:min-h-[140px] py-1 md:py-2 px-0.5 md:px-1 transition-all duration-200 cursor-pointer border-r border-[#E5E7EB]/70 ' +
               (isLastInRow ? 'border-r-0 ' : '') +
               'hover:bg-[#F9FAFB]/50 ' +
               (day.isCurrentMonth
                 ? isToday
-                  ? 'bg-white/80 border-l-[3px] border-l-red-500'
+                  ? 'bg-white/80 border-l-2 md:border-l-[3px] border-l-red-500'
                   : 'bg-white'
                 : 'bg-[#F9FAFB]');
 
             const dayNumClass =
-              'font-semibold text-base mb-2 ' +
+              'font-semibold text-xs md:text-base md:mb-2 ' +
               (day.isCurrentMonth ? 'text-gray-900' : 'text-gray-300');
 
             return (
@@ -310,25 +313,34 @@ export function PlanningCalendarView({
               >
                 <PopoverTrigger asChild>
                   <div role="button" tabIndex={0} aria-label={`${day.date.toLocaleDateString('fr-FR')} - ${dayChantiers.length} chantier(s)`} className={cellClass}>
-                    {/* Day number with optional today dot and note indicator (always show icon: filled if has note, ghost to hint "add note") */}
-                    <div className="flex items-center justify-between gap-1 mb-1">
+                    {/* Jour + indicateur note (mobile et desktop) */}
+                    <div className="flex items-center justify-between gap-0.5 md:gap-1 mb-0 md:mb-1">
                       <div className={dayNumClass}>
                         {day.date.getDate()}
                         {isToday && day.isCurrentMonth && (
-                          <span className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-red-500 align-middle" aria-hidden />
+                          <span className="ml-0.5 md:ml-1 inline-block w-1 h-1 md:w-1.5 md:h-1.5 rounded-full bg-red-500 align-middle" aria-hidden />
                         )}
                       </div>
                       {onSaveNote && (
                         <StickyNote
-                          className={`h-3.5 w-3.5 shrink-0 ${hasNote ? 'text-amber-600' : 'text-gray-300 hover:text-amber-500'}`}
+                          className={`h-3 w-3 md:h-3.5 md:w-3.5 shrink-0 ${hasNote ? 'text-amber-600' : 'text-gray-300 hover:text-amber-500'}`}
                           aria-label={hasNote ? 'Note du jour' : 'Cliquer pour ajouter une note'}
                           title={hasNote ? 'Note du jour' : 'Cliquer pour ajouter une note'}
                         />
                       )}
                     </div>
 
-                    {/* Compact chantier blocks - sans espace vertical pour enchaîner les couleurs */}
-                    <div className="space-y-0 flex flex-col gap-0 w-full">
+                    {/* Mobile uniquement : résumé compact (nombre de chantiers), clic ouvre le popover */}
+                    <div className="md:hidden min-w-0">
+                      {dayChantiers.length > 0 ? (
+                        <div className="text-[10px] font-medium text-gray-500 truncate" title={`${dayChantiers.length} chantier(s)`}>
+                          {dayChantiers.length} chant.
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {/* Desktop uniquement : blocs chantiers détaillés */}
+                    <div className="hidden md:block space-y-0 flex flex-col gap-0 w-full">
                       {visibleChantiers.map((chantier) => (
                         <ChantierBlockCompact
                           key={chantier.id}
@@ -416,6 +428,8 @@ export function PlanningCalendarView({
               </Popover>
             );
           })}
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>

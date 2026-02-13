@@ -709,19 +709,19 @@ export default function ProjectsPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-6 py-4 rounded-tl-3xl ml-20">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">
+      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl ml-0 md:ml-20">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
+          <div className="min-w-0 w-full sm:flex-1 max-md:pl-14">
+            <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
               Mes Chantiers
             </h1>
-            <p className="text-sm text-white/70">Gérez tous vos projets en cours et terminés</p>
+            <p className="text-xs sm:text-sm text-white/70 sm:truncate">Gérez tous vos projets en cours et terminés</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-shrink-0 items-center gap-1.5 sm:gap-2 w-full sm:w-auto flex-wrap">
             <Link href="/dashboard/clients">
-              <Button variant="outline" className="text-white border-white/20 hover:bg-white/10">
-                <User className="h-4 w-4 mr-2" />
-                Clients
+              <Button variant="outline" size="sm" className="text-white border-white/20 hover:bg-white/10 h-9 px-2 sm:px-3">
+                <User className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Clients</span>
               </Button>
             </Link>
             <Dialog
@@ -735,9 +735,10 @@ export default function ProjectsPage() {
               }}
             >
               <DialogTrigger asChild>
-                <Button className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Ajouter un Chantier
+                <Button size="sm" className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30 h-9 px-2 sm:px-3 text-sm">
+                  <Plus className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Ajouter un Chantier</span>
+                  <span className="sm:hidden">Ajouter</span>
                 </Button>
               </DialogTrigger>
               <DialogContent className="bg-black/20 backdrop-blur-xl border border-white/10 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -1047,19 +1048,19 @@ export default function ProjectsPage() {
 
       {/* Barre recherche + filtres + tri */}
       {chantiers.length > 0 && (
-        <div className="px-6 pt-4 pb-2 ml-20 space-y-3">
+        <div className="px-4 sm:px-6 pt-4 pb-2 ml-0 md:ml-20 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <div className="relative flex-1 min-w-0 w-full sm:min-w-[200px] sm:max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
               <Input
                 placeholder="Rechercher par nom ou client..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 bg-black/20 border-white/10 text-white placeholder:text-white/50 h-9"
+                className="pl-9 bg-black/20 border-white/10 text-white placeholder:text-white/50 h-9 w-full"
               />
             </div>
             <Select value={filterStatut} onValueChange={setFilterStatut}>
-              <SelectTrigger className="w-[140px] h-9 bg-black/20 border-white/10 text-white">
+              <SelectTrigger className="w-full sm:w-[140px] h-9 bg-black/20 border-white/10 text-white">
                 <SelectValue placeholder="Statut" />
               </SelectTrigger>
               <SelectContent className="bg-black/20 border-white/10">
@@ -1070,7 +1071,7 @@ export default function ProjectsPage() {
               </SelectContent>
             </Select>
             <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger className="w-[160px] h-9 bg-black/20 border-white/10 text-white">
+              <SelectTrigger className="w-full sm:w-[160px] h-9 bg-black/20 border-white/10 text-white min-w-0">
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
               <SelectContent className="bg-black/20 border-white/10">
@@ -1081,7 +1082,7 @@ export default function ProjectsPage() {
               </SelectContent>
             </Select>
             <Select value={filterClient} onValueChange={setFilterClient}>
-              <SelectTrigger className="w-[160px] h-9 bg-black/20 border-white/10 text-white">
+              <SelectTrigger className="w-full sm:w-[160px] h-9 bg-black/20 border-white/10 text-white min-w-0">
                 <SelectValue placeholder="Client" />
               </SelectTrigger>
               <SelectContent className="bg-black/20 border-white/10">
@@ -1092,7 +1093,7 @@ export default function ProjectsPage() {
               </SelectContent>
             </Select>
             <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
-              <SelectTrigger className="w-[160px] h-9 bg-black/20 border-white/10 text-white">
+              <SelectTrigger className="w-full sm:w-[160px] h-9 bg-black/20 border-white/10 text-white min-w-0">
                 <SelectValue placeholder="Tri" />
               </SelectTrigger>
               <SelectContent className="bg-black/20 border-white/10">
@@ -1740,7 +1741,7 @@ export default function ProjectsPage() {
         </DialogContent>
       </Dialog>
 
-      <main className="flex-1 p-6 ml-20">
+      <main className="flex-1 p-4 sm:p-6 ml-0 md:ml-20">
         {loading ? (
           <div className="flex items-center justify-center h-full text-white">
             Chargement des chantiers...

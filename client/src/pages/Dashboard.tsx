@@ -7,7 +7,6 @@ import Sidebar from '@/components/Sidebar'
 import { 
   Building, 
   FileText, 
-  Wand2, 
   Euro,
   TrendingUp,
   Plus,
@@ -78,7 +77,7 @@ export default function Dashboard() {
         <Sidebar />
 
         {/* Main Content */}
-        <main className="ml-0 lg:ml-0 p-6 lg:p-8">
+        <main className="ml-0 lg:ml-0 p-4 sm:p-6 lg:p-8 overflow-x-hidden">
         <AnimatePresence mode="wait">
           <motion.div
             key={location}
@@ -86,17 +85,19 @@ export default function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="max-w-7xl mx-auto"
+            className="max-w-7xl mx-auto min-w-0"
           >
             {/* Header */}
-            <div className="mb-8 ml-20 flex items-start justify-between gap-4">
-              <div>
-                <h1 className="text-4xl font-light tracking-tight text-white mb-2 drop-shadow-lg">
+            <div className="mb-6 sm:mb-8 ml-0 md:ml-20 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between min-w-0">
+              <div className="min-w-0 w-full sm:flex-1 max-md:pl-14">
+                <h1 className="text-2xl sm:text-4xl font-light tracking-tight text-white mb-2 drop-shadow-lg sm:truncate">
                   Dashboard
                 </h1>
-                <p className="text-white/90 drop-shadow-md">Vue d'ensemble de votre activité</p>
+                <p className="text-white/90 drop-shadow-md text-sm sm:text-base sm:truncate">Vue d'ensemble de votre activité</p>
               </div>
-              <UserAccountButton variant="inline" />
+              <div className="flex-shrink-0 w-full sm:w-auto">
+                <UserAccountButton variant="inline" />
+              </div>
             </div>
 
             {/* Content */}
@@ -427,16 +428,6 @@ function OverviewTab() {
             <div className="text-left">
               <div className="font-medium">Créer un Devis</div>
               <div className="text-xs opacity-70">Générer un devis</div>
-            </div>
-          </Button>
-          <Button 
-            className="w-full justify-start h-auto p-4 rounded-xl bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/30 border border-violet-200 dark:border-violet-800"
-            onClick={() => setLocation('/dashboard/ai-visualization')}
-          >
-            <Wand2 className="h-5 w-5 mr-3" />
-            <div className="text-left">
-              <div className="font-medium">Estimation IA</div>
-              <div className="text-xs opacity-70">Analyser un projet</div>
             </div>
           </Button>
         </CardContent>

@@ -353,6 +353,16 @@ export default function QuotesPage() {
       return;
     }
 
+    // Coche "Utiliser l'analyse IA" mais description vide → expliquer et ne pas avancer
+    if (step === 2 && nextStep === 3 && useAiForPrefill && !projectDescription.trim()) {
+      toast({
+        title: 'Description requise pour l\'analyse IA',
+        description: 'Remplissez la description du projet ci‑dessus pour que l\'IA préremplisse le devis à l\'étape 3.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (needPrefill && useAiForPrefill) {
       setIsAiParsing(true);
       try {
@@ -936,21 +946,21 @@ export default function QuotesPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-6 py-4 rounded-tl-3xl ml-20">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">
+      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl ml-0 md:ml-20">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
+          <div className="min-w-0 w-full sm:flex-1 max-md:pl-14">
+            <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
               Générateur de Devis
             </h1>
-            <p className="text-sm text-white/70">
+            <p className="text-xs sm:text-sm text-white/70 sm:truncate">
               Étape {step}/3 – {step === 1 ? 'Informations client' : step === 2 ? 'Détails du projet' : 'Détail du devis'}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end w-full sm:w-auto">
             <Button
               variant="outline"
               size="sm"
-              className="rounded-xl bg-white/20 text-white border-white/40 hover:bg-white/30 hover:border-white/50"
+              className="rounded-xl bg-white/20 text-white border-white/40 hover:bg-white/30 hover:border-white/50 max-md:min-h-[44px]"
               onClick={handleNewQuote}
               data-testid="button-new-quote"
             >
@@ -1201,8 +1211,8 @@ export default function QuotesPage() {
         );
       })()}
 
-      <div className="max-w-7xl mx-auto">
-        <main className="space-y-6">
+      <div className="max-w-7xl mx-auto ml-0 md:ml-20 px-4 sm:px-6 overflow-x-hidden">
+        <main className="space-y-6 py-4 sm:py-6">
           {quoteLoadState === 'loading' ? (
             <div className="flex flex-col items-center justify-center py-24 text-white/80">
               <p className="text-lg font-medium">Chargement du devis...</p>
@@ -1483,7 +1493,9 @@ export default function QuotesPage() {
                             Utiliser l'analyse IA pour préremplir le devis à partir de la description
                           </Label>
                           <p className="text-xs text-gray-500 dark:text-gray-400">
-                            Si la coche est décochée, le devis ne sera pas prérempli : vous pourrez saisir les lignes manuellement à l'étape 3.
+                            {useAiForPrefill
+                              ? "Remplissez la « Description du projet » ci‑dessus puis cliquez sur Suivant pour que l'IA préremplisse le devis."
+                              : "Si la coche est décochée, le devis ne sera pas prérempli : vous pourrez saisir les lignes manuellement à l'étape 3."}
                           </p>
                         </div>
                       </div>
