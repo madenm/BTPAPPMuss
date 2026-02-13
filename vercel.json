@@ -5,7 +5,8 @@
   "installCommand": "npm install",
   "framework": null,
   "rewrites": [
-    { "source": "/((?!api|assets).*)", "destination": "/index.html" }
+    { "source": "/api/(.*)", "destination": "/api/[[...path]].js" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ],
   "functions": {
     "api/[[...path]].js": { "memory": 1024, "maxDuration": 60 }
