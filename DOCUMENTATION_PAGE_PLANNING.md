@@ -1,4 +1,4 @@
-  # Documentation Page Planning – ChantierPro
+  # Documentation Page Planning – TitanBtp
 
   **Document destiné à l'analyse fonctionnelle et technique**
 
@@ -274,4 +274,4 @@
 
   ---
 
-  *Document mis à jour pour l'analyse fonctionnelle de la page Planning – ChantierPro*
+  *Document mis à jour pour l'analyse fonctionnelle de la page Planning – TitanBtp*

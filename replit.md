@@ -1,8 +1,8 @@
-# ChantierPro
+# TitanBtp
 
 ## Overview
 
-ChantierPro est une application de gestion de chantiers et devis pour les professionnels du bâtiment et de la rénovation. The application provides agents with tools for lead detection, project visualization, CRM management, and portfolio creation. Built as a modern full-stack web application, it features a React frontend with TypeScript, Express.js backend, PostgreSQL database with Drizzle ORM, and includes Stripe integration for payments.
+TitanBtp est une application de gestion de chantiers et devis pour les professionnels du bâtiment et de la rénovation. The application provides agents with tools for lead detection, project visualization, CRM management, and portfolio creation. Built as a modern full-stack web application, it features a React frontend with TypeScript, Express.js backend, PostgreSQL database with Drizzle ORM, and includes Stripe integration for payments.
 
 ## User Preferences
 

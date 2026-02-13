@@ -1,4 +1,4 @@
-# Documentation Page Gestion de l'Équipe – ChantierPro
+# Documentation Page Gestion de l'Équipe – TitanBtp
 
 **Document destiné à l'analyse fonctionnelle et technique**
 
@@ -252,4 +252,4 @@ TeamPage
 
 ---
 
-*Document généré pour l'analyse fonctionnelle de la page Gestion de l'Équipe – ChantierPro*
+*Document généré pour l'analyse fonctionnelle de la page Gestion de l'Équipe – TitanBtp*

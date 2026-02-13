@@ -1,4 +1,4 @@
-# ChantierPro
+# TitanBtp
 
 Application professionnelle pour la gestion de chantiers et devis avec design glassmorphism et fond MeshGradient animé.
 
@@ -42,7 +42,7 @@ Application professionnelle pour la gestion de chantiers et devis avec design gl
 1. **Connecter le dépôt GitHub à Vercel**
    - Allez sur [vercel.com](https://vercel.com)
    - Cliquez sur "New Project"
-   - Importez le dépôt (ou votre fork ChantierPro)
+   - Importez le dépôt (ou votre fork TitanBtp)
 
 2. **Configuration automatique**
    - Vercel détectera automatiquement la configuration depuis `vercel.json`

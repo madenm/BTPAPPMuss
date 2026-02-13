@@ -1,4 +1,4 @@
-# Documentation Page Clients – ChantierPro
+# Documentation Page Clients – TitanBtp
 
 **Document destiné à l'analyse fonctionnelle et technique**
 
@@ -261,4 +261,4 @@ ChantiersContext
 
 ---
 
-*Document mis à jour pour l’analyse fonctionnelle de la page Clients – ChantierPro*
+*Document mis à jour pour l’analyse fonctionnelle de la page Clients – TitanBtp*

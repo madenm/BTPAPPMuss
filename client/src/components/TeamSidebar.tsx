@@ -112,7 +112,7 @@ export default function TeamSidebar({ variant = 'fixed', onNavigate }: TeamSideb
               Connecté en tant qu'{teamMember.role}
             </span>
           )}
-          <span className="text-xs text-white/70 italic mt-1">ChantierPro</span>
+          <span className="text-xs text-white/70 italic mt-1">TitanBtp</span>
         </div>
       </div>
 

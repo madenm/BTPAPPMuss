@@ -1,8 +1,8 @@
-# Documentation Complète - ChantierPro
+# Documentation Complète - TitanBtp
 
 ## Vue d'ensemble
 
-ChantierPro est une application web complète de gestion de chantiers, devis et factures pour les entreprises de rénovation et d'aménagement. L'application permet de gérer les clients, les projets, les devis, les factures, les paiements, l'équipe, et offre un système d'invitation pour les membres d'équipe avec accès restreint. Elle inclut également un CRM Pipeline pour suivre les prospects et automatiser les relances.
+TitanBtp est une application web complète de gestion de chantiers, devis et factures pour les entreprises de rénovation et d'aménagement. L'application permet de gérer les clients, les projets, les devis, les factures, les paiements, l'équipe, et offre un système d'invitation pour les membres d'équipe avec accès restreint. Elle inclut également un CRM Pipeline pour suivre les prospects et automatiser les relances.
 
 ## Architecture Technique
 
@@ -24,7 +24,7 @@ ChantierPro est une application web complète de gestion de chantiers, devis et 
 ### Structure du Projet
 
 ```
-ChantierPro/
+TitanBtp/
 ├── client/                    # Application React frontend
 │   ├── src/
 │   │   ├── components/        # Composants réutilisables

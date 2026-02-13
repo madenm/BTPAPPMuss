@@ -179,8 +179,8 @@ export default function AuthPage() {
           }
           description={
             isSignUp
-              ? "Créez votre compte pour accéder à votre application ChantierPro"
-              : "Connectez-vous à votre compte ChantierPro"
+              ? "Créez votre compte pour accéder à votre application TitanBtp"
+              : "Connectez-vous à votre compte TitanBtp"
           }
           isSignUp={isSignUp}
           onToggleMode={() => setIsSignUp(!isSignUp)}
