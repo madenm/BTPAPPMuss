@@ -14,7 +14,10 @@ async function getApp() {
 
 export default async function handler(req, res) {
   const app = await getApp();
+  const rawUrl = req.url || "";
+  const pathForExpress = rawUrl.startsWith("/api") ? rawUrl : "/api" + (rawUrl.startsWith("/") ? rawUrl : "/" + rawUrl);
+  const wrappedReq = Object.create(req, { url: { value: pathForExpress, writable: false } });
   return new Promise((resolve, reject) => {
-    app(req, res, (err) => (err ? reject(err) : resolve(undefined)));
+    app(wrappedReq, res, (err) => (err ? reject(err) : resolve(undefined)));
   });
 }
