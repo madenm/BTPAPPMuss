@@ -997,6 +997,13 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
 
   // POST /api/send-followup-email - Envoyer un email de relance (sans pièce jointe)
   app.post("/api/send-followup-email", async (req: Request, res: Response) => {
+    // #region agent log
+    const body = req.body as Record<string, unknown> | undefined;
+    const bodyKeys = body && typeof body === "object" ? Object.keys(body) : [];
+    const hasBody = !!body && bodyKeys.length >= 0;
+    const toPresent = !!(body && typeof (body as any).to === "string" && (body as any).to.trim());
+    fetch("http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "routes.ts:send-followup-email:entry", message: "POST handler hit", data: { method: req.method, path: req.path, url: req.url, bodyKeys, hasBody, toPresent }, timestamp: Date.now(), hypothesisId: "H3", runId: "run1" }) }).catch(() => {});
+    // #endregion
     const { to, subject, htmlContent, fromEmail } = req.body as {
       to?: string;
       subject?: string;
@@ -1005,6 +1012,9 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
     };
 
     if (!to || typeof to !== "string" || !to.trim()) {
+      // #region agent log
+      fetch("http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "routes.ts:send-followup-email:400", message: "validation failed", data: { reason: "to missing or empty", hasBody: !!req.body, bodyKeys: req.body && typeof req.body === "object" ? Object.keys(req.body) : [] }, timestamp: Date.now(), hypothesisId: "H4", runId: "run1" }) }).catch(() => {});
+      // #endregion
       res.status(400).json({ message: "Destinataire (to) requis." });
       return;
     }

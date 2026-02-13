@@ -353,16 +353,20 @@ export function CRMPipeline() {
       const defaultMsg = isQuote ? DEFAULT_QUOTE_FOLLOWUP_MESSAGE : DEFAULT_INVOICE_FOLLOWUP_MESSAGE
       const messageText = stored[columnId]?.trim() || defaultMsg
       const htmlContent = `<p>${messageText.replace(/\n/g, "</p><p>")}</p>${contactBlock}`
+      // #region agent log
+      const bodyPayload = { to: prospect.email, subject: `${relanceLabel} - ${subjectSuffix}`, htmlContent }
+      fetch("http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "CRMPipeline.tsx:send-followup-email:before", message: "followup fetch", data: { url: "/api/send-followup-email", method: "POST", bodyKeys: Object.keys(bodyPayload) }, timestamp: Date.now(), hypothesisId: "H5", runId: "run1" }) }).catch(() => {})
+      // #endregion
       const emailRes = await fetch("/api/send-followup-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          to: prospect.email,
-          subject: `${relanceLabel} - ${subjectSuffix}`,
-          htmlContent,
-        }),
+        body: JSON.stringify(bodyPayload),
       })
-      const data = await emailRes.json().catch(() => ({}))
+      // #region agent log
+      const resText = await emailRes.text()
+      fetch("http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "CRMPipeline.tsx:send-followup-email:after", message: "followup response", data: { status: emailRes.status, ok: emailRes.ok, responsePreview: resText.slice(0, 200) }, timestamp: Date.now(), hypothesisId: "H1", runId: "run1" }) }).catch(() => {})
+      // #endregion
+      const data = resText ? (() => { try { return JSON.parse(resText) } catch { return {} } })() : {}
       if (!emailRes.ok) {
         toast({ title: "Erreur d'envoi", description: data.message || "Impossible d'envoyer l'email de relance.", variant: "destructive" })
         return
@@ -727,17 +731,20 @@ export function CRMPipeline() {
               : "Relance facture 2"
       const subjectSuffix =
         selectedColumn.startsWith("quote_") ? "Votre devis" : "Votre facture"
+      // #region agent log
+      const bodyPayload2 = { to: selectedProspect.email, subject: `${relanceLabel} - ${subjectSuffix}`, htmlContent }
+      fetch("http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "CRMPipeline.tsx:handleFollowupConfirm:before", message: "followup fetch", data: { url: "/api/send-followup-email", method: "POST", bodyKeys: Object.keys(bodyPayload2) }, timestamp: Date.now(), hypothesisId: "H5", runId: "run1" }) }).catch(() => {})
+      // #endregion
       const emailRes = await fetch("/api/send-followup-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          to: selectedProspect.email,
-          subject: `${relanceLabel} - ${subjectSuffix}`,
-          htmlContent,
-        }),
+        body: JSON.stringify(bodyPayload2),
       })
-
-      const data = await emailRes.json().catch(() => ({}))
+      // #region agent log
+      const resText2 = await emailRes.text()
+      fetch("http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "CRMPipeline.tsx:handleFollowupConfirm:after", message: "followup response", data: { status: emailRes.status, ok: emailRes.ok, responsePreview: resText2.slice(0, 200) }, timestamp: Date.now(), hypothesisId: "H1", runId: "run1" }) }).catch(() => {})
+      // #endregion
+      const data = resText2 ? (() => { try { return JSON.parse(resText2) } catch { return {} } })() : {}
       if (!emailRes.ok) {
         toast({ title: "Erreur d'envoi", description: data.message || "Impossible d'envoyer l'email de relance.", variant: "destructive" })
         return

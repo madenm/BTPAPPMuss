@@ -23,8 +23,17 @@ app.use((req, res, next) => {
 });
 // #endregion
 // Limite augmentée pour accepter les PDF en base64 (envoi facture/devis par email)
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: false, limit: "50mb" }));
+// Skip body parsing when body already set (e.g. by Vercel handler) so we don't overwrite or double-consume
+app.use((req, res, next) => {
+  if (req.body !== undefined && req.body !== null && typeof req.body === "object") {
+    return next();
+  }
+  return express.json({ limit: "50mb" })(req, res, next);
+});
+app.use((req, res, next) => {
+  if (req.body !== undefined && req.body !== null) return next();
+  return express.urlencoded({ extended: false, limit: "50mb" })(req, res, next);
+});
 
 app.use((req, res, next) => {
   const start = Date.now();
