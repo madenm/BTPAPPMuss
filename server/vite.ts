@@ -1,34 +1,22 @@
 import express, { type Express } from "express";
-import fs from "fs";
 import path from "path";
+import fs from "fs";
 import { type Server } from "http";
 import { nanoid } from "nanoid";
-
-export function log(message: string, source = "express") {
-  const formattedTime = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-
-  console.log(`${formattedTime} [${source}] ${message}`);
-}
 
 export async function setupVite(app: Express, server: Server) {
   const { createServer: createViteServer, createLogger } = await import("vite");
   const { default: viteConfig } = await import("../vite.config");
   const viteLogger = createLogger();
 
-  const port = parseInt(process.env.PORT || '5000', 10);
+  const port = parseInt(process.env.PORT || "5000", 10);
   const host = process.platform === "win32" ? "127.0.0.1" : "0.0.0.0";
-  
   const serverOptions = {
     middlewareMode: true,
-    hmr: { 
+    hmr: {
       server,
-      port: port,
-      host: host,
+      port,
+      host,
       clientPort: port,
     },
     allowedHosts: true as const,
@@ -51,7 +39,6 @@ export async function setupVite(app: Express, server: Server) {
   app.use(vite.middlewares);
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
-
     try {
       const clientTemplate = path.resolve(
         import.meta.dirname,
@@ -59,8 +46,6 @@ export async function setupVite(app: Express, server: Server) {
         "client",
         "index.html",
       );
-
-      // always reload the index.html file from disk incase it changes
       let template = await fs.promises.readFile(clientTemplate, "utf-8");
       template = template.replace(
         `src="/src/main.tsx"`,
@@ -72,22 +57,5 @@ export async function setupVite(app: Express, server: Server) {
       vite.ssrFixStacktrace(e as Error);
       next(e);
     }
-  });
-}
-
-export function serveStatic(app: Express) {
-  const distPath = path.resolve(import.meta.dirname, "..", "dist", "public");
-
-  if (!fs.existsSync(distPath)) {
-    throw new Error(
-      `Could not find the build directory: ${distPath}, make sure to build the client first`,
-    );
-  }
-
-  app.use(express.static(distPath));
-
-  // fall through to index.html if the file doesn't exist
-  app.use("*", (_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
   });
 }

@@ -12,3 +12,6 @@ vite.config.ts.*
 client/.env
 client/.env.local
 client/.env.*.local
+
+# Local/build artifacts (do not deploy)
+api/server.bundle.js

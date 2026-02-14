@@ -4,7 +4,7 @@ import { appendFileSync, existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { log, serveStatic } from "./static";
 
 const app = express();
 // #region agent log - middleware to see if any POST to generate-visualization reaches Express
@@ -76,6 +76,7 @@ async function createApp() {
   });
 
   if (process.env.NODE_ENV === "development" || !process.env.NODE_ENV) {
+    const { setupVite } = await import("./vite");
     await setupVite(app, server);
   } else {
     serveStatic(app);
