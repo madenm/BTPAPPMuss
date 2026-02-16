@@ -1,0 +1,26 @@
+[build]
+  # Contourne le bug npm des optionalDependencies (lockfile généré sur Windows
+  # n'installe pas les binaires Linux). Installation propre puis build.
+  command = "rm -rf node_modules package-lock.json && npm install && npm run build"
+  publish = "dist/public"
+  functions = "netlify/functions"
+
+[functions]
+  included_files = ["./dist/index.js"]
+  [functions.server]
+    environment = { NETLIFY = "1" }
+    node_bundler = "esbuild"
+
+# Toutes les requêtes /api/* sont envoyées à la fonction serverless Express
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/server"
+  status = 200
+  force = true
+
+# SPA : tout le reste sert index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+  force = false
