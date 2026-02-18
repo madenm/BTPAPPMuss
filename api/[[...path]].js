@@ -38,9 +38,6 @@ export default async function handler(req, res) {
   }
   const method = (req.method || "GET").toUpperCase();
   const pathnameOnly = pathForExpress.split("?")[0];
-  // #region agent log
-  fetch("http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "api/[[...path]].js:handler", message: "Vercel handler", data: { rawUrl, reqMethod: method, pathForExpress, pathnameOnly }, timestamp: Date.now(), hypothesisId: "H2", runId: "run1" }) }).catch(() => {});
-  // #endregion
 
   let parsedBody = undefined;
   const contentType = (req.headers && (req.headers["content-type"] || req.headers["Content-Type"])) || "";
@@ -66,7 +63,11 @@ export default async function handler(req, res) {
   const wrappedReq = Object.create(req, descriptor);
 
   return new Promise((resolve, reject) => {
-    app(wrappedReq, res, (err) => (err ? reject(err) : resolve(undefined)));
+    res.on("finish", () => resolve(undefined));
+    res.on("error", reject);
+    app(wrappedReq, res, (err) => {
+      if (err) reject(err);
+    });
   });
 }
 

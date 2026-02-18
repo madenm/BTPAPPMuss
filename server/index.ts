@@ -75,7 +75,10 @@ async function createApp() {
     throw err;
   });
 
-  if (process.env.NODE_ENV === "development" || !process.env.NODE_ENV) {
+  const isVercel = process.env.VERCEL === "1";
+  if (isVercel) {
+    // Sur Vercel, le CDN sert les fichiers statiques (outputDirectory). La function ne gère que /api/*
+  } else if (process.env.NODE_ENV === "development" || !process.env.NODE_ENV) {
     const { setupVite } = await import("./vite");
     await setupVite(app, server);
   } else {

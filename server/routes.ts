@@ -947,7 +947,7 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
         process.env.SENDER_EMAIL ||
         process.env.BREVO_FROM ||
         "";
-      const senderName = process.env.SENDER_NAME || "Aos Rénov";
+      const senderName = process.env.SENDER_NAME || "TitanBtp";
       if (!senderEmail) {
         res.status(400).json({
           message:
@@ -1069,7 +1069,7 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
         process.env.SENDER_EMAIL ||
         process.env.BREVO_FROM ||
         "";
-      const senderName = process.env.SENDER_NAME || "Aos Rénov";
+      const senderName = process.env.SENDER_NAME || "TitanBtp";
       if (!senderEmail) {
         res.status(400).json({
           message: "SENDER_EMAIL ou BREVO_FROM requis pour Brevo.",
@@ -1586,7 +1586,7 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
 
       if (brevoApiKey) {
         const senderEmail = process.env.SENDER_EMAIL || process.env.BREVO_FROM || "";
-        const senderName = process.env.SENDER_NAME || "Aos Rénov";
+        const senderName = process.env.SENDER_NAME || "TitanBtp";
         if (!senderEmail) {
           res.status(400).json({ message: "SENDER_EMAIL requis pour Brevo" });
           return;
