@@ -73,22 +73,22 @@ async function createApp() {
   });
 
   const isVercel = process.env.VERCEL === "1";
+  const isDev = process.env.NODE_ENV === "development" || !process.env.NODE_ENV;
 
   if (isVercel) {
     // Sur Vercel : uniquement les routes API (pas de static, pas de Vite).
-    // Réponse 404 JSON pour toute route non gérée.
     app.use((_req: Request, res: Response) => {
       res.status(404).json({ message: "Not Found" });
     });
-  } else if (process.env.NODE_ENV === "development" || !process.env.NODE_ENV) {
-    const { setupVite } = await import("./vite");
-    await setupVite(app, server);
-  } else {
+  } else if (!isDev) {
     serveStatic(app);
   }
+  // En dev, Vite est ajouté par server/dev.ts (évite d'inclure Rollup dans le bundle prod)
 
   return { app, server };
 }
+
+export { createApp };
 
 const initPromise = createApp().catch((err: any) => {
   console.error("\n[server] Erreur au démarrage:", err?.message || err);
@@ -98,7 +98,8 @@ const initPromise = createApp().catch((err: any) => {
 
 const appPromise = initPromise.then(({ app }) => app);
 
-if (process.env.VERCEL !== "1" && process.env.NETLIFY !== "1") {
+// En prod seulement (dev utilise server/dev.ts qui fait le listen après setupVite)
+if (process.env.VERCEL !== "1" && process.env.NETLIFY !== "1" && process.env.NODE_ENV === "production") {
   initPromise.then(({ server }) => {
     const port = parseInt(process.env.PORT || "5000", 10);
     const finalPort = isNaN(port) || port <= 0 ? 5000 : port;
