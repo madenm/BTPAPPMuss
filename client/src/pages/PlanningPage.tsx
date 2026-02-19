@@ -162,11 +162,11 @@ export default function PlanningPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-white border-b border-gray-200 px-2 py-3 sm:px-6 sm:py-4 rounded-tl-3xl ml-0 md:ml-20">
+      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
-          <div className="min-w-0 w-full sm:flex-1 max-md:pl-14">
-            <h1 className="text-lg sm:text-2xl font-bold text-gray-900 sm:truncate">Planning des Chantiers</h1>
-            <p className="text-xs sm:text-sm text-gray-600 sm:truncate">Calendrier intégré pour organiser vos interventions</p>
+          <div className="min-w-0 w-full sm:flex-1 max-md:pl-16">
+            <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">Planning des Chantiers</h1>
+            <p className="text-xs sm:text-sm text-white/70 sm:truncate">Calendrier intégré pour organiser vos interventions</p>
           </div>
           <div className="flex-shrink-0 w-full sm:w-auto">
             <UserAccountButton variant="inline" />
@@ -174,16 +174,16 @@ export default function PlanningPage() {
         </div>
       </header>
 
-      <main className="flex-1 px-2 py-4 sm:p-6 space-y-4 sm:space-y-6 ml-0 md:ml-20 overflow-x-hidden">
+      <main className="flex-1 px-4 py-4 sm:p-6 space-y-4 sm:space-y-6 overflow-x-hidden">
         {/* Contrôles du calendrier */}
-        <Card className="bg-white border border-gray-200 text-gray-900 min-w-0 overflow-hidden">
-          <CardHeader className="px-2 sm:px-6">
+        <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white min-w-0 overflow-hidden">
+          <CardHeader className="px-4 sm:px-6">
             <div className="flex items-center justify-between flex-wrap gap-3 sm:gap-4 min-w-0">
               <div className="flex items-center gap-4">
                 <button
                   type="button"
                   onClick={goToPreviousMonth}
-                  className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                  className="p-2 rounded-lg text-white hover:bg-white/10 transition-colors"
                   aria-label="Mois précédent"
                 >
                   <ChevronLeft className="h-5 w-5" />
@@ -198,18 +198,18 @@ export default function PlanningPage() {
                   <PopoverTrigger asChild>
                     <button
                       type="button"
-                      className="text-xl font-semibold text-left hover:opacity-90 transition-opacity text-gray-900"
+                      className="text-xl font-semibold text-left hover:opacity-90 transition-opacity text-white"
                       aria-label="Changer la période"
                     >
                       {monthNames[month]} {year}
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent align="start" className="w-56 bg-white border border-gray-200 text-gray-900 shadow-lg p-3">
+                  <PopoverContent align="start" className="w-56 bg-black/90 backdrop-blur-xl border border-white/10 text-white shadow-lg p-3">
                     <div className="flex items-center justify-between gap-2 mb-3">
                       <button
                         type="button"
                         onClick={() => setPickerYear((y) => Math.max(2020, y - 1))}
-                        className="p-1 rounded hover:bg-gray-100 transition-colors"
+                        className="p-1 rounded text-white hover:bg-white/10 transition-colors"
                         aria-label="Année précédente"
                       >
                         <ChevronLeft className="h-4 w-4" />
@@ -218,7 +218,7 @@ export default function PlanningPage() {
                       <button
                         type="button"
                         onClick={() => setPickerYear((y) => Math.min(2030, y + 1))}
-                        className="p-1 rounded hover:bg-gray-100 transition-colors"
+                        className="p-1 rounded text-white hover:bg-white/10 transition-colors"
                         aria-label="Année suivante"
                       >
                         <ChevronRight className="h-4 w-4" />
@@ -233,7 +233,7 @@ export default function PlanningPage() {
                             setCurrentDate(new Date(pickerYear, i, 1));
                             setPeriodPickerOpen(false);
                           }}
-                          className={`px-2 py-1.5 rounded text-sm text-left hover:bg-gray-100 transition-colors ${i === month && pickerYear === year ? 'bg-gray-100' : ''}`}
+                          className={`px-2 py-1.5 rounded text-sm text-left text-white hover:bg-white/10 transition-colors ${i === month && pickerYear === year ? 'bg-white/20' : ''}`}
                         >
                           {name}
                         </button>
@@ -244,7 +244,7 @@ export default function PlanningPage() {
                 <button
                   type="button"
                   onClick={goToNextMonth}
-                  className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                  className="p-2 rounded-lg text-white hover:bg-white/10 transition-colors"
                   aria-label="Mois suivant"
                 >
                   <ChevronRight className="h-5 w-5" />
@@ -256,7 +256,7 @@ export default function PlanningPage() {
                     type="button"
                     onClick={() => setViewMode('list')}
                     className={`px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors ${
-                      viewMode === 'list' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      viewMode === 'list' ? 'bg-violet-500 text-white' : 'bg-white/10 text-white hover:bg-white/20 border border-white/10'
                     }`}
                   >
                     <List className="h-4 w-4" />
@@ -266,7 +266,7 @@ export default function PlanningPage() {
                     type="button"
                     onClick={() => setViewMode('calendar')}
                     className={`px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors ${
-                      viewMode === 'calendar' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      viewMode === 'calendar' ? 'bg-violet-500 text-white' : 'bg-white/10 text-white hover:bg-white/20 border border-white/10'
                     }`}
                   >
                     <CalendarDays className="h-4 w-4" />
@@ -275,7 +275,7 @@ export default function PlanningPage() {
                 </div>
                 <button
                   onClick={goToToday}
-                  className="px-4 py-2 rounded-lg bg-gray-100 text-gray-900 hover:bg-gray-200 border border-gray-300 transition-colors text-sm"
+                  className="px-4 py-2 rounded-lg bg-white/10 text-white hover:bg-white/20 border border-white/10 transition-colors text-sm"
                 >
                   Aujourd'hui
                 </button>

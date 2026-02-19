@@ -165,9 +165,9 @@ export default function InvoicesPage() {
 
   return (
     <PageWrapper>
-      <main className="flex-1 p-4 sm:p-6 space-y-6 ml-0 md:ml-20 overflow-x-hidden">
+      <main className="flex-1 p-4 sm:p-6 space-y-6 overflow-x-hidden">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0 sm:flex-nowrap">
-          <div className="min-w-0 w-full sm:flex-1 max-md:pl-14">
+          <div className="min-w-0 w-full sm:flex-1 max-md:pl-16">
             <h1 className="text-lg sm:text-3xl font-bold text-white sm:truncate">Factures</h1>
             <p className="text-white/70 mt-1 text-xs sm:text-base sm:truncate">Gérez vos factures et paiements</p>
           </div>

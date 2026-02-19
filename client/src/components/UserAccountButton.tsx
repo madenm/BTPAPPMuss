@@ -39,9 +39,14 @@ export function UserAccountButton({ variant = 'fixed' }: UserAccountButtonProps)
       // Calculer la position du dropdown avant de l'ouvrir
       if (buttonRef.current && variant === 'inline') {
         const rect = buttonRef.current.getBoundingClientRect();
+        const dropdownWidth = 256; // w-64
+        const padding = 8;
+        let right = window.innerWidth - rect.right;
+        // Garder le dropdown dans le viewport (éviter débordement à gauche sur smartphone)
+        right = Math.max(padding, Math.min(right, window.innerWidth - dropdownWidth - padding));
         setDropdownPosition({
           top: rect.bottom + 8, // mt-2 = 8px
-          right: window.innerWidth - rect.right,
+          right,
         });
       }
     }

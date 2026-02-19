@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient';
+import { supabase, isSupabaseTableMissing } from './supabaseClient';
 
 export interface PlanningNote {
   id: string;
@@ -35,6 +35,7 @@ export async function fetchPlanningNotesForRange(
     .order('note_date', { ascending: true });
 
   if (error) {
+    if (isSupabaseTableMissing(error)) return [];
     console.error('Error fetching planning notes:', error);
     return [];
   }
@@ -56,6 +57,7 @@ export async function fetchPlanningNoteForDate(
     .maybeSingle();
 
   if (error) {
+    if (isSupabaseTableMissing(error)) return null;
     console.error('Error fetching planning note:', error);
     return null;
   }

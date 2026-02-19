@@ -31,11 +31,11 @@ export interface PlanningCalendarViewProps {
   onSaveNote?: (noteDate: string, content: string) => void | Promise<void>;
 }
 
-// Pastel Notion badge styles
+// Badge styles cohérents avec le thème sombre du site
 const STATUT_STYLES = {
-  planifié: { bg: 'bg-[#F0F5FF]', text: 'text-[#3B82F6]', emoji: '⏳', label: 'Planifié' },
-  'en cours': { bg: 'bg-[#FFFAF0]', text: 'text-[#FBBF24]', emoji: '🔄', label: 'En cours' },
-  terminé: { bg: 'bg-[#F0FDF4]', text: 'text-[#10B981]', emoji: '✅', label: 'Terminé' },
+  planifié: { bg: 'bg-blue-500/20', text: 'text-blue-300', emoji: '⏳', label: 'Planifié' },
+  'en cours': { bg: 'bg-amber-500/20', text: 'text-amber-300', emoji: '🔄', label: 'En cours' },
+  terminé: { bg: 'bg-green-500/20', text: 'text-green-300', emoji: '✅', label: 'Terminé' },
 } as const;
 
 function getStatutStyle(statut: Chantier['statut']) {
@@ -75,9 +75,9 @@ function ChantierBlockCompact({
             if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
           }}
           className={
-            'w-full rounded-none p-2 cursor-pointer transition-all duration-200 ' +
+            'w-full rounded-lg p-2 cursor-pointer transition-all duration-200 border border-white/10 ' +
             style.bg +
-            ' hover:bg-opacity-90 hover:shadow-[0_1px_2px_rgba(0,0,0,0.05)] ' +
+            ' hover:bg-white/10 ' +
             (isUpdating ? 'opacity-60 pointer-events-none' : '')
           }
         >
@@ -86,8 +86,8 @@ function ChantierBlockCompact({
               {icon}
             </span>
             <div className="min-w-0 flex-1 w-full">
-              <div className="font-medium text-sm text-gray-900 truncate">{chantier.nom}</div>
-              <div className="font-normal text-xs text-gray-500 truncate">{chantier.clientName}</div>
+              <div className="font-medium text-sm text-white truncate">{chantier.nom}</div>
+              <div className="font-normal text-xs text-white/60 truncate">{chantier.clientName}</div>
               <div className="mt-1 w-full min-w-0">
                 <span
                   className={
@@ -101,21 +101,21 @@ function ChantierBlockCompact({
           </div>
         </div>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="bg-white border border-gray-200 text-gray-900 shadow-lg">
-        <DropdownMenuItem onSelect={() => handleStatusChange('planifié')} className="focus:bg-gray-100 focus:text-gray-900">
+      <DropdownMenuContent align="start" className="bg-black/90 backdrop-blur-xl border border-white/10 text-white shadow-lg">
+        <DropdownMenuItem onSelect={() => handleStatusChange('planifié')} className="focus:bg-white/10 focus:text-white text-white">
           {chantier.statut === 'planifié' ? <Check className="mr-2 h-4 w-4" /> : null}
           Planifié
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => handleStatusChange('en cours')} className="focus:bg-gray-100 focus:text-gray-900">
+        <DropdownMenuItem onSelect={() => handleStatusChange('en cours')} className="focus:bg-white/10 focus:text-white text-white">
           {chantier.statut === 'en cours' ? <Check className="mr-2 h-4 w-4" /> : null}
           En cours
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => handleStatusChange('terminé')} className="focus:bg-gray-100 focus:text-gray-900">
+        <DropdownMenuItem onSelect={() => handleStatusChange('terminé')} className="focus:bg-white/10 focus:text-white text-white">
           {chantier.statut === 'terminé' ? <Check className="mr-2 h-4 w-4" /> : null}
           Terminé
         </DropdownMenuItem>
-        <DropdownMenuSeparator className="bg-gray-200" />
-        <DropdownMenuItem onSelect={() => { onEditChantier(chantier); onCloseDayPopover?.(); }} className="focus:bg-gray-100 focus:text-gray-900">
+        <DropdownMenuSeparator className="bg-white/10" />
+        <DropdownMenuItem onSelect={() => { onEditChantier(chantier); onCloseDayPopover?.(); }} className="focus:bg-white/10 focus:text-white text-white">
           <Pencil className="mr-2 h-4 w-4" />
           Modifier le chantier
         </DropdownMenuItem>
@@ -144,7 +144,7 @@ function ChantierBlockModal({
   return (
     <div
       className={
-        'rounded-lg p-3 bg-gray-50/50 hover:bg-gray-50 transition-colors duration-200 ' +
+        'rounded-lg p-3 bg-white/5 border border-white/10 hover:bg-white/10 transition-colors duration-200 ' +
         (isUpdating ? 'opacity-60 pointer-events-none' : '')
       }
     >
@@ -153,8 +153,8 @@ function ChantierBlockModal({
           {icon}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="font-medium text-sm text-gray-900">{chantier.nom}</div>
-          <div className="font-normal text-xs text-gray-500 mt-0.5">{chantier.clientName}</div>
+          <div className="font-medium text-sm text-white">{chantier.nom}</div>
+          <div className="font-normal text-xs text-white/60 mt-0.5">{chantier.clientName}</div>
           <span className={'inline-flex items-center gap-1 mt-2 px-2 py-0.5 rounded text-xs font-medium ' + style.bg + ' ' + style.text}>
             {style.emoji} {style.label}
           </span>
@@ -163,22 +163,22 @@ function ChantierBlockModal({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="text-xs bg-white hover:bg-gray-100 border border-gray-200 px-2 py-1.5 rounded text-gray-700 font-medium transition-colors"
+                  className="text-xs bg-white/10 hover:bg-white/20 border border-white/20 px-2 py-1.5 rounded text-white font-medium transition-colors"
                   onClick={(e) => e.stopPropagation()}
                 >
                   Changer statut
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="bg-white border border-gray-200">
-                <DropdownMenuItem onSelect={() => { onStatusChange(chantier, 'planifié'); onClosePopover(); }}>
+              <DropdownMenuContent align="start" className="bg-black/90 backdrop-blur-xl border border-white/10 text-white">
+                <DropdownMenuItem onSelect={() => { onStatusChange(chantier, 'planifié'); onClosePopover(); }} className="text-white focus:bg-white/10">
                   {chantier.statut === 'planifié' ? <Check className="mr-2 h-4 w-4" /> : null}
                   Planifié
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => { onStatusChange(chantier, 'en cours'); onClosePopover(); }}>
+                <DropdownMenuItem onSelect={() => { onStatusChange(chantier, 'en cours'); onClosePopover(); }} className="text-white focus:bg-white/10">
                   {chantier.statut === 'en cours' ? <Check className="mr-2 h-4 w-4" /> : null}
                   En cours
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => { onStatusChange(chantier, 'terminé'); onClosePopover(); }}>
+                <DropdownMenuItem onSelect={() => { onStatusChange(chantier, 'terminé'); onClosePopover(); }} className="text-white focus:bg-white/10">
                   {chantier.statut === 'terminé' ? <Check className="mr-2 h-4 w-4" /> : null}
                   Terminé
                 </DropdownMenuItem>
@@ -186,7 +186,7 @@ function ChantierBlockModal({
             </DropdownMenu>
             <button
               type="button"
-              className="text-xs bg-white hover:bg-gray-100 border border-gray-200 px-2 py-1.5 rounded text-gray-700 font-medium transition-colors"
+              className="text-xs bg-white/10 hover:bg-white/20 border border-white/20 px-2 py-1.5 rounded text-white font-medium transition-colors"
               onClick={(e) => {
                 e.stopPropagation();
                 onEditChantier(chantier);
@@ -233,18 +233,18 @@ export function PlanningCalendarView({
   }, [onSaveNote, draftNote, closeDayPopover]);
 
   return (
-    <Card className="bg-white border border-[#E5E7EB] text-gray-900 shadow-none min-w-0 overflow-hidden">
+    <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white shadow-none min-w-0 overflow-hidden">
       <CardContent className="px-2 py-4 sm:p-5">
-        {/* Legend - Notion style */}
-        <div className="text-xs text-gray-600 pb-2 tracking-wide">
+        {/* Légende */}
+        <div className="text-xs text-white/70 pb-2 tracking-wide">
           <span>⏳ Planifié</span>
-          <span className="mx-3 text-gray-400">|</span>
+          <span className="mx-3 text-white/40">|</span>
           <span>🔄 En cours</span>
-          <span className="mx-3 text-gray-400">|</span>
+          <span className="mx-3 text-white/40">|</span>
           <span>✅ Terminé</span>
         </div>
         {onSaveNote && (
-          <p className="text-xs text-gray-500 pb-4">
+          <p className="text-xs text-white/60 pb-4">
             📌 <strong>Notes :</strong> cliquez sur un jour pour ajouter une note (ex. intervenant, démarrage chantier, réunion…).
           </p>
         )}
@@ -252,17 +252,17 @@ export function PlanningCalendarView({
         {/* Mobile: grille 7 colonnes qui tient en largeur, cellules simplifiées. Desktop: grille avec scroll si besoin, contenu détaillé. */}
         <div className="md:overflow-x-auto md:-mx-5 md:px-0">
           <div className="md:min-w-[630px] md:pr-5">
-            {/* Week header */}
-            <div className="grid grid-cols-7 gap-0 border-b border-[#E5E7EB] bg-[#FAFBFC] px-1 md:px-5 py-2 md:py-4">
+            {/* En-tête des jours */}
+            <div className="grid grid-cols-7 gap-0 border-b border-white/10 bg-white/5 px-1 md:px-5 py-2 md:py-4">
               {dayNames.map((day) => (
-                <div key={day} className="text-center text-[10px] md:text-sm font-semibold text-gray-700 tracking-wide border-r border-[#E5E7EB]/70 last:border-r-0 min-w-0">
+                <div key={day} className="text-center text-[10px] md:text-sm font-semibold text-white/80 tracking-wide border-r border-white/10 last:border-r-0 min-w-0">
                   {day}
                 </div>
               ))}
             </div>
 
-            {/* Calendar grid */}
-            <div className="grid grid-cols-7 gap-0 mt-1 md:mt-4 border-t border-[#E5E7EB]">
+            {/* Grille du calendrier */}
+            <div className="grid grid-cols-7 gap-0 mt-1 md:mt-4 border-t border-white/10">
           {days.map((day, index) => {
             if (day.isPlaceholder) {
               const isLastInRow = index % 7 === 6;
@@ -270,7 +270,7 @@ export function PlanningCalendarView({
                 <div
                   key={index}
                   className={
-                    'relative min-h-[52px] md:min-h-[140px] bg-[#FAFAFA] border-r border-[#E5E7EB]/70 ' +
+                    'relative min-h-[52px] md:min-h-[140px] bg-white/5 border-r border-white/10 ' +
                     (isLastInRow ? 'border-r-0' : '')
                   }
                   aria-hidden
@@ -287,18 +287,18 @@ export function PlanningCalendarView({
 
             const isLastInRow = index % 7 === 6;
             const cellClass =
-              'relative min-h-[52px] md:min-h-[140px] py-1 md:py-2 px-0.5 md:px-1 transition-all duration-200 cursor-pointer border-r border-[#E5E7EB]/70 ' +
+              'relative min-h-[52px] md:min-h-[140px] py-1 md:py-2 px-0.5 md:px-1 transition-all duration-200 cursor-pointer border-r border-white/10 ' +
               (isLastInRow ? 'border-r-0 ' : '') +
-              'hover:bg-[#F9FAFB]/50 ' +
+              'hover:bg-white/10 ' +
               (day.isCurrentMonth
                 ? isToday
-                  ? 'bg-white/80 border-l-2 md:border-l-[3px] border-l-red-500'
-                  : 'bg-white'
-                : 'bg-[#F9FAFB]');
+                  ? 'bg-white/10 border-l-2 md:border-l-[3px] border-l-violet-400'
+                  : 'bg-white/5'
+                : 'bg-white/[0.03]');
 
             const dayNumClass =
               'font-semibold text-xs md:text-base md:mb-2 ' +
-              (day.isCurrentMonth ? 'text-gray-900' : 'text-gray-300');
+              (day.isCurrentMonth ? 'text-white' : 'text-white/40');
 
             return (
               <Popover
@@ -323,7 +323,7 @@ export function PlanningCalendarView({
                       </div>
                       {onSaveNote && (
                         <StickyNote
-                          className={`h-3 w-3 md:h-3.5 md:w-3.5 shrink-0 ${hasNote ? 'text-amber-600' : 'text-gray-300 hover:text-amber-500'}`}
+                          className={`h-3 w-3 md:h-3.5 md:w-3.5 shrink-0 ${hasNote ? 'text-amber-400' : 'text-white/40 hover:text-amber-400'}`}
                           aria-label={hasNote ? 'Note du jour' : 'Cliquer pour ajouter une note'}
                           title={hasNote ? 'Note du jour' : 'Cliquer pour ajouter une note'}
                         />
@@ -333,7 +333,7 @@ export function PlanningCalendarView({
                     {/* Mobile uniquement : résumé compact (nombre de chantiers), clic ouvre le popover */}
                     <div className="md:hidden min-w-0">
                       {dayChantiers.length > 0 ? (
-                        <div className="text-[10px] font-medium text-gray-500 truncate" title={`${dayChantiers.length} chantier(s)`}>
+                        <div className="text-[10px] font-medium text-white/60 truncate" title={`${dayChantiers.length} chantier(s)`}>
                           {dayChantiers.length} chant.
                         </div>
                       ) : null}
@@ -351,7 +351,7 @@ export function PlanningCalendarView({
                         />
                       ))}
                       {moreCount > 0 && (
-                        <div className="text-xs font-medium text-gray-500 pt-1 px-1">
+                        <div className="text-xs font-medium text-white/60 pt-1 px-1">
                           +{moreCount} autre{moreCount > 1 ? 's' : ''}
                         </div>
                       )}
@@ -360,17 +360,17 @@ export function PlanningCalendarView({
                 </PopoverTrigger>
                 <PopoverContent
                   align="start"
-                  className="w-80 max-h-[32rem] overflow-y-auto p-5 bg-white border border-[#E5E7EB] rounded-lg shadow-[0_4px_6px_rgba(0,0,0,0.07)]"
+                  className="w-80 max-h-[32rem] overflow-y-auto p-5 bg-black/90 backdrop-blur-xl border border-white/10 text-white rounded-lg shadow-xl"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="flex items-start justify-between gap-2 mb-4">
-                    <div className="text-sm font-semibold text-gray-900">
+                    <div className="text-sm font-semibold text-white">
                       {day.date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
                     </div>
                     <button
                       type="button"
                       onClick={closeDayPopover}
-                      className="p-1 rounded-md hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"
+                      className="p-1 rounded-md hover:bg-white/10 text-white/70 hover:text-white transition-colors"
                       aria-label="Fermer"
                     >
                       <X className="h-4 w-4" />
@@ -379,12 +379,12 @@ export function PlanningCalendarView({
 
                   {/* Notes du jour - bien visible en premier */}
                   {onSaveNote && (
-                    <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200/60">
-                      <label className="text-sm font-medium text-amber-800 flex items-center gap-1.5 mb-2">
-                        <StickyNote className="h-4 w-4 text-amber-600" />
+                    <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-400/30">
+                      <label className="text-sm font-medium text-amber-300 flex items-center gap-1.5 mb-2">
+                        <StickyNote className="h-4 w-4 text-amber-400" />
                         Note du jour
                       </label>
-                      <p className="text-xs text-amber-700/90 mb-2">
+                      <p className="text-xs text-white/70 mb-2">
                         Indiquez par ex. qui intervient, quel chantier démarre, un rappel…
                       </p>
                       <Textarea
@@ -394,13 +394,13 @@ export function PlanningCalendarView({
                         onBlur={() => {
                           if (selectedDayIndex === index) handleSaveDayNote(noteDateKey);
                         }}
-                        className="min-h-[80px] text-sm resize-y bg-white border-amber-200 focus:border-amber-400"
+                        className="min-h-[80px] text-sm resize-y bg-black/20 border-white/20 text-white placeholder:text-white/40 focus:border-amber-400/50"
                         rows={3}
                       />
                       <Button
                         type="button"
                         size="sm"
-                        className="mt-2 bg-amber-600 hover:bg-amber-700 text-white"
+                        className="mt-2 bg-amber-500/30 hover:bg-amber-500/50 text-amber-100 border border-amber-400/30"
                         onClick={() => handleSaveDayNote(noteDateKey)}
                       >
                         Enregistrer la note
@@ -409,7 +409,7 @@ export function PlanningCalendarView({
                   )}
 
                   {dayChantiers.length === 0 ? (
-                    <p className="text-xs text-gray-500">Aucun chantier ce jour</p>
+                    <p className="text-xs text-white/60">Aucun chantier ce jour</p>
                   ) : (
                     <div className="space-y-3">
                       {dayChantiers.map((chantier) => (

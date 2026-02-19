@@ -1,6 +1,5 @@
-import { supabase } from "./supabaseClient";
+import { supabase, isSupabaseTableMissing } from "./supabaseClient";
 import type { Chantier } from "@/context/ChantiersContext";
-import { debugIngest } from "./debugIngest";
 
 // Types de chantier (alignés sur les types de projet des devis)
 export type TypeChantier = "piscine" | "paysage" | "menuiserie" | "renovation" | "plomberie" | "maconnerie" | "terrasse" | "chauffage" | "isolation" | "electricite" | "peinture" | "autre";
@@ -67,6 +66,7 @@ export async function fetchChantiersForUser(userId: string): Promise<Chantier[]>
     .order("created_at", { ascending: false });
 
   if (error) {
+    if (isSupabaseTableMissing(error)) return [];
     console.error("Error fetching chantiers:", error);
     throw error;
   }
@@ -78,7 +78,6 @@ export async function fetchChantiersForUser(userId: string): Promise<Chantier[]>
 
 /** Charge les chantiers assignés à un membre d'équipe (utilisé sans session Supabase). */
 export async function fetchChantiersForTeamMember(teamMemberId: string): Promise<Chantier[]> {
-  debugIngest({ location: 'supabaseChantiers.ts:fetchChantiersForTeamMember:entry', message: 'RPC call for team member', data: { teamMemberId }, sessionId: 'debug-session', hypothesisId: 'A,B' });
   const { data, error } = await supabase.rpc("get_chantiers_for_team_member", {
     p_team_member_id: teamMemberId,
   });
@@ -89,9 +88,7 @@ export async function fetchChantiersForTeamMember(teamMemberId: string): Promise
   }
 
   const rawArray = Array.isArray(data) ? data : (data == null ? [] : [data]);
-  const result = rawArray.map((row: SupabaseChantier) => mapFromSupabase(row));
-  debugIngest({ location: 'supabaseChantiers.ts:fetchChantiersForTeamMember:exit', message: 'RPC result', data: { isArray: Array.isArray(data), rawLength: rawArray.length, ids: result.map((c) => c.id), resultLength: result.length }, sessionId: 'debug-session', hypothesisId: 'A,B,E' });
-  return result;
+  return rawArray.map((row: SupabaseChantier) => mapFromSupabase(row));
 }
 
 export async function insertChantier(

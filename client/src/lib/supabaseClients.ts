@@ -1,4 +1,4 @@
-import { supabase } from "./supabaseClient";
+import { supabase, isSupabaseTableMissing } from "./supabaseClient";
 
 export interface Client {
   id: string;
@@ -59,6 +59,7 @@ export async function fetchClientsForUser(userId: string): Promise<Client[]> {
     .order("created_at", { ascending: false });
 
   if (error) {
+    if (isSupabaseTableMissing(error)) return [];
     console.error("Error fetching clients:", error);
     throw error;
   }

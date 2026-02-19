@@ -29,7 +29,6 @@ import { InvoiceDialog } from '@/components/InvoiceDialog';
 import { Receipt, Check, Trash2, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { DeleteChantierConfirmDialog } from '@/components/DeleteChantierConfirmDialog';
-import { debugIngest } from '@/lib/debugIngest';
 
 // Format montant en euros (FR)
 function formatMontantEuro(value?: number | null): string {
@@ -676,9 +675,6 @@ export default function ProjectsPage() {
     setChantierInvoicesLoading(true);
     fetchQuotesByChantierId(selectedChantier.id)
       .then((quotes) => {
-        // #region agent log
-        debugIngest({ location: 'ProjectsPage.tsx:fetchQuotesByChantierId:result', message: 'Quotes loaded', data: { chantierId: selectedChantier.id, quotesCount: quotes.length, quotesStatuses: quotes.map(q => ({ id: q.id, status: q.status })) }, sessionId: 'debug-session', hypothesisId: 'E' });
-        // #endregion
         setChantierQuotes(quotes);
       })
       .catch(() => setChantierQuotes([]))
@@ -709,9 +705,9 @@ export default function ProjectsPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl ml-0 md:ml-20">
+      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
-          <div className="min-w-0 w-full sm:flex-1 max-md:pl-14">
+          <div className="min-w-0 w-full sm:flex-1 max-md:pl-16">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
               Mes Chantiers
             </h1>
@@ -1048,7 +1044,7 @@ export default function ProjectsPage() {
 
       {/* Barre recherche + filtres + tri */}
       {chantiers.length > 0 && (
-        <div className="px-4 sm:px-6 pt-4 pb-2 ml-0 md:ml-20 space-y-3">
+        <div className="px-4 sm:px-6 pt-4 pb-2 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative flex-1 min-w-0 w-full sm:min-w-[200px] sm:max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
@@ -1741,7 +1737,7 @@ export default function ProjectsPage() {
         </DialogContent>
       </Dialog>
 
-      <main className="flex-1 p-4 sm:p-6 ml-0 md:ml-20">
+      <main className="flex-1 p-4 sm:p-6">
         {loading ? (
           <div className="flex items-center justify-center h-full text-white">
             Chargement des chantiers...

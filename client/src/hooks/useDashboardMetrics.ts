@@ -4,7 +4,6 @@ import { useChantiers } from "@/context/ChantiersContext";
 import { fetchQuotesForUser } from "@/lib/supabaseQuotes";
 import { fetchRevenuesByPeriod } from "@/lib/supabaseRevenues";
 import { fetchInvoicesForUser } from "@/lib/supabaseInvoices";
-import { debugIngest } from "@/lib/debugIngest";
 
 export interface DashboardMetrics {
   totalRevenue: number;
@@ -57,9 +56,13 @@ export function useDashboardMetrics(): DashboardMetrics {
           (c) => c.statut === "en cours",
         ).length;
 
-        // Charger les devis
-        const allQuotes = await fetchQuotesForUser(user.id);
-        debugIngest({ location: 'useDashboardMetrics.ts:loadMetrics', message: 'loadMetrics run', data: { userId: user.id, allQuotesCount: allQuotes.length, chantiersLength: chantiers.length }, hypothesisId: 'H4,H5' });
+        // Charger les devis (résilient: en cas d'erreur Supabase/RLS on utilise [])
+        let allQuotes: Awaited<ReturnType<typeof fetchQuotesForUser>> = [];
+        try {
+          allQuotes = await fetchQuotesForUser(user.id);
+        } catch (e) {
+          console.warn("fetchQuotesForUser failed, using empty list:", e);
+        }
         // Devis en attente = au plus un par chantier (chantiers ayant au moins un devis envoyé/brouillon)
         const pendingStatuses = ["envoyé", "brouillon"];
         const pendingQuotesList = allQuotes.filter((q) =>
@@ -76,7 +79,12 @@ export function useDashboardMetrics(): DashboardMetrics {
 
         // Taux de conversion = (factures envoyées / devis envoyés) * 100
         const devisEnvoyes = allQuotes.filter((q) => q.status === "envoyé").length;
-        const invoices = await fetchInvoicesForUser(user.id);
+        let invoices: Awaited<ReturnType<typeof fetchInvoicesForUser>> = [];
+        try {
+          invoices = await fetchInvoicesForUser(user.id);
+        } catch (e) {
+          console.warn("fetchInvoicesForUser failed, using empty list:", e);
+        }
         const facturesEnvoyees = invoices.filter((inv) =>
           ["envoyée", "payée", "partiellement_payée"].includes(inv.status),
         ).length;
@@ -104,10 +112,14 @@ export function useDashboardMetrics(): DashboardMetrics {
           (sum, q) => sum + (Number(q.total_ht) || 0),
           0,
         );
-        debugIngest({ location: 'useDashboardMetrics.ts:CA-calculation', message: 'CA calc', data: { currentYear, currentMonth, acceptedCount: acceptedOrValide.length, includedCount: quotesAcceptedThisMonth.length, totalRevenue, acceptedQuotes: acceptedOrValide.map(q => { const ds = q.accepted_at || q.updated_at || q.created_at; const d = ds ? new Date(ds) : null; return { id: q.id, status: q.status, total_ht: q.total_ht, accepted_at: q.accepted_at, updated_at: q.updated_at, created_at: q.created_at, parsedMonth: d?.getMonth(), parsedYear: d?.getFullYear(), included: d && d.getFullYear() === currentYear && d.getMonth() === currentMonth }; }) }, hypothesisId: 'H1,H2,H3,H5' });
 
-        // Charger l'évolution des revenus (par mois)
-        const revenuesByMonth = await fetchRevenuesByPeriod(user.id, "month");
+        // Charger l'évolution des revenus (par mois) (résilient: table payments peut être absente)
+        let revenuesByMonth: Awaited<ReturnType<typeof fetchRevenuesByPeriod>> = [];
+        try {
+          revenuesByMonth = await fetchRevenuesByPeriod(user.id, "month");
+        } catch (e) {
+          console.warn("fetchRevenuesByPeriod failed, using empty list:", e);
+        }
         const monthNames = [
           "Jan",
           "Fév",

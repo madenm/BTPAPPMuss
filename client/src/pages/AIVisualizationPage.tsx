@@ -17,8 +17,6 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { debugIngest } from '@/lib/debugIngest';
-
 interface UploadedImage {
   file: File;
   preview: string;
@@ -120,7 +118,6 @@ export default function AIVisualizationPage() {
       ? `http://127.0.0.1:${window.location.port || '5000'}`
       : window.location.origin;
     const apiUrl = `${apiBase}/api/generate-visualization`;
-    debugIngest({ location: 'AIVisualizationPage.tsx:generateVisualization', message: 'generateVisualization start', data: { origin: window.location.origin, apiUrl, hostname: window.location.hostname }, hypothesisId: 'H1,H2,H3', runId: 'run4' });
     try {
       let body: { imageUrl?: string; imageBase64?: string; mimeType?: string; projectType: string; style: string };
       if (uploadedImage.preview.startsWith('http')) {
@@ -161,7 +158,6 @@ export default function AIVisualizationPage() {
         toast({ title: 'Erreur', description: 'Réponse invalide du serveur.', variant: 'destructive' });
       }
     } catch (err) {
-      debugIngest({ location: 'AIVisualizationPage.tsx:generateVisualization-catch', message: 'fetch or flow error', data: { errMessage: err instanceof Error ? err.message : String(err), errName: err instanceof Error ? err.name : '' }, hypothesisId: 'H1,H4,H5', runId: 'post-fix' });
       const message = err instanceof Error ? err.message : 'Erreur réseau. Réessayez.';
       const isAbort = err instanceof Error && err.name === 'AbortError';
       setGenerationError(isAbort ? 'Délai dépassé.' : message);
@@ -205,9 +201,9 @@ export default function AIVisualizationPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 ml-0 md:ml-20">
+      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0 sm:flex-nowrap">
-          <div className="min-w-0 w-full sm:flex-1 max-md:pl-14">
+          <div className="min-w-0 w-full sm:flex-1 max-md:pl-16">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
               Visualisation
             </h1>
@@ -226,7 +222,7 @@ export default function AIVisualizationPage() {
         </div>
       </header>
 
-      <main className="flex-1 p-4 sm:p-6 ml-0 md:ml-20 overflow-x-hidden">
+      <main className="flex-1 p-4 sm:p-6 overflow-x-hidden">
           {/* Step 1: Upload */}
           {step === 'upload' && (
             <div className="max-w-2xl mx-auto space-y-6">

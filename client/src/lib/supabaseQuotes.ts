@@ -1,5 +1,4 @@
-import { supabase } from "./supabaseClient";
-import { debugIngest } from "./debugIngest";
+import { supabase, isSupabaseTableMissing } from "./supabaseClient";
 
 export interface QuoteSubItem {
   id: string;
@@ -86,6 +85,7 @@ export async function fetchQuotesForUser(
   const { data, error } = await query;
 
   if (error) {
+    if (isSupabaseTableMissing(error)) return [];
     console.error("Error fetching quotes:", error);
     throw error;
   }
@@ -103,6 +103,7 @@ export async function fetchQuotesByChantierId(
     .order("created_at", { ascending: false });
 
   if (error) {
+    if (isSupabaseTableMissing(error)) return [];
     console.error("Error fetching quotes by chantier:", error);
     throw error;
   }
@@ -122,7 +123,7 @@ export async function fetchQuoteById(
     .single();
 
   if (error || !data) {
-    if (error?.code !== "PGRST116") {
+    if (!isSupabaseTableMissing(error) && error?.code !== "PGRST116") {
       console.error("Error fetching quote by id:", error);
     }
     return null;
@@ -136,7 +137,6 @@ export async function updateQuote(
   quoteId: string,
   payload: NewQuotePayload,
 ): Promise<SupabaseQuote> {
-  debugIngest({ location: 'supabaseQuotes.ts:updateQuote:entry', message: 'updateQuote called', data: { quoteId, status: payload.status, hasStatus: !!payload.status }, sessionId: 'debug-session', hypothesisId: 'B,C' });
   const updateData: any = {
     chantier_id: payload.chantier_id ?? null,
     client_name: payload.client_name,
@@ -157,7 +157,6 @@ export async function updateQuote(
     updateData.status = payload.status;
   }
   
-  debugIngest({ location: 'supabaseQuotes.ts:updateQuote:before-update', message: 'Before Supabase update', data: { updateDataStatus: updateData.status, hasStatus: 'status' in updateData }, sessionId: 'debug-session', hypothesisId: 'B,C' });
   const { data, error } = await supabase
     .from("quotes")
     .update(updateData)
@@ -165,8 +164,6 @@ export async function updateQuote(
     .eq("user_id", userId)
     .select("*")
     .single();
-
-  debugIngest({ location: 'supabaseQuotes.ts:updateQuote:after-update', message: 'After Supabase update', data: { error: error?.message, returnedStatus: data?.status }, sessionId: 'debug-session', hypothesisId: 'B,C' });
 
   if (error || !data) {
     console.error("Error updating quote:", error);

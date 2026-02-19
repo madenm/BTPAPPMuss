@@ -286,9 +286,9 @@ export default function ClientsPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl ml-0 md:ml-20">
+      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
-          <div className="min-w-0 w-full sm:flex-1 max-md:pl-14">
+          <div className="min-w-0 w-full sm:flex-1 max-md:pl-16">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">Gestion des clients</h1>
             <p className="text-xs sm:text-sm text-white/70 sm:truncate">Recherchez, éditez et gérez vos clients</p>
           </div>
@@ -298,7 +298,7 @@ export default function ClientsPage() {
         </div>
       </header>
 
-      <main className="flex-1 p-4 sm:p-6 ml-0 md:ml-20 overflow-x-hidden">
+      <main className="flex-1 p-4 sm:p-6 overflow-x-hidden">
         <div className="space-y-4 mb-6 flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-0 w-full sm:min-w-[200px] sm:max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50 pointer-events-none" />

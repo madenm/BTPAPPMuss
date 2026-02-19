@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Mic, MicOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { debugIngest } from '@/lib/debugIngest';
 
 interface VoiceInputButtonProps {
   onTranscript: (text: string) => void;
@@ -102,9 +101,6 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
 
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
         console.error('Speech recognition error:', event.error);
-        // #region agent log
-        debugIngest({ location: 'VoiceInputButton.tsx:onerror', message: 'Speech recognition error occurred', data: { error: event.error, message: event.message, isListening: isListening, protocol: window.location.protocol }, sessionId: 'debug-session', hypothesisId: 'A,B,C,D,E' });
-        // #endregion
         setIsListening(false);
         
         if (event.error === 'not-allowed') {
@@ -130,9 +126,6 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
       };
 
       recognition.onend = () => {
-        // #region agent log
-        debugIngest({ location: 'VoiceInputButton.tsx:onend', message: 'Recognition ended', data: { wasListening: isListening }, sessionId: 'debug-session', hypothesisId: 'B,E' });
-        // #endregion
         setIsListening(false);
         if (interimTranscriptRef.current) {
           onTranscript(interimTranscriptRef.current);
@@ -148,9 +141,6 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
   }, [onTranscript, isListening]);
 
   useEffect(() => {
-    // #region agent log
-    debugIngest({ location: 'VoiceInputButton.tsx:useEffect:init', message: 'Initializing speech recognition', data: { hasSpeechRecognition: !!window.SpeechRecognition, hasWebkitSpeechRecognition: !!window.webkitSpeechRecognition, protocol: window.location.protocol, hostname: window.location.hostname }, sessionId: 'debug-session', hypothesisId: 'A,D' });
-    // #endregion
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     setIsSupported(!!SpeechRecognition);
 
@@ -168,9 +158,6 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
   }, []);
 
   const toggleListening = () => {
-    // #region agent log
-    debugIngest({ location: 'VoiceInputButton.tsx:toggleListening:entry', message: 'Toggle listening called', data: { isListening, disabled, hasRecognition: !!recognitionRef.current }, sessionId: 'debug-session', hypothesisId: 'B,E' });
-    // #endregion
     if (disabled || !isSupported) return;
 
     try {
@@ -219,19 +206,10 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
         setTimeout(() => {
           if (!recognitionRef.current) return;
           try {
-            // #region agent log
-            debugIngest({ location: 'VoiceInputButton.tsx:toggleListening:beforeStart', message: 'About to start recognition', data: { lang: recognitionRef.current.lang, continuous: recognitionRef.current.continuous }, sessionId: 'debug-session', hypothesisId: 'B,C' });
-            // #endregion
             recognitionRef.current.start();
             setIsListening(true);
-            // #region agent log
-            debugIngest({ location: 'VoiceInputButton.tsx:toggleListening:afterStart', message: 'Recognition started', data: {}, sessionId: 'debug-session', hypothesisId: 'B' });
-            // #endregion
           } catch (startErr) {
             console.error('Error starting recognition:', startErr);
-            // #region agent log
-            debugIngest({ location: 'VoiceInputButton.tsx:toggleListening:startErr', message: 'Exception starting recognition', data: { error: startErr instanceof Error ? startErr.message : String(startErr) }, sessionId: 'debug-session', hypothesisId: 'B,E' });
-            // #endregion
             setIsListening(false);
             recognitionRef.current = null;
             setError('Erreur lors du démarrage');
@@ -241,9 +219,6 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
       }
     } catch (err) {
       console.error('Error toggling speech recognition:', err);
-      // #region agent log
-      debugIngest({ location: 'VoiceInputButton.tsx:toggleListening:catch', message: 'Exception in toggleListening', data: { error: err instanceof Error ? err.message : String(err) }, sessionId: 'debug-session', hypothesisId: 'B,E' });
-      // #endregion
       setError('Erreur lors du démarrage');
       setIsListening(false);
       if (recognitionRef.current) {

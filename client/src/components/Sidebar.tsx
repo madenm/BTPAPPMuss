@@ -83,12 +83,12 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Menu Button - Always visible */}
+      {/* Menu Button - Always visible, aligné avec le contenu sur mobile */}
       <motion.button
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-6 left-6 z-50 p-3 rounded-xl transition-colors shadow-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 max-md:top-[env(safe-area-inset-top,1rem)] max-md:left-4"
+        className="fixed top-6 left-6 z-50 p-3 rounded-xl transition-colors shadow-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 max-md:left-4 max-md:top-[max(1rem,env(safe-area-inset-top))] max-md:min-w-[44px] max-md:min-h-[44px] max-md:flex max-md:items-center max-md:justify-center max-md:[&_svg]:w-5 max-md:[&_svg]:h-5"
       >
         {isOpen ? <X size={24} /> : <Menu size={24} />}
       </motion.button>
@@ -130,18 +130,28 @@ export default function Sidebar() {
           />
         </motion.div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-hidden p-8 pt-20">
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15, type: 'spring', stiffness: 200 }}
-            className="mb-4"
-          >
-            <h2 className="text-3xl font-bold mb-2 text-gray-900 dark:text-white">
-              TitanBtp
-            </h2>
+        {/* Content - défilable si la hauteur ne suffit pas */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-8 pt-20">
+          {/* Header - logo à gauche du titre TitanBtp */}
+          <div className="mb-4">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center" aria-hidden role="img">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" className="h-full w-full" width="48" height="48">
+                  <circle cx="50" cy="50" r="48" fill="#1e3a8a" stroke="#fff" strokeWidth="2"/>
+                  <g fill="#fff">
+                    <rect x="25" y="25" width="50" height="8" rx="2"/>
+                    <rect x="46" y="25" width="8" height="50" rx="2"/>
+                    <path d="M 35 75 L 50 68 L 65 75 Z"/>
+                  </g>
+                  <circle cx="50" cy="29" r="2" fill="#fbbf24"/>
+                  <circle cx="50" cy="45" r="2" fill="#fbbf24"/>
+                  <circle cx="50" cy="60" r="2" fill="#fbbf24"/>
+                </svg>
+              </span>
+              <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
+                TitanBtp
+              </h2>
+            </div>
             <p className="text-sm mb-2 text-gray-600 dark:text-gray-400">
               Construire pour durer
             </p>
@@ -151,7 +161,7 @@ export default function Sidebar() {
               transition={{ delay: 0.3, duration: 0.6, ease: 'easeOut' }}
               className="h-1 rounded bg-violet-600 dark:bg-violet-500"
             />
-          </motion.div>
+          </div>
 
           {/* Navigation Items */}
           <div className="mb-8">

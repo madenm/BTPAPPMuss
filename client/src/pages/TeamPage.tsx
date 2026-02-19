@@ -52,7 +52,6 @@ import {
 import { useChantiers } from '@/context/ChantiersContext';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { debugIngest } from '@/lib/debugIngest';
 import {
   ROLE_DEFAULT_PERMISSIONS,
   ROLE_ICONS,
@@ -200,7 +199,6 @@ export default function TeamPage() {
   };
 
   const handleRoleChange = (role: string, isNew = false) => {
-    debugIngest({ location: 'TeamPage.tsx:handleRoleChange', message: 'Role selected', data: { role, isNew }, hypothesisId: 'H4' });
     const defaults = ROLE_DEFAULT_PERMISSIONS[role] ?? emptyPermissions();
     if (isNew) {
       setNewMember((prev) => ({ ...prev, role, ...defaults }));
@@ -374,9 +372,9 @@ export default function TeamPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-black/10 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl ml-0 md:ml-20">
+      <header className="bg-black/10 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
-          <div className="min-w-0 w-full sm:flex-1 max-md:pl-14">
+          <div className="min-w-0 w-full sm:flex-1 max-md:pl-16">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">Gestion de l&apos;Équipe</h1>
             <p className="text-xs sm:text-sm text-white/70 sm:truncate">Gérez les membres et leurs codes de connexion</p>
           </div>
@@ -507,7 +505,7 @@ export default function TeamPage() {
         </div>
       </header>
 
-      <main className="flex-1 p-4 sm:p-6 space-y-6 ml-0 md:ml-20 overflow-x-hidden">
+      <main className="flex-1 p-4 sm:p-6 space-y-6 overflow-x-hidden">
         {/* Widget Stats */}
         <Card className="bg-white/5 backdrop-blur-xl border border-white/10 text-white">
           <CardHeader>

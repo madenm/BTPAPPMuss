@@ -7,21 +7,6 @@ import { registerRoutes } from "./routes";
 import { log, serveStatic } from "./static";
 
 const app = express();
-// #region agent log - middleware to see if any POST to generate-visualization reaches Express
-app.use((req, res, next) => {
-  if (req.method === "POST" && req.path === "/api/generate-visualization") {
-    console.log("[DEBUG] POST /api/generate-visualization reached Express");
-    try {
-      const logDir = join(process.cwd(), ".cursor");
-      if (!existsSync(logDir)) mkdirSync(logDir, { recursive: true });
-      appendFileSync(join(logDir, "debug.log"), JSON.stringify({ location: "index.ts:api-middleware", message: "POST generate-visualization reached Express", data: { path: req.path }, timestamp: Date.now(), hypothesisId: "H1", runId: "run2" }) + "\n");
-    } catch (e) {
-      console.log("[DEBUG] Failed to write debug.log:", e);
-    }
-  }
-  next();
-});
-// #endregion
 // Limite augmentée pour accepter les PDF en base64 (envoi facture/devis par email)
 // Skip body parsing when body already set (e.g. by Vercel handler) so we don't overwrite or double-consume
 app.use((req, res, next) => {
@@ -75,10 +60,7 @@ async function createApp() {
     throw err;
   });
 
-  const isVercel = process.env.VERCEL === "1";
-  if (isVercel) {
-    // Sur Vercel, le CDN sert les fichiers statiques (outputDirectory). La function ne gère que /api/*
-  } else if (process.env.NODE_ENV === "development" || !process.env.NODE_ENV) {
+  if (process.env.NODE_ENV === "development" || !process.env.NODE_ENV) {
     const { setupVite } = await import("./vite");
     await setupVite(app, server);
   } else {
@@ -96,7 +78,7 @@ const initPromise = createApp().catch((err: any) => {
 
 const appPromise = initPromise.then(({ app }) => app);
 
-if (process.env.VERCEL !== "1") {
+if (process.env.VERCEL !== "1" && process.env.NETLIFY !== "1") {
   initPromise.then(({ server }) => {
     const port = parseInt(process.env.PORT || "5000", 10);
     const finalPort = isNaN(port) || port <= 0 ? 5000 : port;

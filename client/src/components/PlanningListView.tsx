@@ -59,13 +59,13 @@ function formatDateRange(dateDebut: string, duree: string): { label: string; day
 function getStatusBadgeClasses(statut: Chantier['statut']): string {
   switch (statut) {
     case 'planifié':
-      return 'bg-blue-100 text-blue-800 border-blue-200';
+      return 'bg-blue-500/20 text-blue-300 border border-blue-400/30';
     case 'en cours':
-      return 'bg-amber-100 text-amber-800 border-amber-200';
+      return 'bg-amber-500/20 text-amber-300 border border-amber-400/30';
     case 'terminé':
-      return 'bg-green-100 text-green-800 border-green-200';
+      return 'bg-green-500/20 text-green-300 border border-green-400/30';
     default:
-      return 'bg-gray-100 text-gray-800 border-gray-200';
+      return 'bg-white/10 text-white/80 border border-white/20';
   }
 }
 
@@ -102,7 +102,7 @@ export function PlanningListView({
   );
 
   return (
-    <Card className="bg-white border border-gray-200 text-gray-900 min-w-0 overflow-hidden">
+    <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white min-w-0 overflow-hidden">
       <CardHeader className="px-4 sm:px-6">
         <CardTitle className="text-base sm:text-lg break-words">
           CHANTIERS DE {monthLabel.toUpperCase()} {year} ({sortedChantiers.length} chantier{sortedChantiers.length !== 1 ? 's' : ''})
@@ -110,13 +110,13 @@ export function PlanningListView({
       </CardHeader>
       <CardContent className="px-4 sm:px-6 min-w-0">
         {sortedChantiers.length === 0 ? (
-          <div className="text-center py-12 text-gray-600">
+          <div className="text-center py-12 text-white/70">
             <p className="mb-4">Aucun chantier en {monthLabel} {year}.</p>
             {canCreateChantier && (
               <Button
                 variant="outline"
                 onClick={() => setLocation('/dashboard/projects?openDialog=true')}
-                className="border-gray-300 text-gray-700 hover:bg-gray-100"
+                className="border-white/20 text-white hover:bg-white/10"
               >
                 Créer un chantier
               </Button>
@@ -135,12 +135,12 @@ export function PlanningListView({
               return (
                 <div
                   key={chantier.id}
-                  className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 shadow-sm hover:shadow-md transition-shadow min-w-0 overflow-hidden"
+                  className="bg-white/5 border border-white/10 rounded-lg p-4 sm:p-6 hover:bg-white/10 transition-colors min-w-0 overflow-hidden"
                 >
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex-1 min-w-0 space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 break-words">
+                        <h3 className="text-base sm:text-lg font-semibold text-white break-words">
                           <span className="mr-2" aria-hidden>{icon}</span>
                           {chantier.nom}
                         </h3>
@@ -152,18 +152,18 @@ export function PlanningListView({
                         </span>
                       </div>
 
-                      <div className="flex flex-col gap-2 text-sm text-gray-600 min-w-0">
+                      <div className="flex flex-col gap-2 text-sm text-white/70 min-w-0">
                         <div className="flex items-start gap-2 min-w-0">
-                          <Calendar className="h-4 w-4 shrink-0 text-gray-500 mt-0.5" />
+                          <Calendar className="h-4 w-4 shrink-0 text-white/50 mt-0.5" />
                           <span className="break-words">{dateRangeLabel}</span>
                         </div>
                         <div className="flex items-center gap-2 min-w-0">
-                          <User className="h-4 w-4 shrink-0 text-gray-500" />
+                          <User className="h-4 w-4 shrink-0 text-white/50" />
                           <span className="truncate">Client : {chantier.clientName}</span>
                         </div>
                         {typeof chantier.montantDevis === 'number' && chantier.montantDevis > 0 && (
                           <div className="flex items-center gap-2 min-w-0">
-                            <DollarSign className="h-4 w-4 shrink-0 text-gray-500" />
+                            <DollarSign className="h-4 w-4 shrink-0 text-white/50" />
                             <span className="break-all">
                               Montant :{' '}
                               {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(chantier.montantDevis)} TTC
@@ -172,12 +172,12 @@ export function PlanningListView({
                         )}
                         {members.length > 0 && (
                           <div className="flex flex-wrap items-center gap-2 min-w-0">
-                            <Users className="h-4 w-4 shrink-0 text-gray-500" />
+                            <Users className="h-4 w-4 shrink-0 text-white/50" />
                             <div className="flex flex-wrap gap-2 min-w-0">
                               {members.map((m) => (
                                 <span
                                   key={m.id}
-                                  className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-sm break-words"
+                                  className="bg-white/10 text-white/90 px-2 py-1 rounded text-sm break-words border border-white/10"
                                 >
                                   {m.name} - {m.role || 'Membre'}
                                 </span>
@@ -187,8 +187,8 @@ export function PlanningListView({
                         )}
                         {chantier.notes && (
                           <div className="flex items-start gap-2 min-w-0">
-                            <FileText className="h-4 w-4 shrink-0 text-gray-500 mt-0.5" />
-                            <p className="text-gray-600 line-clamp-2 min-w-0 break-words">
+                            <FileText className="h-4 w-4 shrink-0 text-white/50 mt-0.5" />
+                            <p className="text-white/70 line-clamp-2 min-w-0 break-words">
                               {notesPreview}
                               {notesTruncated ? '…' : ''}
                             </p>
@@ -202,7 +202,7 @@ export function PlanningListView({
                         variant="outline"
                         size="sm"
                         onClick={() => onEditChantier(chantier)}
-                        className="border-gray-300 text-gray-700 w-full sm:w-auto justify-center"
+                        className="border-white/20 text-white hover:bg-white/10 w-full sm:w-auto justify-center"
                       >
                         <Pencil className="h-4 w-4 mr-2 shrink-0" />
                         <span className="truncate">Modifier le chantier</span>
@@ -213,22 +213,22 @@ export function PlanningListView({
                             variant="outline"
                             size="sm"
                             disabled={!!isUpdating}
-                            className="border-gray-300 text-gray-700 w-full sm:w-auto justify-center"
+                            className="border-white/20 text-white hover:bg-white/10 w-full sm:w-auto justify-center"
                           >
                             <ChevronDown className="h-4 w-4 mr-2 shrink-0" />
                             <span className="truncate">Changer statut</span>
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="bg-white border border-gray-200 text-gray-900 shadow-lg">
-                          <DropdownMenuItem onSelect={() => onStatusChange(chantier, 'planifié')} className="focus:bg-gray-100 focus:text-gray-900">
+                        <DropdownMenuContent align="end" className="bg-black/90 backdrop-blur-xl border border-white/10 text-white shadow-lg">
+                          <DropdownMenuItem onSelect={() => onStatusChange(chantier, 'planifié')} className="focus:bg-white/10 focus:text-white text-white">
                             {chantier.statut === 'planifié' && <Check className="mr-2 h-4 w-4" />}
                             Planifié
                           </DropdownMenuItem>
-                          <DropdownMenuItem onSelect={() => onStatusChange(chantier, 'en cours')} className="focus:bg-gray-100 focus:text-gray-900">
+                          <DropdownMenuItem onSelect={() => onStatusChange(chantier, 'en cours')} className="focus:bg-white/10 focus:text-white text-white">
                             {chantier.statut === 'en cours' && <Check className="mr-2 h-4 w-4" />}
                             En cours
                           </DropdownMenuItem>
-                          <DropdownMenuItem onSelect={() => onStatusChange(chantier, 'terminé')} className="focus:bg-gray-100 focus:text-gray-900">
+                          <DropdownMenuItem onSelect={() => onStatusChange(chantier, 'terminé')} className="focus:bg-white/10 focus:text-white text-white">
                             {chantier.statut === 'terminé' && <Check className="mr-2 h-4 w-4" />}
                             Terminé
                           </DropdownMenuItem>

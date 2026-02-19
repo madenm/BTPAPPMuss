@@ -30,3 +30,18 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     storage: authStorageAdapter,
   },
 })
+
+/** True if the error indicates the table/schema is missing (404 or relation does not exist). */
+export function isSupabaseTableMissing(error: { code?: string; message?: string; status?: number } | null): boolean {
+  if (!error) return false
+  const msg = (error.message ?? "").toLowerCase()
+  const code = String((error as any).code ?? "")
+  const status = (error as any).status
+  return (
+    status === 404 ||
+    code === "42P01" ||
+    code === "PGRST116" ||
+    msg.includes("does not exist") ||
+    msg.includes("relation")
+  )
+}

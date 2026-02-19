@@ -1,4 +1,4 @@
-import { supabase } from "./supabaseClient";
+import { supabase, isSupabaseTableMissing } from "./supabaseClient";
 
 export interface InvoiceItem {
   id: string;
@@ -156,12 +156,8 @@ export async function fetchInvoicesForUser(
   const { data, error } = await query;
 
   if (error) {
+    if (isSupabaseTableMissing(error)) return [];
     console.error("Error fetching invoices:", error);
-    // Si la table n'existe pas encore, retourner un tableau vide au lieu de throw
-    if (error.code === "PGRST205" || error.message?.includes("Could not find the table")) {
-      console.warn("Table 'invoices' does not exist yet. Please run the SQL script supabase_invoices_tables.sql in Supabase.");
-      return [];
-    }
     throw error;
   }
 
@@ -199,13 +195,8 @@ export async function fetchInvoiceById(
     .single();
 
   if (error || !data) {
-    if (error?.code === "PGRST205" || error?.message?.includes("Could not find the table")) {
-      console.warn("Table 'invoices' does not exist yet. Please run the SQL script supabase_invoices_tables.sql in Supabase.");
-      return null;
-    }
-    if (error?.code !== "PGRST116") {
-      console.error("Error fetching invoice by id:", error);
-    }
+    if (isSupabaseTableMissing(error) || error?.code === "PGRST116") return null;
+    console.error("Error fetching invoice by id:", error);
     return null;
   }
 
@@ -235,13 +226,9 @@ export async function fetchPaymentsForInvoice(
     .order("payment_date", { ascending: false });
 
   if (error) {
+    if (isSupabaseTableMissing(error)) return [];
     console.error("Error fetching payments:", error);
-    // Si la table n'existe pas encore, retourner un tableau vide
-    if (error.code === "PGRST205" || error.message?.includes("Could not find the table")) {
-      console.warn("Table 'payments' does not exist yet. Please run the SQL script supabase_invoices_tables.sql in Supabase.");
-      return [];
-    }
-    return [];
+    throw error;
   }
 
   return (data ?? []) as SupabasePayment[];

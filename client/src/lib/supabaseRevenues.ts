@@ -1,4 +1,4 @@
-import { supabase } from "./supabaseClient";
+import { supabase, isSupabaseTableMissing } from "./supabaseClient";
 
 export interface SupabasePayment {
   id: string;
@@ -51,6 +51,7 @@ export async function fetchRevenuesForUser(
   const { data, error } = await query;
 
   if (error) {
+    if (isSupabaseTableMissing(error)) return [];
     console.error("Error fetching revenues:", error);
     throw error;
   }
@@ -91,6 +92,7 @@ export async function calculateTotalRevenue(userId: string): Promise<number> {
     .eq("user_id", userId);
 
   if (error) {
+    if (isSupabaseTableMissing(error)) return 0;
     console.error("Error calculating total revenue:", error);
     throw error;
   }
@@ -109,6 +111,7 @@ export async function fetchRevenuesByPeriod(
     .order("payment_date", { ascending: true });
 
   if (error) {
+    if (isSupabaseTableMissing(error)) return [];
     console.error("Error fetching revenues by period:", error);
     throw error;
   }

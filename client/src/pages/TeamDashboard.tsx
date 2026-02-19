@@ -18,7 +18,6 @@ import TeamPage from '@/pages/TeamPage'
 import ClientsPage from '@/pages/ClientsPage'
 import { refreshTeamMember, type TeamMember } from '@/lib/supabase'
 import { TeamEffectiveUserIdProvider } from '@/context/TeamEffectiveUserIdContext'
-import { debugIngest } from '@/lib/debugIngest'
 
 // Helpers pour le planning (alignés sur PlanningPage)
 function parseLocalDate(dateStr: string): Date {
@@ -285,10 +284,6 @@ export default function TeamDashboard() {
   const chantiersEnCours = chantiers.filter(c => c.statut === 'en cours')
   const chantiersPlanifies = chantiers.filter(c => c.statut === 'planifié')
 
-  useEffect(() => {
-    debugIngest({ location: 'TeamDashboard.tsx:chantiers', message: 'chantiers in UI', data: { chantiersLength: chantiers.length, chantierIds: chantiers.map((c) => c.id), myChantiersLength: myChantiers.length }, sessionId: 'debug-session', hypothesisId: 'C,D' });
-  }, [chantiers, myChantiers.length]);
-
   const [teamMenuOpen, setTeamMenuOpen] = useState(false);
 
   return (
@@ -309,7 +304,7 @@ export default function TeamDashboard() {
               transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
               className="flex-1 flex flex-col relative z-10 ml-0 md:ml-64 rounded-l-3xl overflow-hidden"
             >
-              <header className="bg-black/10 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl ml-0 md:ml-20">
+              <header className="bg-black/10 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
                   <div className="flex items-center gap-2 min-w-0 w-full sm:flex-1">
                     <SheetTrigger asChild>
@@ -342,7 +337,7 @@ export default function TeamDashboard() {
             </header>
 
             {/* Tabs Navigation */}
-            <div className="bg-black/10 backdrop-blur-xl border-b border-white/10 px-4 sm:px-6 rounded-tl-3xl ml-0 md:ml-20">
+            <div className="bg-black/10 backdrop-blur-xl border-b border-white/10 px-4 sm:px-6 rounded-tl-3xl">
               <div className="flex gap-2 overflow-x-auto min-w-0">
                 {/* Vue d'ensemble - toujours accessible */}
                 <Button
@@ -417,7 +412,7 @@ export default function TeamDashboard() {
 
             {/* Tab Content */}
             <TeamEffectiveUserIdProvider value={teamMember?.user_id ?? null}>
-            <main className="flex-1 p-4 sm:p-6 space-y-6 overflow-auto ml-0 md:ml-20 overflow-x-hidden">
+            <main className="flex-1 p-4 sm:p-6 space-y-6 overflow-auto overflow-x-hidden">
               {activeTab === 'overview' && (
                 <div className="space-y-6">
                   {(() => {

@@ -5,31 +5,6 @@ import { join, resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { storage } from "./storage";
 
-const __dirnameServer = dirname(fileURLToPath(import.meta.url));
-const WORKSPACE_CURSOR_LOG = resolve(__dirnameServer, "..", "..", ".cursor", "debug.log");
-
-function debugLog(payload: Record<string, unknown>) {
-  try {
-    const dir = join(process.cwd(), ".cursor");
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    const logPath = join(dir, "debug.log");
-    appendFileSync(logPath, JSON.stringify({ ...payload, timestamp: Date.now(), sessionId: "debug-session" }) + "\n");
-  } catch {
-    /* ignore */
-  }
-}
-
-function agentLog(payload: Record<string, unknown>) {
-  try {
-    const logPath = WORKSPACE_CURSOR_LOG;
-    const dir = join(logPath, "..");
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    const line = JSON.stringify({ ...payload, timestamp: Date.now() }) + "\n";
-    appendFileSync(logPath, line);
-  } catch {
-    /* ignore */
-  }
-}
 import { Resend } from "resend";
 import { GoogleGenAI } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
@@ -118,14 +93,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/generate-visualization", async (req: Request, res: Response) => {
-    // #region agent log
-    agentLog({
-      location: "routes.ts:generate-visualization:entry",
-      message: "generate-visualization called",
-      hypothesisId: "H1",
-      data: { hasOpenAIClient: !!getOpenAIClient() },
-    });
-    // #endregion
     const { imageBase64, imageUrl: imageUrlFromClient, mimeType, projectType, style } = req.body as {
       imageBase64?: string;
       imageUrl?: string;
@@ -173,14 +140,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return;
     }
     const ext = mime === "image/png" ? "png" : mime === "image/webp" ? "webp" : "jpg";
-    // #region agent log
-    agentLog({
-      location: "routes.ts:generate-visualization:image-ready",
-      message: "image buffer ready",
-      hypothesisId: "H3",
-      data: { bufferLength: imageBuffer.length, mime, ext },
-    });
-    // #endregion
     const typeLabel = VISUALIZATION_PROJECT_TYPE_LABELS[projectType.trim()] ?? projectType.trim();
     const styleLabel = VISUALIZATION_STYLE_LABELS[style.trim()] ?? style.trim();
     const prompt = `Transforme ce lieu en projet ${typeLabel} avec un style ${styleLabel}. Montre le rendu final réaliste après travaux, en gardant la même perspective et le même cadrage.`;
@@ -194,12 +153,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let lastErr: unknown = null;
       for (const opts of modelsToTry) {
         try {
-          agentLog({
-            location: "routes.ts:generate-visualization:before-edit",
-            message: "calling openai.images.edit",
-            hypothesisId: "H4,H5",
-            data: { model: opts.model, promptLen: prompt.length },
-          });
           const fileForCall = await toFile(imageBuffer, `image.${ext}`, { type: mime });
           response = await openai.images.edit({
             image: fileForCall,
@@ -219,20 +172,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const first = response.data?.[0];
       const b64 = first && "b64_json" in first ? (first as { b64_json?: string }).b64_json : (first && "url" in first ? undefined : undefined);
       const url = first && "url" in first ? (first as { url?: string }).url : undefined;
-      // #region agent log
-      agentLog({
-        location: "routes.ts:generate-visualization:response",
-        message: "openai response received",
-        hypothesisId: "H2",
-        data: {
-          hasData: !!response.data,
-          dataLength: response.data?.length ?? 0,
-          firstHasB64: !!(first && "b64_json" in first),
-          firstHasUrl: !!(first && "url" in first),
-          firstKeys: first ? Object.keys(first) : [],
-        },
-      });
-      // #endregion
       if (b64 && typeof b64 === "string") {
         res.json({ imageUrl: `data:image/png;base64,${b64}` });
         return;
@@ -246,14 +185,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const message = err instanceof Error ? err.message : String(err);
       const errName = err instanceof Error ? err.name : "";
       const errStatus = err && typeof err === "object" && "status" in err ? (err as { status?: number }).status : undefined;
-      // #region agent log
-      agentLog({
-        location: "routes.ts:generate-visualization:catch",
-        message: "openai error",
-        hypothesisId: "H1,H4,H5",
-        data: { message, errName, errStatus },
-      });
-      // #endregion
       const isRateLimit = /rate limit|quota|429/i.test(message);
       const isBillingLimit = errStatus === 400 && /billing|limit has been reached|credits/i.test(message);
       const is403 = errStatus === 403 || /forbidden|403/i.test(message);
@@ -563,9 +494,6 @@ Règles strictes :
   });
 
   app.post("/api/estimate-chantier", async (req: Request, res: Response) => {
-    // #region agent log
-    debugLog({ location: "server/routes.ts:estimate-chantier:entry", message: "POST body", hypothesisId: "H1", data: { hasChantierInfo: !!req.body?.chantierInfo, surface: req.body?.chantierInfo?.surface, metier: req.body?.chantierInfo?.metier, photoAnalysisLength: typeof req.body?.photoAnalysis === "string" ? req.body.photoAnalysis.length : 0, questionnaireKeys: req.body?.questionnaireAnswers ? Object.keys(req.body.questionnaireAnswers).length : 0 } });
-    // #endregion
     const { client, chantierInfo, photoAnalysis, questionnaireAnswers } = req.body as {
       client?: { name?: string; email?: string; phone?: string };
       chantierInfo?: { surface?: string | number; materiaux?: string; localisation?: string; delai?: string; metier?: string };
@@ -679,17 +607,11 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
       }
       if (!raw && lastErr) throw lastErr;
       raw = raw || "";
-      // #region agent log
-      debugLog({ location: "server/routes.ts:estimate-chantier:raw", message: "Raw AI response", hypothesisId: "H2", data: { rawLength: raw?.length ?? 0, rawPreview: typeof raw === "string" ? raw.slice(0, 250) : "" } });
-      // #endregion
       if (!raw || typeof raw !== "string") {
         res.status(502).json({ message: "Réponse vide de l'IA." });
         return;
       }
       const jsonStr = extractJsonFromResponse(raw);
-      // #region agent log
-      debugLog({ location: "server/routes.ts:estimate-chantier:jsonStr", message: "Extracted JSON", hypothesisId: "H2", data: { jsonStrLength: jsonStr?.length ?? 0, jsonStrPreview: (jsonStr || "").slice(0, 350) } });
-      // #endregion
       type MatRaw = { nom?: string; quantite?: string; prix?: number; prixUnitaire?: number; notes?: string };
       type RepRaw = { transport?: number; mainOeuvre?: number; materiaux?: number; autres?: number };
       type OutilLouer = { nom?: string; duree?: string; coutLocation?: number };
@@ -716,15 +638,9 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
       try {
         parsed = JSON.parse(jsonStr) as EstimateRaw;
       } catch (parseErr) {
-        // #region agent log
-        debugLog({ location: "server/routes.ts:estimate-chantier:parseErr", message: "JSON parse failed", hypothesisId: "H3", data: { error: String(parseErr) } });
-        // #endregion
         res.status(502).json({ message: "Réponse IA invalide (JSON)." });
         return;
       }
-      // #region agent log
-      debugLog({ location: "server/routes.ts:estimate-chantier:parsed", message: "Parsed AI response", hypothesisId: "H3", data: { parsedKeys: Object.keys(parsed || {}), materiauxLength: Array.isArray(parsed?.materiaux) ? parsed.materiaux.length : "notArray", coutTotal: parsed?.coutTotal, tempsRealisation: typeof parsed?.tempsRealisation === "string" ? parsed.tempsRealisation : (parsed?.tempsRealisation as { dureeEstimee?: string })?.dureeEstimee } });
-      // #endregion
       const tempsRaw = parsed.tempsRealisation;
       let tempsRealisation = "Non estimé";
       let tempsRealisationDecomposition: { preparation?: string; travauxPrincipaux?: string; finitions?: string; imprevu?: string } | undefined;
@@ -834,14 +750,8 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
       if (hypotheses?.length) analysisResults.hypotheses = hypotheses;
       if (confiance != null) analysisResults.confiance = confiance;
       if (confiance_explication) analysisResults.confiance_explication = confiance_explication;
-      // #region agent log
-      debugLog({ location: "server/routes.ts:estimate-chantier:beforeSend", message: "analysisResults before send", hypothesisId: "H4", data: { tempsRealisation: analysisResults.tempsRealisation, materiauxLength: (analysisResults.materiaux as unknown[])?.length, outilsLength: (analysisResults.outils as unknown[])?.length, coutTotal: analysisResults.coutTotal, recommandationsLength: (analysisResults.recommandations as unknown[])?.length } });
-      // #endregion
       res.status(200).json(analysisResults);
     } catch (err: unknown) {
-      // #region agent log
-      debugLog({ location: "server/routes.ts:estimate-chantier:catch", message: "Exception", hypothesisId: "H4", data: { errMessage: err instanceof Error ? err.message : String(err) } });
-      // #endregion
       const status = err && typeof (err as { status?: number }).status === "number" ? (err as { status: number }).status : undefined;
       const errMessage = err instanceof Error ? err.message : String(err ?? "");
       const errLower = errMessage.toLowerCase();
@@ -947,7 +857,7 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
         process.env.SENDER_EMAIL ||
         process.env.BREVO_FROM ||
         "";
-      const senderName = process.env.SENDER_NAME || "TitanBtp";
+      const senderName = process.env.SENDER_NAME || "Aos Rénov";
       if (!senderEmail) {
         res.status(400).json({
           message:
@@ -1069,7 +979,7 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
         process.env.SENDER_EMAIL ||
         process.env.BREVO_FROM ||
         "";
-      const senderName = process.env.SENDER_NAME || "TitanBtp";
+      const senderName = process.env.SENDER_NAME || "Aos Rénov";
       if (!senderEmail) {
         res.status(400).json({
           message: "SENDER_EMAIL ou BREVO_FROM requis pour Brevo.",
@@ -1586,7 +1496,7 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
 
       if (brevoApiKey) {
         const senderEmail = process.env.SENDER_EMAIL || process.env.BREVO_FROM || "";
-        const senderName = process.env.SENDER_NAME || "TitanBtp";
+        const senderName = process.env.SENDER_NAME || "Aos Rénov";
         if (!senderEmail) {
           res.status(400).json({ message: "SENDER_EMAIL requis pour Brevo" });
           return;

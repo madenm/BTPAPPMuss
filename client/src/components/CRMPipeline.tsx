@@ -28,7 +28,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Mail, Phone, Plus, Loader2, Upload, X, Search, User, Trash2, Pencil } from "lucide-react"
 import { motion } from "framer-motion"
 import { useAuth } from "@/context/AuthContext"
-import { debugIngest } from "@/lib/debugIngest"
 import { useTeamEffectiveUserId } from "@/context/TeamEffectiveUserIdContext"
 import { useUserSettings } from "@/context/UserSettingsContext"
 import { useChantiers } from "@/context/ChantiersContext"
@@ -560,13 +559,10 @@ export function CRMPipeline() {
 
       // Mettre à jour le statut du devis à "validé" si un devis a été sélectionné (validation automatique lors de l'envoi)
       if (quoteModalSelectedQuote && userId) {
-        debugIngest({ location: 'CRMPipeline.tsx:sendQuoteEmail:before-status-update', message: 'Updating quote status to validé', data: { quoteId: quoteModalSelectedQuote.id, currentStatus: quoteModalSelectedQuote.status }, sessionId: 'debug-session', hypothesisId: 'F' });
         try {
           await updateQuoteStatus(quoteModalSelectedQuote.id, userId, 'validé');
           await createInvoiceFromQuote(userId, quoteModalSelectedQuote);
-          debugIngest({ location: 'CRMPipeline.tsx:sendQuoteEmail:after-status-update', message: 'Quote status updated to validé', data: { quoteId: quoteModalSelectedQuote.id }, sessionId: 'debug-session', hypothesisId: 'F' });
         } catch (err) {
-          debugIngest({ location: 'CRMPipeline.tsx:sendQuoteEmail:status-update-error', message: 'Error updating quote status', data: { error: err instanceof Error ? err.message : String(err) }, sessionId: 'debug-session', hypothesisId: 'F' });
           console.error('Error updating quote status:', err);
           // Ne pas bloquer le processus si la mise à jour du statut échoue
         }
