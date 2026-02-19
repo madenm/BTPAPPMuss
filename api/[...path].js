@@ -1,13 +1,17 @@
 /**
  * Vercel serverless handler: forward all /api/* requests to the Express app.
- * The app is built to dist/index.js and exports a Promise<Express>.
- * We wrap req with url, method, path, originalUrl so Express routing matches correctly.
+ * Uses required catch-all [...path] for reliable routing on Vercel.
+ * Loads app from dist/index.js (path from process.cwd() for correct resolution in serverless).
  */
+import path from "path";
+import { pathToFileURL } from "url";
+
 let appCache = null;
 
 async function getApp() {
   if (!appCache) {
-    const mod = await import("../dist/index.js");
+    const distPath = path.join(process.cwd(), "dist", "index.js");
+    const mod = await import(pathToFileURL(distPath).href);
     appCache = await mod.default;
   }
   return appCache;
@@ -47,7 +51,6 @@ export default async function handler(req, res) {
   let pathnameOnly = pathForExpress.split("?")[0];
   const q = pathForExpress.indexOf("?");
   const query = q >= 0 ? pathForExpress.slice(q) : "";
-  // Supprimer le slash final pour que Express matche (ex: /api/invoices/xxx/ -> /api/invoices/xxx)
   if (pathnameOnly.length > 1 && pathnameOnly.endsWith("/")) {
     pathnameOnly = pathnameOnly.slice(0, -1);
     pathForExpress = pathnameOnly + query;
@@ -65,7 +68,6 @@ export default async function handler(req, res) {
     }
   }
 
-  // writable: true pour que Express puisse modifier url/path/originalUrl en interne (routing)
   const descriptor = {
     url: { value: pathForExpress, writable: true },
     method: { value: method, writable: true },
