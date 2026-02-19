@@ -44,7 +44,14 @@ export default async function handler(req, res) {
     pathForExpress = "/api" + (pathForExpress.startsWith("/") ? pathForExpress : "/" + pathForExpress);
   }
   const method = (req.method || "GET").toUpperCase();
-  const pathnameOnly = pathForExpress.split("?")[0];
+  let pathnameOnly = pathForExpress.split("?")[0];
+  const q = pathForExpress.indexOf("?");
+  const query = q >= 0 ? pathForExpress.slice(q) : "";
+  // Supprimer le slash final pour que Express matche (ex: /api/invoices/xxx/ -> /api/invoices/xxx)
+  if (pathnameOnly.length > 1 && pathnameOnly.endsWith("/")) {
+    pathnameOnly = pathnameOnly.slice(0, -1);
+    pathForExpress = pathnameOnly + query;
+  }
 
   let parsedBody = undefined;
   const contentType = (req.headers && (req.headers["content-type"] || req.headers["Content-Type"])) || "";
