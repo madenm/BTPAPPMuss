@@ -58,14 +58,15 @@ export default async function handler(req, res) {
     }
   }
 
+  // writable: true pour que Express puisse modifier url/path/originalUrl en interne (routing)
   const descriptor = {
-    url: { value: pathForExpress, writable: false },
-    method: { value: method, writable: false },
-    path: { value: pathnameOnly, writable: false },
-    originalUrl: { value: pathForExpress, writable: false },
+    url: { value: pathForExpress, writable: true },
+    method: { value: method, writable: true },
+    path: { value: pathnameOnly, writable: true },
+    originalUrl: { value: pathForExpress, writable: true },
   };
   if (parsedBody !== undefined) {
-    descriptor.body = { value: parsedBody, writable: false };
+    descriptor.body = { value: parsedBody, writable: true };
   }
   const wrappedReq = Object.create(req, descriptor);
 
