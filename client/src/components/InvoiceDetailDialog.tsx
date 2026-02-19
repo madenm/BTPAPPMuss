@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { getApiPostHeaders } from '@/lib/apiHeaders';
 import { useAuth } from '@/context/AuthContext';
 import { useTeamEffectiveUserId } from '@/context/TeamEffectiveUserIdContext';
 import { useChantiers } from '@/context/ChantiersContext';
@@ -75,7 +76,7 @@ export function InvoiceDetailDialog({
   invoice: initialInvoice,
   onUpdated,
 }: InvoiceDetailDialogProps) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const effectiveUserId = useTeamEffectiveUserId();
   const userId = effectiveUserId ?? user?.id ?? null;
   const { chantiers } = useChantiers();
@@ -177,7 +178,7 @@ export function InvoiceDetailDialog({
 
       const res = await fetch(`/api/invoices/${invoice.id}/send-email`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getApiPostHeaders(session?.access_token),
         body: JSON.stringify({
           userId,
           to: invoice.client_email,

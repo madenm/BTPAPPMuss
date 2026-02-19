@@ -89,7 +89,7 @@ export default function Dashboard() {
           >
             {/* Header */}
             <div className="mb-6 sm:mb-8 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between min-w-0">
-              <div className="min-w-0 w-full sm:flex-1 max-md:pl-16">
+              <div className="min-w-0 w-full sm:flex-1 pl-20">
                 <h1 className="text-2xl sm:text-4xl font-light tracking-tight text-white mb-2 drop-shadow-lg sm:truncate">
                   Dashboard
                 </h1>

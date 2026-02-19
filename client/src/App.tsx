@@ -14,6 +14,7 @@ import AuthPage from "@/pages/AuthPage";
 import LoginPage from "@/pages/LoginPage";
 import LoadingRedirectPage from "@/pages/LoadingRedirectPage";
 import InvitePage from "@/pages/InvitePage";
+import ClientFormPage from "@/pages/ClientFormPage";
 import TeamDashboard from "@/pages/TeamDashboard";
 import Dashboard from "@/pages/Dashboard";
 import QuotesPage from "@/pages/QuotesPage";
@@ -60,9 +61,12 @@ function Router() {
   const [location] = useLocation();
 
   const getComponent = () => {
-    // Vérifier si c'est une route d'invitation
+    // Routes publiques (sans auth)
     if (location.startsWith('/invite/')) {
       return <InvitePage />;
+    }
+    if (location.startsWith('/client-form/')) {
+      return <ClientFormPage />;
     }
 
     switch (location) {
@@ -113,8 +117,8 @@ function Router() {
     }
   };
 
-  // Pages without sidebar (Home, Auth, Login, Loading, Invite) get full page animation
-  const isFullPage = location === "/" || location === "/auth" || location === "/login" || location === "/loading" || location.startsWith("/invite/");
+  // Pages without sidebar (Home, Auth, Login, Loading, Invite, Client form) get full page animation
+  const isFullPage = location === "/" || location === "/auth" || location === "/login" || location === "/loading" || location.startsWith("/invite/") || location.startsWith("/client-form/");
 
   if (isFullPage) {
     return (

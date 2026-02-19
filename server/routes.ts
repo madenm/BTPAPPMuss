@@ -1039,6 +1039,87 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
     return createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
   }
 
+  // POST /api/public-client-form - Formulaire client public (lien partagé, sans auth)
+  app.post("/api/public-client-form", async (req: Request, res: Response) => {
+    const body = req.body as {
+      token?: unknown;
+      name?: unknown;
+      email?: unknown;
+      phone?: unknown;
+      street_address?: unknown;
+      postal_code?: unknown;
+      city?: unknown;
+    };
+    const token = typeof body.token === "string" ? body.token.trim() : "";
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const email = typeof body.email === "string" ? body.email.trim() : "";
+    const phone = typeof body.phone === "string" ? body.phone.trim() : undefined;
+    const street_address = typeof body.street_address === "string" ? body.street_address.trim() || undefined : undefined;
+    const postal_code = typeof body.postal_code === "string" ? body.postal_code.trim() || undefined : undefined;
+    const city = typeof body.city === "string" ? body.city.trim() || undefined : undefined;
+
+    if (!token) {
+      res.status(400).json({ message: "Lien invalide (token manquant)." });
+      return;
+    }
+    if (!name) {
+      res.status(400).json({ message: "Le nom est requis." });
+      return;
+    }
+    if (!email) {
+      res.status(400).json({ message: "L'email est requis." });
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      res.status(400).json({ message: "Format d'email invalide." });
+      return;
+    }
+
+    try {
+      const supabase = getSupabaseClient();
+      const { data: linkRow, error: linkError } = await supabase
+        .from("client_form_links")
+        .select("user_id")
+        .eq("token", token)
+        .maybeSingle();
+
+      if (linkError) {
+        res.status(500).json({ message: "Erreur lors de la vérification du lien." });
+        return;
+      }
+      if (!linkRow?.user_id) {
+        res.status(404).json({ message: "Lien invalide ou expiré." });
+        return;
+      }
+
+      const { data: client, error: insertError } = await supabase
+        .from("clients")
+        .insert({
+          user_id: linkRow.user_id,
+          name,
+          email,
+          phone: phone ?? null,
+          street_address: street_address ?? null,
+          postal_code: postal_code ?? null,
+          city: city ?? null,
+        })
+        .select("id")
+        .single();
+
+      if (insertError) {
+        const msg = insertError.message || "Impossible de créer la fiche client.";
+        res.status(400).json({ message: msg });
+        return;
+      }
+
+      res.status(201).json({ id: client?.id, message: "Votre fiche a bien été enregistrée." });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur serveur";
+      res.status(500).json({ message });
+    }
+  });
+
   // GET /api/invoices - Liste des factures avec filtres
   app.get("/api/invoices", async (req: Request, res: Response) => {
     const { userId, clientId, chantierId, status, year } = req.query as {

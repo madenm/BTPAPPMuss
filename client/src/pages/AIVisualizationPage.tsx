@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { PageWrapper } from '@/components/PageWrapper';
+import { getApiPostHeaders } from '@/lib/apiHeaders';
 import { useAuth } from '@/context/AuthContext';
 import { useTeamEffectiveUserId } from '@/context/TeamEffectiveUserIdContext';
 import { uploadFile } from '@/lib/supabaseStorage';
@@ -23,7 +24,7 @@ interface UploadedImage {
 }
 
 export default function AIVisualizationPage() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const effectiveUserId = useTeamEffectiveUserId();
   const userId = effectiveUserId ?? user?.id ?? null;
   const [step, setStep] = useState<'upload' | 'configure' | 'generating' | 'result'>('upload');
@@ -130,7 +131,7 @@ export default function AIVisualizationPage() {
       const timeoutId = setTimeout(() => controller.abort(), 90_000);
       const res = await fetch(apiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getApiPostHeaders(session?.access_token),
         body: JSON.stringify(body),
         signal: controller.signal,
       });
@@ -203,7 +204,7 @@ export default function AIVisualizationPage() {
     <PageWrapper>
       <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0 sm:flex-nowrap">
-          <div className="min-w-0 w-full sm:flex-1 max-md:pl-16">
+          <div className="min-w-0 w-full sm:flex-1 pl-20">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
               Visualisation
             </h1>

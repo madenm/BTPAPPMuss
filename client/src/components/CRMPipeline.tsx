@@ -27,6 +27,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Mail, Phone, Plus, Loader2, Upload, X, Search, User, Trash2, Pencil } from "lucide-react"
 import { motion } from "framer-motion"
+import { getApiPostHeaders } from "@/lib/apiHeaders"
 import { useAuth } from "@/context/AuthContext"
 import { useTeamEffectiveUserId } from "@/context/TeamEffectiveUserIdContext"
 import { useUserSettings } from "@/context/UserSettingsContext"
@@ -105,7 +106,7 @@ function setStoredPipelineMessage(userId: string | null, key: string, value: str
 }
 
 export function CRMPipeline() {
-  const { user } = useAuth()
+  const { user, session } = useAuth()
   const effectiveUserId = useTeamEffectiveUserId()
   const userId = effectiveUserId ?? user?.id ?? null
   const { profile, logoUrl, themeColor } = useUserSettings()
@@ -355,7 +356,7 @@ export function CRMPipeline() {
       const bodyPayload = { to: prospect.email, subject: `${relanceLabel} - ${subjectSuffix}`, htmlContent }
       const emailRes = await fetch("/api/send-followup-email", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getApiPostHeaders(session?.access_token),
         body: JSON.stringify(bodyPayload),
       })
       const resText = await emailRes.text()
@@ -542,7 +543,7 @@ export function CRMPipeline() {
 
       const emailRes = await fetch("/api/send-quote-email", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getApiPostHeaders(session?.access_token),
         body: JSON.stringify({
           to: selectedProspect.email,
           pdfBase64,
@@ -636,10 +637,10 @@ export function CRMPipeline() {
         dueDate: invoiceModalSelectedInvoice.due_date ?? new Date().toISOString(),
         paymentTerms: invoiceModalSelectedInvoice.payment_terms ?? "",
         companyName: profile?.full_name ?? undefined,
-        companyAddress: profile?.company_address,
-        companyCityPostal: profile?.company_city_postal,
-        companyPhone: profile?.company_phone,
-        companyEmail: profile?.company_email,
+        companyAddress: profile?.company_address ?? undefined,
+        companyCityPostal: profile?.company_city_postal ?? undefined,
+        companyPhone: profile?.company_phone ?? undefined,
+        companyEmail: profile?.company_email ?? undefined,
         contactBlock: {
           contactName: profile?.full_name,
           phone: profile?.company_phone,
@@ -659,7 +660,7 @@ export function CRMPipeline() {
         `/api/invoices/${invoiceModalSelectedInvoice.id}/send-email`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: getApiPostHeaders(session?.access_token),
           body: JSON.stringify({
             userId,
             to: selectedProspect.email,
@@ -724,7 +725,7 @@ export function CRMPipeline() {
       const bodyPayload2 = { to: selectedProspect.email, subject: `${relanceLabel} - ${subjectSuffix}`, htmlContent }
       const emailRes = await fetch("/api/send-followup-email", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getApiPostHeaders(session?.access_token),
         body: JSON.stringify(bodyPayload2),
       })
       const resText2 = await emailRes.text()

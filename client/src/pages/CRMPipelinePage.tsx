@@ -7,7 +7,7 @@ export default function CRMPipelinePage() {
     <PageWrapper>
       <header className="bg-black/10 backdrop-blur-xl border-b border-white/5 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
-          <div className="min-w-0 w-full sm:flex-1 max-md:pl-16">
+          <div className="min-w-0 w-full sm:flex-1 pl-20">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
               CRM Pipeline
             </h1>

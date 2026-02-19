@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { DevisGeneratingLoader } from '@/components/ui/devis-generating-loader';
+import { getApiPostHeaders } from '@/lib/apiHeaders';
 import { useAuth } from '@/context/AuthContext';
 import { useChantiers } from '@/context/ChantiersContext';
 import { useUserSettings } from '@/context/UserSettingsContext';
@@ -62,7 +63,7 @@ interface ClientInfo {
 const DEFAULT_THEME_COLOR = '#8b5cf6';
 
 export default function QuotesPage() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { clients, chantiers, addChantier, addClient, updateChantier, refreshChantiers } = useChantiers();
   const { logoUrl, themeColor, profile } = useUserSettings();
   const accentColor = themeColor || DEFAULT_THEME_COLOR;
@@ -366,7 +367,7 @@ export default function QuotesPage() {
         };
         const res = await fetch('/api/parse-quote-description', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getApiPostHeaders(session?.access_token),
           body: JSON.stringify(payload),
         });
         const data = await res.json().catch(() => ({}));
@@ -917,7 +918,7 @@ export default function QuotesPage() {
     <PageWrapper>
       <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
-          <div className="min-w-0 w-full sm:flex-1 max-md:pl-16">
+          <div className="min-w-0 w-full sm:flex-1 pl-20">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
               Générateur de Devis
             </h1>

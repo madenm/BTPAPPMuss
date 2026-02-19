@@ -30,9 +30,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { UserAccountButton } from '@/components/UserAccountButton';
+import { useAuth } from '@/context/AuthContext';
 import { useChantiers, type Client } from '@/context/ChantiersContext';
 import { useToast } from '@/hooks/use-toast';
-import { Search, Plus, Pencil, Trash2, Mail, Phone } from 'lucide-react';
+import { createClientFormLink } from '@/lib/supabaseClients';
+import { Search, Plus, Pencil, Trash2, Mail, Phone, Link2 } from 'lucide-react';
 
 function useDebouncedValue<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -219,8 +221,46 @@ export default function ClientsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [shareLinkOpen, setShareLinkOpen] = useState(false);
+  const [shareLink, setShareLink] = useState<string | null>(null);
+  const [shareLinkLoading, setShareLinkLoading] = useState(false);
 
+  const { user } = useAuth();
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
+
+  const handleCreateShareLink = useCallback(async () => {
+    if (!user?.id) {
+      toast({ title: 'Vous devez être connecté pour partager un lien', variant: 'destructive' });
+      return;
+    }
+    setShareLinkLoading(true);
+    setShareLink(null);
+    try {
+      const { link } = await createClientFormLink(user.id);
+      setShareLink(link);
+      setShareLinkOpen(true);
+    } catch (e) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'66eecc'},body:JSON.stringify({sessionId:'66eecc',location:'ClientsPage.tsx:handleCreateShareLink:catch',message:'Share link error caught',data:{isError:e instanceof Error,name:(e as {constructor?:{name?:string}})?.constructor?.name,message:(e as {message?:string})?.message},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
+      // #endregion
+      const raw = (e as { message?: string })?.message ?? (e instanceof Error ? e.message : null) ?? '';
+      const isMissingTable = /client_form_links|schema cache|PGRST205/i.test(raw);
+      const msg = isMissingTable
+        ? 'Table des liens partageables absente. Exécutez le fichier supabase/migrations/client_form_links.sql dans le SQL Editor de votre projet Supabase.'
+        : (raw || 'Erreur lors de la création du lien');
+      toast({ title: msg, variant: 'destructive' });
+    } finally {
+      setShareLinkLoading(false);
+    }
+  }, [user?.id, toast]);
+
+  const copyShareLink = useCallback(() => {
+    if (!shareLink) return;
+    navigator.clipboard.writeText(shareLink).then(
+      () => toast({ title: 'Lien copié dans le presse-papier' }),
+      () => toast({ title: 'Échec de la copie', variant: 'destructive' })
+    );
+  }, [shareLink, toast]);
 
   const filteredClients = useMemo(() => {
     let list = clients;
@@ -288,7 +328,7 @@ export default function ClientsPage() {
     <PageWrapper>
       <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
-          <div className="min-w-0 w-full sm:flex-1 max-md:pl-16">
+          <div className="min-w-0 w-full sm:flex-1 pl-20">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">Gestion des clients</h1>
             <p className="text-xs sm:text-sm text-white/70 sm:truncate">Recherchez, éditez et gérez vos clients</p>
           </div>
@@ -329,6 +369,15 @@ export default function ClientsPage() {
             >
               <Plus className="h-4 w-4 mr-2" />
               Ajouter client
+            </Button>
+            <Button
+              onClick={handleCreateShareLink}
+              disabled={shareLinkLoading}
+              variant="outline"
+              className="bg-white/10 backdrop-blur-md text-white border border-white/20 hover:bg-white/20 max-md:min-h-[44px]"
+            >
+              <Link2 className="h-4 w-4 mr-2" />
+              {shareLinkLoading ? 'Création...' : 'Partager un lien'}
             </Button>
           </div>
         </div>
@@ -402,6 +451,34 @@ export default function ClientsPage() {
         onSave={handleSave}
         isSaving={isSaving}
       />
+
+      <Dialog open={shareLinkOpen} onOpenChange={setShareLinkOpen}>
+        <DialogContent className="max-w-[480px] bg-black/20 backdrop-blur-xl border border-white/10 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Lien formulaire client</DialogTitle>
+            <DialogDescription className="text-white/70">
+              Partagez ce lien pour permettre à quelqu&apos;un de remplir un formulaire et créer une fiche client dans votre compte.
+            </DialogDescription>
+          </DialogHeader>
+          {shareLink && (
+            <>
+              <Input
+                readOnly
+                value={shareLink}
+                className="bg-black/20 border-white/10 text-white font-mono text-sm"
+              />
+              <DialogFooter>
+                <Button
+                  onClick={copyShareLink}
+                  className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30"
+                >
+                  Copier le lien
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent className="max-w-[380px] bg-black/20 backdrop-blur-xl border border-white/10 text-white">
