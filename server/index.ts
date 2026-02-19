@@ -20,6 +20,18 @@ app.use((req, res, next) => {
   return express.urlencoded({ extended: false, limit: "50mb" })(req, res, next);
 });
 
+// CORS : prévol OPTIONS + en-têtes sur réponses /api (Vercel / cross-origin)
+app.use((req: Request, res: Response, next) => {
+  if (!req.path.startsWith("/api")) return next();
+  const origin = req.headers.origin;
+  if (origin) res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Max-Age", "86400");
+  if (req.method === "OPTIONS") return res.status(204).end();
+  next();
+});
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -60,7 +72,15 @@ async function createApp() {
     throw err;
   });
 
-  if (process.env.NODE_ENV === "development" || !process.env.NODE_ENV) {
+  const isVercel = process.env.VERCEL === "1";
+
+  if (isVercel) {
+    // Sur Vercel : uniquement les routes API (pas de static, pas de Vite).
+    // Réponse 404 JSON pour toute route non gérée.
+    app.use((_req: Request, res: Response) => {
+      res.status(404).json({ message: "Not Found" });
+    });
+  } else if (process.env.NODE_ENV === "development" || !process.env.NODE_ENV) {
     const { setupVite } = await import("./vite");
     await setupVite(app, server);
   } else {

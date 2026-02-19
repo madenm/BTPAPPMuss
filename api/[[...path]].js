@@ -23,7 +23,14 @@ function readBody(req) {
 }
 
 export default async function handler(req, res) {
-  const app = await getApp();
+  let app;
+  try {
+    app = await getApp();
+  } catch (err) {
+    console.error("[API] getApp failed:", err);
+    res.status(500).setHeader("Content-Type", "application/json").end(JSON.stringify({ message: "Server failed to load" }));
+    return;
+  }
   const rawUrl = req.url || "";
   let pathForExpress = rawUrl;
   if (rawUrl.includes("://")) {
