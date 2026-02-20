@@ -8,6 +8,21 @@ const MARGIN = 40;
 const PAGE_W = 595.28;
 const LINE = 14;
 
+/** Renders a string safe for pdf-lib WinAnsi (e.g. U+202F narrow no-break space, €). */
+function toWinAnsiSafe(s: string | null | undefined): string {
+  if (s == null || typeof s !== "string") return "";
+  return Array.from(s)
+    .map((c) => {
+      const code = c.codePointAt(0) ?? 0;
+      if (code >= 32 && code <= 127) return c; // ASCII
+      if (code >= 0xa0 && code <= 0xff) return c; // Latin-1 supplement
+      if (code === 0x202f) return "\u0020"; // narrow no-break space → space
+      if (code === 0x20ac) return " EUR";   // € → " EUR"
+      return "\u0020"; // other (e.g. special quotes) → space
+    })
+    .join("");
+}
+
 function formatDate(dateStr: string): string {
   if (!dateStr || String(dateStr).trim() === "") return "—";
   const d = new Date(dateStr);
@@ -65,11 +80,11 @@ export async function generateInvoicePdfBuffer(
   const companyAddr = profile?.company_address ?? "";
   const companyCity = profile?.company_city_postal ?? "";
 
-  page.drawText("FACTURE", { x: PAGE_W - MARGIN - 80, y, size: 16, font: fontBold });
+  page.drawText(toWinAnsiSafe("FACTURE"), { x: PAGE_W - MARGIN - 80, y, size: 16, font: fontBold });
   y -= LINE;
-  page.drawText(`N° ${invoice.invoice_number ?? "—"}`, { x: PAGE_W - MARGIN - 80, y, size: 10, font });
+  page.drawText(toWinAnsiSafe(`N° ${invoice.invoice_number ?? "—"}`), { x: PAGE_W - MARGIN - 80, y, size: 10, font });
   y -= LINE;
-  page.drawText(`${companyCity || "—"}, le ${formatDate(invoice.invoice_date ?? new Date().toISOString())}`, {
+  page.drawText(toWinAnsiSafe(`${companyCity || "—"}, le ${formatDate(invoice.invoice_date ?? new Date().toISOString())}`), {
     x: PAGE_W - MARGIN - 80,
     y,
     size: 9,
@@ -77,26 +92,26 @@ export async function generateInvoicePdfBuffer(
   });
   y -= LINE * 2;
 
-  page.drawText(companyName, { x: MARGIN, y, size: 10, font: fontBold });
+  page.drawText(toWinAnsiSafe(companyName), { x: MARGIN, y, size: 10, font: fontBold });
   y -= LINE;
-  page.drawText(companyAddr || "—", { x: MARGIN, y, size: 9, font });
+  page.drawText(toWinAnsiSafe(companyAddr || "—"), { x: MARGIN, y, size: 9, font });
   y -= LINE;
-  page.drawText(companyCity || "—", { x: MARGIN, y, size: 9, font });
-  page.drawText("Facturé à", { x: PAGE_W - MARGIN - 120, y, size: 9, font: fontBold });
+  page.drawText(toWinAnsiSafe(companyCity || "—"), { x: MARGIN, y, size: 9, font });
+  page.drawText(toWinAnsiSafe("Facturé à"), { x: PAGE_W - MARGIN - 120, y, size: 9, font: fontBold });
   y -= LINE;
-  page.drawText(profile?.company_phone ?? "—", { x: MARGIN, y, size: 9, font });
-  page.drawText(invoice.client_name ?? "—", { x: PAGE_W - MARGIN - 120, y, size: 9, font });
+  page.drawText(toWinAnsiSafe(profile?.company_phone ?? "—"), { x: MARGIN, y, size: 9, font });
+  page.drawText(toWinAnsiSafe(invoice.client_name ?? "—"), { x: PAGE_W - MARGIN - 120, y, size: 9, font });
   y -= LINE;
-  page.drawText(profile?.company_email ?? "—", { x: MARGIN, y, size: 9, font });
-  page.drawText(invoice.client_address ?? "—", { x: PAGE_W - MARGIN - 120, y, size: 9, font });
+  page.drawText(toWinAnsiSafe(profile?.company_email ?? "—"), { x: MARGIN, y, size: 9, font });
+  page.drawText(toWinAnsiSafe(invoice.client_address ?? "—"), { x: PAGE_W - MARGIN - 120, y, size: 9, font });
   y -= LINE * 2;
 
-  page.drawText(`Date d'émission: ${formatDate(invoice.invoice_date ?? "")}`, { x: MARGIN, y, size: 9, font });
-  page.drawText(`Date d'échéance: ${formatDate(invoice.due_date ?? "")}`, { x: MARGIN + 200, y, size: 9, font });
+  page.drawText(toWinAnsiSafe(`Date d'émission: ${formatDate(invoice.invoice_date ?? "")}`), { x: MARGIN, y, size: 9, font });
+  page.drawText(toWinAnsiSafe(`Date d'échéance: ${formatDate(invoice.due_date ?? "")}`), { x: MARGIN + 200, y, size: 9, font });
   y -= LINE * 2;
 
-  page.drawText("Description", { x: MARGIN, y, size: 9, font: fontBold });
-  page.drawText("Montant HT", { x: PAGE_W - MARGIN - 70, y, size: 9, font: fontBold });
+  page.drawText(toWinAnsiSafe("Description"), { x: MARGIN, y, size: 9, font: fontBold });
+  page.drawText(toWinAnsiSafe("Montant HT"), { x: PAGE_W - MARGIN - 70, y, size: 9, font: fontBold });
   y -= LINE;
 
   let items: InvoiceRow[] = [];
@@ -113,31 +128,31 @@ export async function generateInvoicePdfBuffer(
   for (const item of items) {
     const subItems = Array.isArray(item.subItems) ? item.subItems : [];
     if (subItems.length) {
-      page.drawText(item.description ?? "—", { x: MARGIN, y, size: 9, font });
+      page.drawText(toWinAnsiSafe(item.description ?? "—"), { x: MARGIN, y, size: 9, font });
       const mainTotal = subItems.reduce((s, sub) => s + (sub.total ?? 0), 0);
-      page.drawText(formatEur(mainTotal), { x: PAGE_W - MARGIN - 70, y, size: 9, font });
+      page.drawText(toWinAnsiSafe(formatEur(mainTotal)), { x: PAGE_W - MARGIN - 70, y, size: 9, font });
       y -= LINE;
       for (const sub of subItems) {
-        page.drawText(`  ${sub.description ?? "—"}`, { x: MARGIN, y, size: 8, font });
-        page.drawText(formatEur(sub.total ?? 0), { x: PAGE_W - MARGIN - 70, y, size: 8, font });
+        page.drawText(toWinAnsiSafe(`  ${sub.description ?? "—"}`), { x: MARGIN, y, size: 8, font });
+        page.drawText(toWinAnsiSafe(formatEur(sub.total ?? 0)), { x: PAGE_W - MARGIN - 70, y, size: 8, font });
         y -= LINE * 0.9;
       }
     } else {
-      page.drawText(item.description ?? "—", { x: MARGIN, y, size: 9, font });
-      page.drawText(formatEur(item.total ?? 0), { x: PAGE_W - MARGIN - 70, y, size: 9, font });
+      page.drawText(toWinAnsiSafe(item.description ?? "—"), { x: MARGIN, y, size: 9, font });
+      page.drawText(toWinAnsiSafe(formatEur(item.total ?? 0)), { x: PAGE_W - MARGIN - 70, y, size: 9, font });
       y -= LINE;
     }
   }
 
   y -= LINE;
-  page.drawText("Total HT", { x: PAGE_W - MARGIN - 120, y, size: 10, font });
-  page.drawText(formatEur(invoice.subtotal_ht ?? 0), { x: PAGE_W - MARGIN - 70, y, size: 10, font });
+  page.drawText(toWinAnsiSafe("Total HT"), { x: PAGE_W - MARGIN - 120, y, size: 10, font });
+  page.drawText(toWinAnsiSafe(formatEur(invoice.subtotal_ht ?? 0)), { x: PAGE_W - MARGIN - 70, y, size: 10, font });
   y -= LINE;
-  page.drawText("TVA 20%", { x: PAGE_W - MARGIN - 120, y, size: 10, font });
-  page.drawText(formatEur(invoice.tva_amount ?? 0), { x: PAGE_W - MARGIN - 70, y, size: 10, font });
+  page.drawText(toWinAnsiSafe("TVA 20%"), { x: PAGE_W - MARGIN - 120, y, size: 10, font });
+  page.drawText(toWinAnsiSafe(formatEur(invoice.tva_amount ?? 0)), { x: PAGE_W - MARGIN - 70, y, size: 10, font });
   y -= LINE;
-  page.drawText("Total TTC", { x: PAGE_W - MARGIN - 120, y, size: 11, font: fontBold });
-  page.drawText(formatEur(invoice.total_ttc ?? 0), { x: PAGE_W - MARGIN - 70, y, size: 11, font: fontBold });
+  page.drawText(toWinAnsiSafe("Total TTC"), { x: PAGE_W - MARGIN - 120, y, size: 11, font: fontBold });
+  page.drawText(toWinAnsiSafe(formatEur(invoice.total_ttc ?? 0)), { x: PAGE_W - MARGIN - 70, y, size: 11, font: fontBold });
 
   const pdfBytes = await doc.save();
   return Buffer.from(pdfBytes);
