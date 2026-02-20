@@ -23,7 +23,7 @@ import { fetchPlanningNotesForRange, upsertPlanningNote, deletePlanningNote } fr
 export default function PlanningPage() {
   const { chantiers, updateChantier } = useChantiers();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('calendar');
   const [editingChantier, setEditingChantier] = useState<Chantier | null>(null);
   const [updatingChantierId, setUpdatingChantierId] = useState<string | null>(null);
   const [periodPickerOpen, setPeriodPickerOpen] = useState(false);
