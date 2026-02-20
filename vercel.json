@@ -1,13 +1,12 @@
 {
   "version": 2,
   "buildCommand": "npm run build",
-  "outputDirectory": ".",
+  "outputDirectory": "dist/public",
   "installCommand": "npm install",
   "framework": null,
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/assets/(.*)", "destination": "/dist/public/assets/$1" },
-    { "source": "/((?!api/).*)", "destination": "/dist/public/index.html" }
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "functions": {
     "api/[...path].js": { "memory": 1024, "maxDuration": 60 }
