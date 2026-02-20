@@ -99,26 +99,12 @@ npm start
 
 ## 📧 Envoi d’emails (devis par email)
 
-L’envoi automatique du devis par email (CRM Pipeline) supporte **Brevo** (gratuit) ou **Resend**.
+L’envoi automatique du devis par email (CRM Pipeline) utilise **Resend**.
 
-### Option gratuite sans domaine : Brevo
-
-1. **Créez un compte** sur [brevo.com](https://www.brevo.com) (gratuit, 300 emails/jour).
-2. **Récupérez une clé API** : Paramètres → Clés API → Créer une clé.
-3. **Ajoutez et vérifiez un expéditeur** : [Expéditeurs Brevo](https://app.brevo.com/senders/list) → Ajouter un expéditeur → saisissez votre adresse (Outlook, Gmail, etc.) → Brevo envoie un **code à 6 chiffres** à cette adresse → entrez le code pour valider. **Aucun domaine à acheter.**
-4. **Dans le `.env`** :
-   - `BREVO_API_KEY=xkeysib-...` (votre clé)
-   - `SENDER_EMAIL=votre-adresse@outlook.fr` (l’adresse que vous avez vérifiée dans Brevo)
-5. Si vous avez configuré votre email dans le CRM (« Configuration Email »), cette adresse sera utilisée ; elle doit être vérifiée dans Brevo.
-
-L’app utilise Brevo en priorité si `BREVO_API_KEY` est défini. Vous pouvez alors envoyer des devis à **n’importe quel prospect** sans acheter de domaine.
-
-### Option avec domaine : Resend
 
 - **`RESEND_API_KEY`** : clé API [Resend](https://resend.com). Pour envoyer à des prospects, un **domaine vérifié** est requis sur [resend.com/domains](https://resend.com/domains) (ex. domaine acheté chez OVH, Gandi).
 - **`SENDER_EMAIL`** ou **`RESEND_FROM`** : adresse du domaine vérifié (ex. `contact@votredomaine.fr`).
 
-Si `BREVO_API_KEY` n’est pas défini mais `RESEND_API_KEY` l’est, l’app utilise Resend.
 
 Un fichier `.env.example` à la racine du projet liste ces variables ; copiez-le en `.env` et renseignez les valeurs.
 

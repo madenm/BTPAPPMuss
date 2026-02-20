@@ -1,0 +1,130 @@
+/**
+ * Génération PDF facture côté serveur (pour envoi email sans envoyer le PDF dans le body).
+ * Utilise pdf-lib pour éviter un body trop gros et la 404 Vercel.
+ */
+import { PDFDocument, StandardFonts, type PDFPage } from "pdf-lib";
+
+const MARGIN = 40;
+const PAGE_W = 595.28;
+const LINE = 14;
+
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function formatEur(n: number): string {
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(n);
+}
+
+type InvoiceRow = {
+  description?: string | null;
+  unitPrice?: number;
+  quantity?: number;
+  total?: number;
+  subItems?: { description?: string | null; quantity?: number; unitPrice?: number; total?: number }[];
+};
+
+type InvoiceForPdf = {
+  invoice_number?: string | null;
+  invoice_date?: string | null;
+  due_date?: string | null;
+  client_name?: string | null;
+  client_address?: string | null;
+  client_phone?: string | null;
+  client_email?: string | null;
+  items?: InvoiceRow[] | null;
+  subtotal_ht?: number;
+  tva_amount?: number;
+  total_ttc?: number;
+  payment_terms?: string | null;
+};
+
+type ProfileForPdf = {
+  full_name?: string | null;
+  company_address?: string | null;
+  company_city_postal?: string | null;
+  company_phone?: string | null;
+  company_email?: string | null;
+  company_siret?: string | null;
+};
+
+export async function generateInvoicePdfBuffer(
+  invoice: InvoiceForPdf,
+  profile: ProfileForPdf | null
+): Promise<Buffer> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const page = doc.addPage([PAGE_W, 841.89]);
+  let y = 841.89 - MARGIN;
+
+  const companyName = profile?.full_name ?? "Nom de l'entreprise";
+  const companyAddr = profile?.company_address ?? "";
+  const companyCity = profile?.company_city_postal ?? "";
+
+  page.drawText("FACTURE", { x: PAGE_W - MARGIN - 80, y, size: 16, font: fontBold });
+  y -= LINE;
+  page.drawText(`N° ${invoice.invoice_number ?? "—"}`, { x: PAGE_W - MARGIN - 80, y, size: 10, font });
+  y -= LINE;
+  page.drawText(`${companyCity || "—"}, le ${formatDate(invoice.invoice_date ?? new Date().toISOString())}`, {
+    x: PAGE_W - MARGIN - 80,
+    y,
+    size: 9,
+    font,
+  });
+  y -= LINE * 2;
+
+  page.drawText(companyName, { x: MARGIN, y, size: 10, font: fontBold });
+  y -= LINE;
+  page.drawText(companyAddr || "—", { x: MARGIN, y, size: 9, font });
+  y -= LINE;
+  page.drawText(companyCity || "—", { x: MARGIN, y, size: 9, font });
+  page.drawText("Facturé à", { x: PAGE_W - MARGIN - 120, y, size: 9, font: fontBold });
+  y -= LINE;
+  page.drawText(profile?.company_phone ?? "—", { x: MARGIN, y, size: 9, font });
+  page.drawText(invoice.client_name ?? "—", { x: PAGE_W - MARGIN - 120, y, size: 9, font });
+  y -= LINE;
+  page.drawText(profile?.company_email ?? "—", { x: MARGIN, y, size: 9, font });
+  page.drawText(invoice.client_address ?? "—", { x: PAGE_W - MARGIN - 120, y, size: 9, font });
+  y -= LINE * 2;
+
+  page.drawText(`Date d'émission: ${formatDate(invoice.invoice_date ?? "")}`, { x: MARGIN, y, size: 9, font });
+  page.drawText(`Date d'échéance: ${formatDate(invoice.due_date ?? "")}`, { x: MARGIN + 200, y, size: 9, font });
+  y -= LINE * 2;
+
+  page.drawText("Description", { x: MARGIN, y, size: 9, font: fontBold });
+  page.drawText("Montant HT", { x: PAGE_W - MARGIN - 70, y, size: 9, font: fontBold });
+  y -= LINE;
+
+  const items = invoice.items ?? [];
+  for (const item of items) {
+    if (item.subItems?.length) {
+      page.drawText(item.description ?? "—", { x: MARGIN, y, size: 9, font });
+      const mainTotal = item.subItems.reduce((s, sub) => s + (sub.total ?? 0), 0);
+      page.drawText(formatEur(mainTotal), { x: PAGE_W - MARGIN - 70, y, size: 9, font });
+      y -= LINE;
+      for (const sub of item.subItems) {
+        page.drawText(`  ${sub.description ?? "—"}`, { x: MARGIN, y, size: 8, font });
+        page.drawText(formatEur(sub.total ?? 0), { x: PAGE_W - MARGIN - 70, y, size: 8, font });
+        y -= LINE * 0.9;
+      }
+    } else {
+      page.drawText(item.description ?? "—", { x: MARGIN, y, size: 9, font });
+      page.drawText(formatEur(item.total ?? 0), { x: PAGE_W - MARGIN - 70, y, size: 9, font });
+      y -= LINE;
+    }
+  }
+
+  y -= LINE;
+  page.drawText("Total HT", { x: PAGE_W - MARGIN - 120, y, size: 10, font });
+  page.drawText(formatEur(invoice.subtotal_ht ?? 0), { x: PAGE_W - MARGIN - 70, y, size: 10, font });
+  y -= LINE;
+  page.drawText("TVA 20%", { x: PAGE_W - MARGIN - 120, y, size: 10, font });
+  page.drawText(formatEur(invoice.tva_amount ?? 0), { x: PAGE_W - MARGIN - 70, y, size: 10, font });
+  y -= LINE;
+  page.drawText("Total TTC", { x: PAGE_W - MARGIN - 120, y, size: 11, font: fontBold });
+  page.drawText(formatEur(invoice.total_ttc ?? 0), { x: PAGE_W - MARGIN - 70, y, size: 11, font: fontBold });
+
+  const pdfBytes = await doc.save();
+  return Buffer.from(pdfBytes);
+}

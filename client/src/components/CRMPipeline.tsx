@@ -42,7 +42,7 @@ import {
 import { fetchQuotesForUser, updateQuoteStatus, type SupabaseQuote } from "@/lib/supabaseQuotes"
 import { fetchInvoicesForUser, createInvoiceFromQuote, type InvoiceWithPayments } from "@/lib/supabaseInvoices"
 import { getQuotePdfBase64, fetchLogoDataUrl, buildQuoteEmailHtml, buildContactBlockHtml, type QuotePdfParams } from "@/lib/quotePdf"
-import { getInvoicePdfBase64, buildInvoiceEmailHtml } from "@/lib/invoicePdf"
+import { buildInvoiceEmailHtml } from "@/lib/invoicePdf"
 import { toast } from "@/hooks/use-toast"
 
 interface Column {
@@ -613,17 +613,6 @@ export function CRMPipeline() {
     }
     setUpdatingStage(true)
     try {
-      const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : null
-      const pdfBase64 = getInvoicePdfBase64({
-        invoice: invoiceModalSelectedInvoice,
-        companyName: profile?.full_name || "",
-        companyAddress: profile?.company_address || "",
-        companyCityPostal: profile?.company_city_postal || "",
-        companyPhone: profile?.company_phone || "",
-        companyEmail: profile?.company_email || "",
-        companySiret: profile?.company_siret || "",
-        logoDataUrl,
-      })
       const builtInvoiceHtml = buildInvoiceEmailHtml({
         clientName: invoiceModalSelectedInvoice.client_name ?? "",
         clientEmail: invoiceModalSelectedInvoice.client_email,
@@ -665,7 +654,6 @@ export function CRMPipeline() {
             userId,
             to: selectedProspect.email,
             subject: `Facture ${invoiceModalSelectedInvoice.invoice_number}`,
-            pdfBase64,
             message: invoiceHtml,
           }),
         }

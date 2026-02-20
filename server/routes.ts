@@ -4,6 +4,7 @@ import { appendFileSync, mkdirSync, existsSync } from "fs";
 import { join, resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { storage } from "./storage";
+import { generateInvoicePdfBuffer } from "./lib/invoicePdfServer";
 
 import { Resend } from "resend";
 import { GoogleGenAI } from "@google/genai";
@@ -796,10 +797,9 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
     // Toujours envoyer au destinataire indiqué (pas de redirection RESEND_TEST_EMAIL)
     const toAddress = to.trim();
     const attachmentFilename = fileName && String(fileName).trim() ? String(fileName).trim() : "devis.pdf";
-    const brevoApiKey = process.env.BREVO_API_KEY;
     const resendApiKey = process.env.RESEND_API_KEY;
 
-    // --- Resend en priorité (nécessite domaine vérifié pour envoyer à des prospects) ---
+    // --- Resend ---
     if (resendApiKey) {
       const unverifiableDomains = [
         "outlook.fr", "outlook.com", "hotmail.fr", "hotmail.com", "live.fr", "live.com",
@@ -834,7 +834,7 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
           ) {
             res.status(403).json({
               message:
-                "Avec Resend, l'envoi à des prospects nécessite un domaine vérifié. Option gratuite sans domaine : utilisez Brevo. Ajoutez BREVO_API_KEY et SENDER_EMAIL dans le .env, puis vérifiez l'expéditeur sur https://app.brevo.com/senders/list. Voir le README.",
+                "Avec Resend, l'envoi à des prospects nécessite un domaine vérifié. Ajoutez RESEND_API_KEY, SENDER_EMAIL ou RESEND_FROM dans le .env. Voir le README.",
             });
             return;
           }
@@ -850,58 +850,8 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
       }
     }
 
-    // --- Brevo (300 emails/jour, pas de domaine requis) ---
-    if (brevoApiKey) {
-      const senderEmail =
-        (fromEmail && String(fromEmail).trim()) ||
-        process.env.SENDER_EMAIL ||
-        process.env.BREVO_FROM ||
-        "";
-      const senderName = process.env.SENDER_NAME || "Aos Rénov";
-      if (!senderEmail) {
-        res.status(400).json({
-          message:
-            "Avec Brevo, définissez SENDER_EMAIL ou BREVO_FROM dans le .env (ou configurez votre email dans le CRM), puis ajoutez et vérifiez cet expéditeur sur https://app.brevo.com/senders/list (code à 6 chiffres envoyé à votre adresse).",
-        });
-        return;
-      }
-      try {
-        const brevoRes = await fetch("https://api.brevo.com/v3/smtp/email", {
-          method: "POST",
-          headers: {
-            accept: "application/json",
-            "api-key": brevoApiKey,
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            sender: { name: senderName, email: senderEmail },
-            to: [{ email: toAddress, name: toAddress.split("@")[0] || "" }],
-            subject: "Votre devis",
-            htmlContent: (htmlContent && String(htmlContent).trim()) || "<p>Veuillez trouver ci-joint votre devis.</p>",
-            attachment: [{ content: pdfBase64, name: attachmentFilename }],
-          }),
-        });
-        const brevoData = (await brevoRes.json()) as { messageId?: string; code?: string; message?: string };
-        if (!brevoRes.ok) {
-          const msg =
-            brevoData.message ||
-            (brevoData.code ? `Brevo: ${brevoData.code}` : "Erreur lors de l'envoi de l'email.");
-          res.status(brevoRes.status >= 500 ? 502 : 400).json({ message: msg });
-          return;
-        }
-        res.status(200).json({ ok: true, id: brevoData.messageId });
-        return;
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Erreur lors de l'envoi de l'email.";
-        res.status(500).json({ message });
-        return;
-      }
-    }
-
-    // --- Aucun service configuré ---
     res.status(503).json({
-      message:
-        "Aucun service email configuré. Priorité : Resend (domaine vérifié) — ajoutez RESEND_API_KEY, SENDER_EMAIL ou RESEND_FROM dans le .env. Alternative gratuite sans domaine : Brevo — créez un compte sur https://www.brevo.com, récupérez une clé API, ajoutez BREVO_API_KEY et SENDER_EMAIL, puis vérifiez l'expéditeur sur https://app.brevo.com/senders/list.",
+      message: "Aucun service email configuré. Ajoutez RESEND_API_KEY, SENDER_EMAIL ou RESEND_FROM dans le .env. Voir le README.",
     });
   });
 
@@ -924,7 +874,6 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
     const subjectText = subject && String(subject).trim() ? String(subject).trim() : "Relance - Votre devis";
     const html = (htmlContent && String(htmlContent).trim()) ? String(htmlContent).trim() : "<p>Bonjour, je souhaite faire un suivi concernant notre échange précédent.</p>";
 
-    const brevoApiKey = process.env.BREVO_API_KEY;
     const resendApiKey = process.env.RESEND_API_KEY;
 
     if (resendApiKey) {
@@ -957,7 +906,7 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
           ) {
             res.status(403).json({
               message:
-                "Avec Resend, l'envoi à des prospects nécessite un domaine vérifié. Utilisez RESEND_TEST_EMAIL pour les tests ou Brevo.",
+                "Avec Resend, l'envoi à des prospects nécessite un domaine vérifié. Utilisez RESEND_TEST_EMAIL pour les tests.",
             });
             return;
           }
@@ -973,52 +922,8 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
       }
     }
 
-    if (brevoApiKey) {
-      const senderEmail =
-        (fromEmail && String(fromEmail).trim()) ||
-        process.env.SENDER_EMAIL ||
-        process.env.BREVO_FROM ||
-        "";
-      const senderName = process.env.SENDER_NAME || "Aos Rénov";
-      if (!senderEmail) {
-        res.status(400).json({
-          message: "SENDER_EMAIL ou BREVO_FROM requis pour Brevo.",
-        });
-        return;
-      }
-      try {
-        const brevoRes = await fetch("https://api.brevo.com/v3/smtp/email", {
-          method: "POST",
-          headers: {
-            accept: "application/json",
-            "api-key": brevoApiKey,
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            sender: { name: senderName, email: senderEmail },
-            to: [{ email: toAddress, name: toAddress.split("@")[0] || "" }],
-            subject: subjectText,
-            htmlContent: html,
-          }),
-        });
-        const brevoData = (await brevoRes.json()) as { messageId?: string; code?: string; message?: string };
-        if (!brevoRes.ok) {
-          res.status(brevoRes.status >= 500 ? 502 : 400).json({
-            message: brevoData.message || "Erreur lors de l'envoi de l'email.",
-          });
-          return;
-        }
-        res.status(200).json({ ok: true, id: brevoData.messageId });
-        return;
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Erreur lors de l'envoi de l'email.";
-        res.status(500).json({ message });
-        return;
-      }
-    }
-
     res.status(503).json({
-      message: "Aucun service email configuré (RESEND_API_KEY ou BREVO_API_KEY).",
+      message: "Aucun service email configuré. Ajoutez RESEND_API_KEY dans le .env.",
     });
   });
 
@@ -1527,12 +1432,7 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
       res.status(400).json({ message: "Destinataire (to) requis." });
       return;
     }
-    if (!pdfBase64 || typeof pdfBase64 !== "string") {
-      res.status(400).json({ message: "PDF (pdfBase64) requis." });
-      return;
-    }
 
-    // Toujours envoyer au destinataire indiqué (pas de redirection RESEND_TEST_EMAIL)
     const toAddress = to.trim();
 
     try {
@@ -1544,21 +1444,26 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
         return;
       }
 
-      // Utiliser la même logique que pour les devis
-      const brevoApiKey = process.env.BREVO_API_KEY;
+      let pdfBuffer: Buffer;
+      if (pdfBase64 && typeof pdfBase64 === "string") {
+        pdfBuffer = Buffer.from(pdfBase64, "base64");
+      } else {
+        const { data: profile } = await supabase.from("user_profiles").select("full_name, company_address, company_city_postal, company_phone, company_email, company_siret").eq("id", userId).single();
+        pdfBuffer = await generateInvoicePdfBuffer(invoice, profile ?? null);
+      }
+
       const resendApiKey = process.env.RESEND_API_KEY;
       const attachmentFilename = `facture-${invoice.invoice_number}.pdf`;
 
       if (resendApiKey) {
         const resend = new Resend(resendApiKey);
-        const buffer = Buffer.from(pdfBase64, "base64");
         const fromInvoice = process.env.SENDER_EMAIL || process.env.RESEND_FROM || "onboarding@resend.dev";
         const { data, error } = await resend.emails.send({
           from: fromInvoice,
           to: toAddress,
           subject: subject || `Facture ${invoice.invoice_number}`,
           html: message || `<p>Veuillez trouver ci-joint votre facture ${invoice.invoice_number}.</p>`,
-          attachments: [{ filename: attachmentFilename, content: buffer }],
+          attachments: [{ filename: attachmentFilename, content: pdfBuffer }],
         });
 
         if (error) {
@@ -1575,45 +1480,7 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
         return;
       }
 
-      if (brevoApiKey) {
-        const senderEmail = process.env.SENDER_EMAIL || process.env.BREVO_FROM || "";
-        const senderName = process.env.SENDER_NAME || "Aos Rénov";
-        if (!senderEmail) {
-          res.status(400).json({ message: "SENDER_EMAIL requis pour Brevo" });
-          return;
-        }
-
-        const brevoRes = await fetch("https://api.brevo.com/v3/smtp/email", {
-          method: "POST",
-          headers: {
-            accept: "application/json",
-            "api-key": brevoApiKey,
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            sender: { name: senderName, email: senderEmail },
-            to: [{ email: toAddress, name: toAddress.split("@")[0] || "" }],
-            subject: subject || `Facture ${invoice.invoice_number}`,
-            htmlContent: message || `<p>Veuillez trouver ci-joint votre facture ${invoice.invoice_number}.</p>`,
-            attachment: [{ content: pdfBase64, name: attachmentFilename }],
-          }),
-        });
-
-        const brevoData = (await brevoRes.json()) as { messageId?: string; code?: string; message?: string };
-        if (!brevoRes.ok) {
-          res.status(brevoRes.status >= 500 ? 502 : 400).json({ message: brevoData.message || "Erreur envoi email" });
-          return;
-        }
-
-        if (invoice.status === "brouillon") {
-          await supabase.from("invoices").update({ status: "envoyée" }).eq("id", id);
-        }
-
-        res.json({ ok: true, id: brevoData.messageId });
-        return;
-      }
-
-      res.status(503).json({ message: "Aucun service email configuré" });
+      res.status(503).json({ message: "Aucun service email configuré. Ajoutez RESEND_API_KEY dans le .env." });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Erreur serveur";
       res.status(500).json({ message });

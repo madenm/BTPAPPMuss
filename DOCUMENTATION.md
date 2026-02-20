@@ -18,7 +18,7 @@ TitanBtp est une application web complète de gestion de chantiers, devis et fac
 - **PDF** : jsPDF + jspdf-autotable
 - **Graphiques** : Recharts (AreaChart, LineChart)
 - **IA** : OpenAI API (optionnel) ou Google Gemini API
-- **Email** : Resend (prioritaire) ou Brevo
+- **Email** : Resend
 - **Reconnaissance vocale** : Web Speech API (natif)
 
 ### Structure du Projet
@@ -266,7 +266,7 @@ TitanBtp/
   - PDF en pièce jointe
   - Corps HTML avec détails complets de la facture
   - Bloc de contact avec coordonnées de l'utilisateur
-- **Intégration** : Resend ou Brevo selon configuration
+- **Intégration** : Resend
 
 ### 6. CRM Pipeline
 
@@ -317,7 +317,7 @@ TitanBtp/
 - **Envoi manuel** : Possibilité d'envoyer une relance manuellement depuis n'importe quelle colonne
 
 #### Configuration Email
-- **Service** : Resend (prioritaire) ou Brevo (fallback)
+- **Service** : Resend
 - **Variable d'environnement** : `RESEND_TEST_EMAIL` pour rediriger tous les emails de test vers une adresse
 - **Expéditeur** : Configuré dans les variables d'environnement
 - **Bloc de contact** : Ajouté automatiquement à tous les emails (devis, factures, relances)
@@ -601,8 +601,8 @@ RESEND_API_KEY=re_...
 RESEND_FROM=contact@votredomaine.fr
 RESEND_TEST_EMAIL=votre-email@test.fr  # Pour rediriger tous les emails de test
 
-# Email - Brevo (fallback si Resend non configuré)
-BREVO_API_KEY=xkeysib-...
+# Email - Resend
+RESEND_API_KEY=re_...
 SENDER_EMAIL=votre-email@outlook.fr
 ```
 
@@ -704,7 +704,7 @@ Envoi devis/facture → buildQuoteEmailHtml() / buildInvoiceEmailHtml()
   ↓
 Ajout bloc contact → buildContactBlockHtml()
   ↓
-Envoi email → /api/send-email (Resend/Brevo)
+Envoi email → /api/send-email (Resend)
   ↓
 Mise à jour stage → updateProspect()
 ```
