@@ -137,8 +137,9 @@ export const SignInPage: React.FC<SignInPageProps> = ({
 
               {!isSignUp && (
                 <div className="animate-element animate-delay-500 flex items-center justify-between text-sm">
-                  <label className="flex items-center gap-3 cursor-pointer">
+                  <label className="flex items-center gap-3 cursor-pointer" htmlFor="rememberMe">
                     <input
+                      id="rememberMe"
                       type="checkbox"
                       name="rememberMe"
                       className="custom-checkbox"

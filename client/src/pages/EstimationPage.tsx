@@ -427,11 +427,12 @@ export default function EstimationPage() {
                       ou cliquez pour sélectionner un fichier
                     </p>
                     <input
+                      id="photo-upload"
+                      name="photo"
                       type="file"
                       accept="image/*"
                       onChange={handleFileInput}
                       className="hidden"
-                      id="photo-upload"
                     />
                     <Button
                       variant="outline"
@@ -568,8 +569,10 @@ export default function EstimationPage() {
                               <p className="text-sm font-medium text-white mb-3">Nouveau client</p>
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
-                                  <label className="text-sm font-medium text-white/80 block mb-2">Nom</label>
+                                  <label className="text-sm font-medium text-white/80 block mb-2" htmlFor="new-client-name">Nom</label>
                                   <input
+                                    id="new-client-name"
+                                    name="newClientName"
                                     type="text"
                                     value={newClient.name}
                                     onChange={(e) => setNewClient({ ...newClient, name: e.target.value })}
@@ -578,8 +581,10 @@ export default function EstimationPage() {
                                   />
                                 </div>
                                 <div>
-                                  <label className="text-sm font-medium text-white/80 block mb-2">Email</label>
+                                  <label className="text-sm font-medium text-white/80 block mb-2" htmlFor="new-client-email">Email</label>
                                   <input
+                                    id="new-client-email"
+                                    name="newClientEmail"
                                     type="email"
                                     value={newClient.email}
                                     onChange={(e) => setNewClient({ ...newClient, email: e.target.value })}
@@ -588,8 +593,10 @@ export default function EstimationPage() {
                                   />
                                 </div>
                                 <div>
-                                  <label className="text-sm font-medium text-white/80 block mb-2">Téléphone</label>
+                                  <label className="text-sm font-medium text-white/80 block mb-2" htmlFor="new-client-phone">Téléphone</label>
                                   <input
+                                    id="new-client-phone"
+                                    name="newClientPhone"
                                     type="tel"
                                     value={newClient.phone}
                                     onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })}
@@ -631,8 +638,10 @@ export default function EstimationPage() {
                     <h3 className="text-lg font-semibold text-white">Réponses</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="text-sm font-medium text-white block mb-2">Quel est le type de projet ?</label>
+                        <label className="text-sm font-medium text-white block mb-2" htmlFor="chantier-metier">Quel est le type de projet ?</label>
                         <select
+                          id="chantier-metier"
+                          name="metier"
                           value={chantierInfo.metier}
                           onChange={(e) => {
                             const metier = e.target.value;
@@ -648,8 +657,10 @@ export default function EstimationPage() {
                         </select>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-white block mb-2">Quelle est la surface en m² ?</label>
+                        <label className="text-sm font-medium text-white block mb-2" htmlFor="chantier-surface">Quelle est la surface en m² ?</label>
                         <input
+                          id="chantier-surface"
+                          name="surface"
                           type="number"
                           value={chantierInfo.surface}
                           onChange={(e) => setChantierInfo({ ...chantierInfo, surface: e.target.value })}
@@ -666,8 +677,10 @@ export default function EstimationPage() {
                       )}
                       {chantierInfo.metier && !hasQuestionsForType(chantierInfo.metier) && (
                         <div className="md:col-span-2">
-                          <label className="text-sm font-medium text-white block mb-2">Précisez le projet ou les matériaux</label>
+                          <label className="text-sm font-medium text-white block mb-2" htmlFor="chantier-materiaux">Précisez le projet ou les matériaux</label>
                           <input
+                            id="chantier-materiaux"
+                            name="materiaux"
                             type="text"
                             value={chantierInfo.materiaux}
                             onChange={(e) => setChantierInfo({ ...chantierInfo, materiaux: e.target.value })}
@@ -677,8 +690,10 @@ export default function EstimationPage() {
                         </div>
                       )}
                       <div>
-                        <label className="text-sm font-medium text-white block mb-2">Localisation ?</label>
+                        <label className="text-sm font-medium text-white block mb-2" htmlFor="chantier-localisation">Localisation ?</label>
                         <input
+                          id="chantier-localisation"
+                          name="localisation"
                           type="text"
                           value={chantierInfo.localisation}
                           onChange={(e) => setChantierInfo({ ...chantierInfo, localisation: e.target.value })}
@@ -687,8 +702,10 @@ export default function EstimationPage() {
                         />
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-white block mb-2">Délai souhaité ?</label>
+                        <label className="text-sm font-medium text-white block mb-2" htmlFor="chantier-delai">Délai souhaité ?</label>
                         <select
+                          id="chantier-delai"
+                          name="delai"
                           value={chantierInfo.delai}
                           onChange={(e) => setChantierInfo({ ...chantierInfo, delai: e.target.value })}
                           className="w-full px-3 py-2 rounded-md border bg-black/20 backdrop-blur-md border-white/10 text-white"

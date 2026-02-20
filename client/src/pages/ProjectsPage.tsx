@@ -947,14 +947,15 @@ export default function ProjectsPage() {
                   </div>
 
                   <div>
-                    <Label className="text-white">Images</Label>
+                    <Label className="text-white" htmlFor="chantier-images">Images</Label>
                     <input
+                      id="chantier-images"
+                      name="chantierImages"
                       type="file"
                       multiple
                       accept="image/*"
                       onChange={handleImageUpload}
                       className="hidden"
-                      id="chantier-images"
                     />
                     <Button
                       type="button"
@@ -1367,14 +1368,15 @@ export default function ProjectsPage() {
             </div>
 
             <div>
-              <Label className="text-white">Ajouter des images</Label>
+              <Label className="text-white" htmlFor="edit-chantier-images">Ajouter des images</Label>
               <input
+                id="edit-chantier-images"
+                name="editChantierImages"
                 type="file"
                 multiple
                 accept="image/*"
                 onChange={handleAddImagesToChantier}
                 className="hidden"
-                id="edit-chantier-images"
               />
               <Button
                 type="button"

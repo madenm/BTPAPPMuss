@@ -437,12 +437,13 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
           <div>
             <Label className="text-white">Ajouter des images</Label>
             <input
+              id={fileInputId}
+              name="chantierEditImages"
               type="file"
               multiple
               accept="image/*"
               onChange={handleAddImagesToChantier}
               className="hidden"
-              id={fileInputId}
             />
             <Button
               type="button"

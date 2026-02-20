@@ -174,6 +174,8 @@ export default function SettingsPage() {
                 )}
                 <div className="flex items-center gap-2">
                   <input
+                    id="logo-upload"
+                    name="logo"
                     ref={fileInputRef}
                     type="file"
                     accept="image/*"

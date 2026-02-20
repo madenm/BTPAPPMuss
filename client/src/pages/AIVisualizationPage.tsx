@@ -252,6 +252,8 @@ export default function AIVisualizationPage() {
                     </p>
                   </div>
                   <input
+                    id="ai-viz-file-input"
+                    name="aiVizImage"
                     ref={fileInputRef}
                     type="file"
                     accept="image/*"
@@ -502,6 +504,8 @@ export default function AIVisualizationPage() {
 
           {/* Hidden file input for step 2 */}
           <input
+            id="ai-viz-file-input-step2"
+            name="aiVizImageStep2"
             ref={fileInputRef}
             type="file"
             accept="image/*"

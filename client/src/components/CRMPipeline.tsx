@@ -1187,6 +1187,8 @@ export function CRMPipeline() {
                   <div>
                     <Label className="text-white/80 text-xs">Fichier PDF</Label>
                     <input
+                      id="quote-modal-pdf"
+                      name="quotePdf"
                       ref={quoteModalFileInputRef}
                       type="file"
                       accept="application/pdf,.pdf"
@@ -1431,8 +1433,10 @@ export function CRMPipeline() {
                 </p>
               </div>
               <div>
-                <label className="text-sm font-medium mb-2 block">Message (modifiable, enregistré pour cette étape):</label>
+                <label className="text-sm font-medium mb-2 block" htmlFor="followup-message">Message (modifiable, enregistré pour cette étape):</label>
                 <textarea
+                  id="followup-message"
+                  name="followupMessage"
                   className="w-full px-3 py-2 rounded-md border bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50 min-h-[150px]"
                   value={followupMessage}
                   onChange={(e) => setFollowupMessage(e.target.value)}

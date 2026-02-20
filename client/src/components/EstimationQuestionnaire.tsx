@@ -29,12 +29,14 @@ export function EstimationQuestionnaire({ type, answers, onChange }: EstimationQ
           <p className="text-sm text-white/60">
             Question {index + 1} / {questions.length}
           </p>
-          <label className="text-sm font-medium text-white block">
+          <label className="text-sm font-medium text-white block" htmlFor={`estimation-q-${q.id}`}>
             {q.label}
             {q.required ? ' *' : ''}
           </label>
           {q.type === 'text' ? (
             <input
+              id={`estimation-q-${q.id}`}
+              name={q.id}
               type="text"
               value={answers[q.id] ?? ''}
               onChange={(e) => onChange(q.id, e.target.value)}
