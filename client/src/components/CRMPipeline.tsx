@@ -645,6 +645,7 @@ export function CRMPipeline() {
 
       setStoredPipelineMessage(userId, "invoice", invoiceModalCustomMessage)
 
+      const toEmail = (selectedProspect.email?.trim() || invoiceModalSelectedInvoice.client_email?.trim()) ?? ""
       const emailRes = await fetch(
         `/api/invoices/${invoiceModalSelectedInvoice.id}/send-email`,
         {
@@ -652,7 +653,7 @@ export function CRMPipeline() {
           headers: getApiPostHeaders(session?.access_token),
           body: JSON.stringify({
             userId,
-            to: selectedProspect.email,
+            to: toEmail,
             subject: `Facture ${invoiceModalSelectedInvoice.invoice_number}`,
             message: invoiceHtml,
           }),

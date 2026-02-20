@@ -4,6 +4,7 @@ import { appendFileSync, mkdirSync, existsSync } from "fs";
 import { join, resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { storage } from "./storage";
+
 import { generateInvoicePdfBuffer } from "./lib/invoicePdfServer";
 
 import { Resend } from "resend";
@@ -1424,23 +1425,27 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
       pdfBase64?: string;
     };
 
-    if (!userId) {
+    const userIdVal = typeof userId === "string" ? userId.trim() : userId;
+    if (!userIdVal) {
       res.status(400).json({ message: "userId requis" });
       return;
     }
-    if (!to || typeof to !== "string" || !to.trim()) {
-      res.status(400).json({ message: "Destinataire (to) requis." });
-      return;
-    }
-
-    const toAddress = to.trim();
 
     try {
       const supabase = getSupabaseClient();
-      const { data: invoice } = await supabase.from("invoices").select("*").eq("id", id).eq("user_id", userId).single();
+      const { data: invoice } = await supabase.from("invoices").select("*").eq("id", id).eq("user_id", userIdVal).single();
 
       if (!invoice) {
         res.status(404).json({ message: "Facture non trouvée" });
+        return;
+      }
+
+      const toAddress =
+        (typeof to === "string" && to.trim()) ? to.trim()
+        : (invoice.client_email && String(invoice.client_email).trim()) ? String(invoice.client_email).trim()
+        : "";
+      if (!toAddress) {
+        res.status(400).json({ message: "Destinataire (to) requis. Indiquez un email dans le body ou sur la facture (client_email)." });
         return;
       }
 
@@ -1448,12 +1453,19 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
       if (pdfBase64 && typeof pdfBase64 === "string") {
         pdfBuffer = Buffer.from(pdfBase64, "base64");
       } else {
-        const { data: profile } = await supabase.from("user_profiles").select("full_name, company_address, company_city_postal, company_phone, company_email, company_siret").eq("id", userId).single();
-        pdfBuffer = await generateInvoicePdfBuffer(invoice, profile ?? null);
+        try {
+          const { data: profile } = await supabase.from("user_profiles").select("full_name, company_address, company_city_postal, company_phone, company_email, company_siret").eq("id", userIdVal).single();
+          pdfBuffer = await generateInvoicePdfBuffer(invoice, profile ?? null);
+        } catch (pdfErr: unknown) {
+          const pdfMsg = pdfErr instanceof Error ? pdfErr.message : "Erreur génération PDF";
+          console.error("[send-email] generateInvoicePdfBuffer:", pdfErr);
+          res.status(500).json({ message: `Génération du PDF: ${pdfMsg}` });
+          return;
+        }
       }
 
       const resendApiKey = process.env.RESEND_API_KEY;
-      const attachmentFilename = `facture-${invoice.invoice_number}.pdf`;
+      const attachmentFilename = `facture-${invoice.invoice_number ?? "facture"}.pdf`;
 
       if (resendApiKey) {
         const resend = new Resend(resendApiKey);
@@ -1463,7 +1475,7 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
           to: toAddress,
           subject: subject || `Facture ${invoice.invoice_number}`,
           html: message || `<p>Veuillez trouver ci-joint votre facture ${invoice.invoice_number}.</p>`,
-          attachments: [{ filename: attachmentFilename, content: pdfBuffer }],
+          attachments: [{ filename: attachmentFilename, content: pdfBuffer.toString("base64") }],
         });
 
         if (error) {
@@ -1483,6 +1495,7 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
       res.status(503).json({ message: "Aucun service email configuré. Ajoutez RESEND_API_KEY dans le .env." });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Erreur serveur";
+      console.error("[send-email]", err);
       res.status(500).json({ message });
     }
   });

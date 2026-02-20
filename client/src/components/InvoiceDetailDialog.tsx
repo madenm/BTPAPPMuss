@@ -27,7 +27,7 @@ import {
   deletePayment,
   type InvoiceWithPayments,
 } from '@/lib/supabaseInvoices';
-import { downloadInvoicePdf, fetchLogoDataUrl, getInvoicePdfBase64, buildInvoiceEmailHtml } from '@/lib/invoicePdf';
+import { downloadInvoicePdf, fetchLogoDataUrl, buildInvoiceEmailHtml } from '@/lib/invoicePdf';
 import { PaymentDialog } from './PaymentDialog';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -138,18 +138,6 @@ export function InvoiceDetailDialog({
 
     setSendingEmail(true);
     try {
-      const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : null;
-      const pdfBase64 = getInvoicePdfBase64({
-        invoice,
-        companyName: profile?.full_name || '',
-        companyAddress: profile?.company_address || '',
-        companyCityPostal: profile?.company_city_postal || '',
-        companyPhone: profile?.company_phone || '',
-        companyEmail: profile?.company_email || '',
-        companySiret: profile?.company_siret || '',
-        logoDataUrl,
-      });
-
       const emailHtml = buildInvoiceEmailHtml({
         clientName: invoice.client_name ?? '',
         clientEmail: invoice.client_email,
@@ -183,7 +171,6 @@ export function InvoiceDetailDialog({
           userId,
           to: invoice.client_email,
           subject: `Facture ${invoice.invoice_number}`,
-          pdfBase64,
           message: emailHtml,
         }),
       });

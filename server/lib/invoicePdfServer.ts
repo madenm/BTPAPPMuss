@@ -9,7 +9,10 @@ const PAGE_W = 595.28;
 const LINE = 14;
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  if (!dateStr || String(dateStr).trim() === "") return "—";
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
 function formatEur(n: number): string {
@@ -96,14 +99,25 @@ export async function generateInvoicePdfBuffer(
   page.drawText("Montant HT", { x: PAGE_W - MARGIN - 70, y, size: 9, font: fontBold });
   y -= LINE;
 
-  const items = invoice.items ?? [];
+  let items: InvoiceRow[] = [];
+  if (Array.isArray(invoice.items)) {
+    items = invoice.items;
+  } else if (invoice.items && typeof invoice.items === "string") {
+    try {
+      items = JSON.parse(invoice.items) as InvoiceRow[];
+      if (!Array.isArray(items)) items = [];
+    } catch {
+      items = [];
+    }
+  }
   for (const item of items) {
-    if (item.subItems?.length) {
+    const subItems = Array.isArray(item.subItems) ? item.subItems : [];
+    if (subItems.length) {
       page.drawText(item.description ?? "—", { x: MARGIN, y, size: 9, font });
-      const mainTotal = item.subItems.reduce((s, sub) => s + (sub.total ?? 0), 0);
+      const mainTotal = subItems.reduce((s, sub) => s + (sub.total ?? 0), 0);
       page.drawText(formatEur(mainTotal), { x: PAGE_W - MARGIN - 70, y, size: 9, font });
       y -= LINE;
-      for (const sub of item.subItems) {
+      for (const sub of subItems) {
         page.drawText(`  ${sub.description ?? "—"}`, { x: MARGIN, y, size: 8, font });
         page.drawText(formatEur(sub.total ?? 0), { x: PAGE_W - MARGIN - 70, y, size: 8, font });
         y -= LINE * 0.9;
