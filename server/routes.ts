@@ -61,6 +61,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // put application routes here
   // prefix all routes with /api
 
+  app.get("/api/health", (_req: Request, res: Response) => {
+    res.json({ ok: true });
+  });
+
   // use storage to perform CRUD operations on the storage interface
   // e.g. storage.insertUser(user) or storage.getUserByUsername(username)
 
@@ -1415,6 +1419,9 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
   });
 
   // POST /api/invoices/:id/send-email - Envoyer facture par email
+  app.get("/api/invoices/:id/send-email", (_req: Request, res: Response) => {
+    res.status(405).json({ message: "Use POST to send the invoice by email." });
+  });
   app.post("/api/invoices/:id/send-email", async (req: Request, res: Response) => {
     const { id } = req.params;
     const { userId, to, subject, message, pdfBase64 } = req.body as {
