@@ -6,7 +6,7 @@
   "framework": null,
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/((?!api/)(?!favicon\\.svg)(?!favicon\\.ico)(?!assets/).*)", "destination": "/index.html" }
   ],
   "functions": {
     "api/[...path].js": { "memory": 1024, "maxDuration": 60 },
