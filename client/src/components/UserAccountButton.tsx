@@ -31,6 +31,8 @@ export function UserAccountButton({ variant = 'fixed' }: UserAccountButtonProps)
 
   const userEmail = user?.email || 'Utilisateur';
   const userName = user?.user_metadata?.full_name || userEmail.split('@')[0];
+  const adminEmail = (import.meta.env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
+  const isAdmin = !!adminEmail && user?.email?.toLowerCase() === adminEmail;
 
   const handleToggle = () => {
     if (isOpen) {
@@ -64,19 +66,24 @@ export function UserAccountButton({ variant = 'fixed' }: UserAccountButtonProps)
     : 'fixed top-6 right-6 z-50';
 
   const button = (
-    <motion.button
-      ref={buttonRef}
-      whileHover={{ scale: 1.05 }}
-      whileTap={{ scale: 0.95 }}
-      onClick={handleToggle}
-      className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black/20 backdrop-blur-xl border border-white/10 text-white hover:bg-black/30 transition-colors shadow-lg"
-    >
-      <div className="w-8 h-8 rounded-full bg-violet-500 flex items-center justify-center">
-        <User size={16} />
-      </div>
-      <span className="text-sm font-medium hidden md:block">{userName}</span>
-      <ChevronDown size={16} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-    </motion.button>
+    <div className="flex flex-col items-end gap-1">
+      {isAdmin && (
+        <span className="text-xs font-medium text-violet-400">Administrateur</span>
+      )}
+      <motion.button
+        ref={buttonRef}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={handleToggle}
+        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black/20 backdrop-blur-xl border border-white/10 text-white hover:bg-black/30 transition-colors shadow-lg"
+      >
+        <div className="w-8 h-8 rounded-full bg-violet-500 flex items-center justify-center">
+          <User size={16} />
+        </div>
+        <span className="text-sm font-medium hidden md:block">{userName}</span>
+        <ChevronDown size={16} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </motion.button>
+    </div>
   );
 
   const dropdownContent = (
@@ -112,6 +119,9 @@ export function UserAccountButton({ variant = 'fixed' }: UserAccountButtonProps)
             }}
           >
             <div className="p-4 border-b border-white/10">
+              {isAdmin && (
+                <p className="text-xs font-medium text-violet-400 mb-1">Administrateur</p>
+              )}
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-violet-500 flex items-center justify-center">
                   <User size={20} />

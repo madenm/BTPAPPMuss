@@ -28,6 +28,7 @@ import CRMPipelinePage from "@/pages/CRMPipelinePage";
 import TeamPage from "@/pages/TeamPage";
 import SettingsPage from "@/pages/SettingsPage";
 import InvoicesPage from "@/pages/InvoicesPage";
+import CreateUserPage from "@/pages/CreateUserPage";
 import NotFound from "@/pages/not-found";
 import { UserSettingsProvider } from "@/context/UserSettingsContext";
 
@@ -112,6 +113,8 @@ function Router() {
         return <ProtectedRoute><TeamPage /></ProtectedRoute>;
       case "/dashboard/settings":
         return <ProtectedRoute><SettingsPage /></ProtectedRoute>;
+      case "/dashboard/create-user":
+        return <ProtectedRoute><CreateUserPage /></ProtectedRoute>;
       default:
         return <NotFound />;
     }

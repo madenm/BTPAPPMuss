@@ -1675,6 +1675,87 @@ Calcule les montants à partir du type de chantier, de la surface, de la localis
     }
   });
 
+  // ===== Routes Admin (création de comptes réservée à l'admin) =====
+  const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || process.env.VITE_ADMIN_EMAIL || "").trim().toLowerCase();
+
+  async function requireAdmin(req: Request, res: Response): Promise<{ email: string } | null> {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+    if (!token) {
+      res.status(401).json({ message: "Non authentifié." });
+      return null;
+    }
+    if (!ADMIN_EMAIL) {
+      res.status(503).json({ message: "ADMIN_EMAIL non configuré. Ajoutez ADMIN_EMAIL dans le .env (email de l'admin)." });
+      return null;
+    }
+    try {
+      const supabase = getSupabaseClient();
+      const { data: { user }, error } = await supabase.auth.getUser(token);
+      if (error || !user?.email) {
+        res.status(401).json({ message: "Session invalide." });
+        return null;
+      }
+      if (user.email.toLowerCase() !== ADMIN_EMAIL) {
+        res.status(403).json({ message: "Accès réservé à l'administrateur." });
+        return null;
+      }
+      return { email: user.email };
+    } catch {
+      res.status(401).json({ message: "Session invalide." });
+      return null;
+    }
+  }
+
+  app.get("/api/admin/check", async (req: Request, res: Response) => {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+    res.json({ ok: true });
+  });
+
+  app.post("/api/admin/create-user", async (req: Request, res: Response) => {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+    const body = req.body as { email?: string; full_name?: string; password?: string };
+    const email = typeof body.email === "string" ? body.email.trim() : "";
+    const fullName = typeof body.full_name === "string" ? body.full_name.trim() : "";
+    const password = typeof body.password === "string" ? body.password.trim() : "";
+    if (!email) {
+      res.status(400).json({ message: "L'email est requis." });
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      res.status(400).json({ message: "Format d'email invalide." });
+      return;
+    }
+    if (!password || password.length < 6) {
+      res.status(400).json({ message: "Le mot de passe est requis (minimum 6 caractères)." });
+      return;
+    }
+    try {
+      const supabase = getSupabaseClient();
+      const { error } = await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name: fullName || "" },
+      });
+      if (error) {
+        if (error.message?.includes("already") || error.message?.includes("exists")) {
+          res.status(400).json({ message: "Un compte existe déjà pour cet email." });
+          return;
+        }
+        res.status(400).json({ message: error.message || "Impossible de créer le compte." });
+        return;
+      }
+      res.json({ ok: true, message: "Compte créé. L'utilisateur peut se connecter avec cet email et le mot de passe défini." });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur serveur";
+      res.status(500).json({ message });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

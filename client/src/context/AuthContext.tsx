@@ -10,6 +10,7 @@ interface AuthContextType {
   signIn: (email: string, password: string, rememberMe?: boolean) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   resendConfirmationEmail: (email: string) => Promise<{ error: any }>;
+  updatePassword: (newPassword: string) => Promise<{ error: any }>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -65,27 +66,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
 
+    // Profil créé côté serveur par le trigger handle_new_user (auth.users) ; pas d'upsert client pour éviter 401/RLS quand la confirmation email est requise.
     if (!error && data.user) {
-      // Le trigger SQL créera automatiquement le profil, mais on essaie quand même côté client
-      // pour être sûr (en cas d'échec du trigger ou si l'utilisateur existe déjà)
-      const { error: profileError } = await supabase
-        .from('user_profiles')
-        .upsert({
-          id: data.user.id,
-          email: email,
-          full_name: fullName || '',
-        }, {
-          onConflict: 'id'
-        });
-
-      if (profileError) {
-        console.error('Error creating user profile:', profileError);
-        // Ne pas bloquer l'inscription si le profil échoue (le trigger SQL devrait le créer)
-        // Si la table n'existe pas, c'est normal - le trigger SQL la créera automatiquement
-        if (profileError.code === 'PGRST205') {
-          console.warn('User profile table does not exist yet. The SQL trigger should create it automatically. Make sure you have executed the supabase-schema.sql script in Supabase.');
-        }
-      }
+      // Rien à faire : le trigger on_auth_user_created crée la ligne user_profiles.
     }
 
     return { error };
@@ -129,12 +112,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.resend({
       type: 'signup',
       email: email,
+      options: {
+        emailRedirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth`,
+      },
     });
     return { error };
   };
 
+  const updatePassword = async (newPassword: string) => {
+    if (!newPassword || newPassword.length < 6) {
+      return { error: { message: 'Le mot de passe doit contenir au moins 6 caractères.', status: 400 } };
+    }
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    return { error };
+  };
+
   return (
-    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signOut, resendConfirmationEmail }}>
+    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signOut, resendConfirmationEmail, updatePassword }}>
       {children}
     </AuthContext.Provider>
   );

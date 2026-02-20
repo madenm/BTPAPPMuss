@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { Link, useLocation } from 'wouter';
-import { Menu, X, ChevronLeft, Home, Calculator, Building, Calendar, Workflow, FileText, Users, User, Receipt } from 'lucide-react';
+import { Menu, X, ChevronLeft, Home, Calculator, Building, Calendar, Workflow, FileText, Users, User, Receipt, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/context/AuthContext';
 
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const [location] = useLocation();
   const dragX = useMotionValue(0);
   const dragOpacity = useTransform(dragX, [-200, 0], [0, 1]);
+  const { user } = useAuth();
+  const adminEmail = (import.meta.env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
+  const isAdmin = !!adminEmail && user?.email?.toLowerCase() === adminEmail;
 
   const menuItems = [
     { icon: Home, label: 'Vue d\'ensemble', path: '/dashboard' },
@@ -210,6 +214,39 @@ export default function Sidebar() {
                   </motion.li>
                 );
               })}
+              {isAdmin && (
+                <motion.li
+                  custom={menuItems.length}
+                  variants={itemVariants}
+                  initial="closed"
+                  animate={isOpen ? 'open' : 'closed'}
+                >
+                  <Link href="/dashboard/create-user" onClick={() => setIsOpen(false)}>
+                    <div
+                      className={cn(
+                        "flex items-center space-x-3 p-2.5 rounded-lg transition-all cursor-pointer group",
+                        location === '/dashboard/create-user'
+                          ? 'bg-violet-50 dark:bg-violet-500/20 text-violet-600 dark:text-violet-400'
+                          : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200'
+                      )}
+                    >
+                      <motion.div
+                        whileHover={{ scale: 1.1, rotate: 5 }}
+                        whileTap={{ scale: 0.95 }}
+                        className={cn(
+                          "p-1.5 rounded-md transition-all duration-300",
+                          location === '/dashboard/create-user'
+                            ? 'bg-violet-500 text-white'
+                            : 'bg-gray-200 dark:bg-gray-700 group-hover:bg-violet-500 group-hover:text-white'
+                        )}
+                      >
+                        <UserPlus size={16} />
+                      </motion.div>
+                      <span className="text-sm font-medium">Créer un compte</span>
+                    </div>
+                  </Link>
+                </motion.li>
+              )}
             </ul>
           </div>
 
