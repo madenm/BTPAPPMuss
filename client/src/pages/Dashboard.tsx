@@ -240,7 +240,7 @@ function OverviewTab() {
         <MetricCard
           title="Chantiers en cours"
           value={activeChantiers.toString()}
-          change={activeChantiers > 0 ? "Chantiers en cours" : "Aucun chantier en cours"}
+          change={activeChantiers > 0 ? "Projets en cours" : "Aucun projet en cours"}
           icon={Building}
           delay={0.2}
         />
@@ -340,7 +340,7 @@ function OverviewTab() {
               <div className="flex items-center justify-center h-64 text-white/60">
                 <div className="text-center">
                   <Building className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <div className="text-sm">Aucun chantier aujourd'hui</div>
+                  <div className="text-sm">Aucun projet aujourd'hui</div>
                 </div>
               </div>
             ) : (

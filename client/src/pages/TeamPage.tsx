@@ -60,20 +60,18 @@ import {
   formatChantierDateRange,
 } from '@/lib/teamUtils';
 
-const ROLES = ['Chef de chantier', 'Ouvrier', 'Commercial', 'Assistant', 'Autre'];
+const ROLES = ['Chef de projet', 'Ouvrier', 'Commercial', 'Assistant', 'Autre'];
 
 const PERMISSION_LABELS: { key: keyof TeamMember; label: string }[] = [
   { key: 'can_view_dashboard', label: 'Voir le dashboard' },
   { key: 'can_view_planning', label: 'Voir le planning' },
   { key: 'can_manage_planning', label: 'Gérer le planning' },
-  { key: 'can_manage_chantiers', label: 'Gérer les chantiers' },
-  { key: 'can_view_all_chantiers', label: 'Voir tous les chantiers' },
+  { key: 'can_manage_chantiers', label: 'Gérer les projets' },
+  { key: 'can_view_all_chantiers', label: 'Voir tous les projets' },
   { key: 'can_access_crm', label: 'Accès CRM' },
   { key: 'can_create_quotes', label: 'Créer des devis' },
   { key: 'can_manage_invoices', label: 'Gérer les factures' },
-  { key: 'can_manage_team', label: "Gérer l'équipe" },
   { key: 'can_manage_clients', label: 'Gérer les clients' },
-  { key: 'can_use_ai_visualization', label: 'Utiliser IA visualization' },
 ];
 
 const emptyPermissions = () => ({
@@ -530,8 +528,8 @@ export default function TeamPage() {
             </div>
             <div className="space-y-2">
               <p className="text-white/70">📈 Charge de travail</p>
-              <p>Total : {stats.totalChantiers} chantiers assignés</p>
-              <p>Moyenne : {stats.avg} chantiers/personne</p>
+              <p>Total : {stats.totalChantiers} projets assignés</p>
+              <p>Moyenne : {stats.avg} projets/personne</p>
               <p>Max : {stats.maxMember} | Min : {stats.minMember}</p>
             </div>
           </CardContent>
@@ -844,7 +842,7 @@ export default function TeamPage() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-white/70">
-              Affectez les membres aux chantiers depuis la fiche chantier ou depuis le planning.
+              Affectez les membres aux projets depuis la fiche projet ou depuis le planning.
             </p>
           </CardContent>
         </Card>
@@ -856,14 +854,14 @@ export default function TeamPage() {
           <DialogHeader>
             <DialogTitle>Modifier un Membre</DialogTitle>
             <DialogDescription className="text-white/70">
-              Modifiez les informations, chantiers et permissions
+              Modifiez les informations, projets et permissions
             </DialogDescription>
           </DialogHeader>
           {editingMember && (
             <Tabs value={editTab} onValueChange={setEditTab} className="flex-1 overflow-hidden flex flex-col">
               <TabsList className="bg-black/10 border border-white/10 w-full grid grid-cols-3">
                 <TabsTrigger value="infos" className="data-[state=active]:bg-white/20">ℹ️ Infos</TabsTrigger>
-                <TabsTrigger value="chantiers" className="data-[state=active]:bg-white/20">👥 Chantiers</TabsTrigger>
+                <TabsTrigger value="chantiers" className="data-[state=active]:bg-white/20">👥 Projets</TabsTrigger>
                 <TabsTrigger value="permissions" className="data-[state=active]:bg-white/20">🔐 Permissions</TabsTrigger>
               </TabsList>
               <TabsContent value="infos" className="mt-4 space-y-4 flex-1 overflow-y-auto">
@@ -973,7 +971,7 @@ export default function TeamPage() {
                 {loadingAssignments ? (
                   <p className="text-sm text-white/60">Chargement...</p>
                 ) : chantiers.length === 0 ? (
-                  <p className="text-sm text-white/60">Aucun chantier disponible</p>
+                  <p className="text-sm text-white/60">Aucun projet disponible</p>
                 ) : (
                   <div className="space-y-2 max-h-64 overflow-y-auto">
                     {chantiers.map((chantier) => (

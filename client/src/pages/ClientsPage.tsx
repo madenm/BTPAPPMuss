@@ -346,12 +346,12 @@ export default function ClientsPage() {
               placeholder="Rechercher par nom ou email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 bg-black/20 border-white/10 text-white placeholder:text-white/50 h-9 w-full"
+              className="pl-9 bg-black/20 border-white/10 text-white placeholder:text-white/50 h-9 w-full max-md:min-h-[44px] max-md:h-[44px]"
             />
           </div>
           <div className="flex flex-wrap items-center gap-3 min-w-0">
             <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as FilterStatus)}>
-              <SelectTrigger className="w-full sm:w-[160px] h-9 bg-black/20 border-white/10 text-white min-w-0">
+              <SelectTrigger className="w-full sm:w-[160px] h-9 max-md:h-[44px] bg-black/20 border-white/10 text-white min-w-0">
                 <SelectValue placeholder="Filtre" />
               </SelectTrigger>
               <SelectContent className="bg-black/20 backdrop-blur-xl border-white/10">
@@ -365,7 +365,7 @@ export default function ClientsPage() {
                 setEditingClient(null);
                 setIsModalOpen(true);
               }}
-              className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30 max-md:min-h-[44px]"
+              className="h-9 max-md:h-[44px] bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30"
             >
               <Plus className="h-4 w-4 mr-2" />
               Ajouter client
@@ -374,7 +374,7 @@ export default function ClientsPage() {
               onClick={handleCreateShareLink}
               disabled={shareLinkLoading}
               variant="outline"
-              className="bg-white/10 backdrop-blur-md text-white border border-white/20 hover:bg-white/20 max-md:min-h-[44px]"
+              className="h-9 max-md:h-[44px] bg-white/10 backdrop-blur-md text-white border border-white/20 hover:bg-white/20"
             >
               <Link2 className="h-4 w-4 mr-2" />
               {shareLinkLoading ? 'Création...' : 'Partager un lien'}

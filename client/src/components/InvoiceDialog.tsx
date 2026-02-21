@@ -288,7 +288,7 @@ export function InvoiceDialog({
                 disabled={!selectedClientId}
               >
                 <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white">
-                  <SelectValue placeholder="Sélectionner un chantier" />
+                  <SelectValue placeholder="Sélectionner un projet" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Aucun</SelectItem>

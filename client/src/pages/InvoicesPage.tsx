@@ -214,7 +214,7 @@ export default function InvoicesPage() {
                   <SelectValue placeholder="Chantier" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous les chantiers</SelectItem>
+                  <SelectItem value="all">Tous les projets</SelectItem>
                   {chantiers.map((chantier) => (
                     <SelectItem key={chantier.id} value={chantier.id}>
                       {chantier.nom}

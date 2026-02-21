@@ -97,7 +97,7 @@ export async function insertChantier(
 ): Promise<Chantier> {
   // Validation des champs requis
   if (!payload.nom?.trim()) {
-    throw new Error("Le nom du chantier est requis");
+    throw new Error("Le nom du projet est requis");
   }
   if (!payload.dateDebut?.trim()) {
     throw new Error("La date de début est requise");
@@ -164,7 +164,7 @@ export async function insertChantier(
   }
 
   if (!data) {
-    throw new Error("Aucune donnée retournée après l'insertion du chantier");
+    throw new Error("Aucune donnée retournée après l'insertion du projet");
   }
 
   return mapFromSupabase(data as SupabaseChantier);

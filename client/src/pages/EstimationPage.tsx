@@ -239,7 +239,7 @@ export default function EstimationPage() {
     const doc = new jsPDF();
     let y = 15;
     doc.setFontSize(16);
-    doc.text('Estimation de chantier', 14, y);
+    doc.text('Estimation de projet', 14, y);
     y += 10;
     doc.setFontSize(10);
     doc.text(`Type: ${chantierInfo.metier ? (TYPE_CHANTIER_LABELS[chantierInfo.metier] ?? chantierInfo.metier) : '—'} | Surface: ${chantierInfo.surface ?? '—'} m²`, 14, y);
@@ -402,7 +402,7 @@ export default function EstimationPage() {
                 <CardHeader className="px-4 sm:px-6">
                   <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
                     <Upload className="h-4 w-4 sm:h-5 sm:w-5 text-white/70 flex-shrink-0" />
-                    <span className="break-words">Photo de la zone du chantier</span>
+                    <span className="break-words">Photo de la zone du projet</span>
                   </CardTitle>
                   <p className="text-xs sm:text-sm text-white/60 mt-1">
                     Insérez une photo de la zone où aura lieu le chantier. Elle sera analysée par l’IA.

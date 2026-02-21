@@ -349,7 +349,7 @@ export default function TeamDashboard() {
                   Vue d'ensemble
                 </Button>
                 
-                {/* Mes Chantiers - seulement si permission */}
+                {/* Mes Projets - seulement si permission */}
                 {(teamMember?.can_view_all_chantiers || teamMember?.can_manage_chantiers) && (
                   <Button
                     variant="ghost"
@@ -358,7 +358,7 @@ export default function TeamDashboard() {
                     className={activeTab === 'projects' ? 'bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}
                   >
                     <Building className="h-4 w-4 mr-2" />
-                    Mes Chantiers
+                    Mes Projets
                   </Button>
                 )}
                 
@@ -458,17 +458,17 @@ export default function TeamDashboard() {
                     // Sinon, afficher le contenu du dashboard
                     return (
                       <>
-                        {/* Stats Cards - seulement si permission de voir les chantiers */}
+                        {/* Stats Cards - seulement si permission de voir les projets */}
                         {(teamMember.can_view_all_chantiers || teamMember.can_manage_chantiers) && (
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
                               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Mes Chantiers</CardTitle>
+                                <CardTitle className="text-sm font-medium">Mes Projets</CardTitle>
                                 <Building className="h-4 w-4 text-white/70" />
                               </CardHeader>
                               <CardContent>
                                 <div className="text-2xl font-bold">{myChantiers.length}</div>
-                                <p className="text-xs text-white/70">Chantiers actifs</p>
+                                <p className="text-xs text-white/70">Projets actifs</p>
                               </CardContent>
                             </Card>
 
@@ -479,7 +479,7 @@ export default function TeamDashboard() {
                               </CardHeader>
                               <CardContent>
                                 <div className="text-2xl font-bold">{chantiersEnCours.length}</div>
-                                <p className="text-xs text-white/70">Chantiers en cours</p>
+                                <p className="text-xs text-white/70">Projets en cours</p>
                               </CardContent>
                             </Card>
 
@@ -490,21 +490,21 @@ export default function TeamDashboard() {
                               </CardHeader>
                               <CardContent>
                                 <div className="text-2xl font-bold">{chantiersPlanifies.length}</div>
-                                <p className="text-xs text-white/70">Chantiers planifiés</p>
+                                <p className="text-xs text-white/70">Projets planifiés</p>
                               </CardContent>
                             </Card>
                           </div>
                         )}
 
-                        {/* Mes Chantiers Récents - seulement si permission de voir les chantiers */}
+                        {/* Mes Projets Récents - seulement si permission de voir les projets */}
                         {(teamMember.can_view_all_chantiers || teamMember.can_manage_chantiers) && (
                           <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
                             <CardHeader>
-                              <CardTitle>Mes Chantiers Récents</CardTitle>
+                              <CardTitle>Mes Projets Récents</CardTitle>
                             </CardHeader>
                             <CardContent>
                               {chantiers.length === 0 ? (
-                                <p className="text-white/70 text-center py-4">Aucun chantier assigné</p>
+                                <p className="text-white/70 text-center py-4">Aucun projet assigné</p>
                               ) : (
                                 <div className="space-y-3">
                                   {chantiers.slice(0, 5).map((chantier) => (
@@ -544,24 +544,24 @@ export default function TeamDashboard() {
                       <CardContent className="py-12 text-center">
                         <Building className="h-12 w-12 mx-auto mb-4 text-white/50" />
                         <p className="text-white/70 text-lg font-semibold">Accès refusé</p>
-                        <p className="text-sm text-white/50 mt-2">Vous n'avez pas la permission de voir les chantiers. Contactez votre administrateur pour obtenir cette autorisation.</p>
+                        <p className="text-sm text-white/50 mt-2">Vous n'avez pas la permission de voir les projets. Contactez votre administrateur pour obtenir cette autorisation.</p>
                       </CardContent>
                     </Card>
                   ) : (
                     <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
                       <CardHeader>
-                        <CardTitle>Mes Chantiers</CardTitle>
+                        <CardTitle>Mes Projets</CardTitle>
                       </CardHeader>
                       <CardContent>
                     {loading ? (
                       <div className="text-center py-8">
-                        <p className="text-white/70">Chargement des chantiers...</p>
+                        <p className="text-white/70">Chargement des projets...</p>
                       </div>
                     ) : chantiers.length === 0 ? (
                       <div className="text-center py-8">
                         <Building className="h-12 w-12 mx-auto mb-4 text-white/50" />
-                        <p className="text-white/70">Aucun chantier assigné</p>
-                        <p className="text-sm text-white/50 mt-2">Vos chantiers apparaîtront ici une fois que l'administrateur vous y aura affecté.</p>
+                        <p className="text-white/70">Aucun projet assigné</p>
+                        <p className="text-sm text-white/50 mt-2">Vos projets apparaîtront ici une fois que l'administrateur vous y aura affecté.</p>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -577,7 +577,7 @@ export default function TeamDashboard() {
                               {chantier.images.length > 0 && (
                                 <div className="grid grid-cols-2 gap-2 mt-2">
                                   {chantier.images.slice(0, 2).map((img, index) => (
-                                    <img key={index} src={img} alt={`Chantier ${index}`} className="w-full h-20 object-cover rounded-md" />
+                                    <img key={index} src={img} alt={`Projet ${index}`} className="w-full h-20 object-cover rounded-md" />
                                   ))}
                                 </div>
                               )}
@@ -652,8 +652,8 @@ export default function TeamDashboard() {
                     <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
                       <CardContent className="py-12 text-center">
                         <Calendar className="h-12 w-12 mx-auto mb-4 text-white/50" />
-                        <p className="text-white/70">Aucun chantier assigné</p>
-                        <p className="text-sm text-white/50 mt-2">Votre planning s'affichera ici une fois que des chantiers vous auront été affectés.</p>
+                        <p className="text-white/70">Aucun projet assigné</p>
+                        <p className="text-sm text-white/50 mt-2">Votre planning s'affichera ici une fois que des projets vous auront été affectés.</p>
                       </CardContent>
                     </Card>
                   ) : (

@@ -312,7 +312,7 @@ export function PlanningCalendarView({
                 }}
               >
                 <PopoverTrigger asChild>
-                  <div role="button" tabIndex={0} aria-label={`${day.date.toLocaleDateString('fr-FR')} - ${dayChantiers.length} chantier(s)`} className={cellClass}>
+                  <div role="button" tabIndex={0} aria-label={`${day.date.toLocaleDateString('fr-FR')} - ${dayChantiers.length} projet(s)`} className={cellClass}>
                     {/* Jour + indicateur note (mobile et desktop) */}
                     <div className="flex items-center justify-between gap-0.5 md:gap-1 mb-0 md:mb-1">
                       <div className={dayNumClass}>
@@ -333,7 +333,7 @@ export function PlanningCalendarView({
                     {/* Mobile uniquement : résumé compact (nombre de chantiers), clic ouvre le popover */}
                     <div className="md:hidden min-w-0">
                       {dayChantiers.length > 0 ? (
-                        <div className="text-[10px] font-medium text-white/60 truncate" title={`${dayChantiers.length} chantier(s)`}>
+                        <div className="text-[10px] font-medium text-white/60 truncate" title={`${dayChantiers.length} projet(s)`}>
                           {dayChantiers.length} chant.
                         </div>
                       ) : null}
@@ -409,7 +409,7 @@ export function PlanningCalendarView({
                   )}
 
                   {dayChantiers.length === 0 ? (
-                    <p className="text-xs text-white/60">Aucun chantier ce jour</p>
+                    <p className="text-xs text-white/60">Aucun projet ce jour</p>
                   ) : (
                     <div className="space-y-3">
                       {dayChantiers.map((chantier) => (

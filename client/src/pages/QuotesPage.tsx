@@ -615,7 +615,7 @@ export default function QuotesPage() {
     if (!clientName || !clientEmail) {
       toast({
         title: 'Client requis',
-        description: 'Renseignez le nom et l\'email du client avant de créer le chantier.',
+        description: 'Renseignez le nom et l\'email du client avant de créer le projet.',
         variant: 'destructive',
       });
       return;
@@ -688,7 +688,7 @@ export default function QuotesPage() {
       setSelectedClientId(clientId);
       toast({
         title: 'Chantier créé',
-        description: 'Le chantier a été créé et le devis lui est désormais associé. Vous pouvez ouvrir la fiche chantier.',
+        description: 'Le projet a été créé et le devis lui est désormais associé. Vous pouvez ouvrir la fiche projet.',
       });
     } catch (err) {
       console.error('Error creating chantier from quote:', err);
@@ -1121,7 +1121,7 @@ export default function QuotesPage() {
                 {chantiersForClient.length === 0 ? (
                   <p className="text-sm text-gray-600 dark:text-gray-400 py-4">
                     {selectedClientId
-                      ? 'Aucun chantier pour ce client. Créez des chantiers depuis la page Projets.'
+                      ? 'Aucun projet pour ce client. Créez des projets depuis la page Projets.'
                       : 'Sélectionnez d\'abord un client à l\'étape 1.'}
                   </p>
                 ) : (

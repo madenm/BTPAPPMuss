@@ -54,7 +54,7 @@ export default function FeaturesSection() {
             <span className="text-foreground">Complètes</span>
           </h2>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Tout ce dont votre entreprise artisanale a besoin pour professionnaliser vos devis, gérer vos chantiers et impressionner vos clients.
+            Tout ce dont votre entreprise artisanale a besoin pour professionnaliser vos devis, gérer vos projets et impressionner vos clients.
           </p>
         </div>
 
@@ -81,12 +81,12 @@ export default function FeaturesSection() {
             </h3>
             <p className="text-lg text-muted-foreground">
               Notre interface vous donne un contrôle total sur votre activité artisanale. 
-              Suivez vos chantiers, gérez vos prospects et optimisez votre productivité depuis un seul endroit.
+              Suivez vos projets, gérez vos prospects et optimisez votre productivité depuis un seul endroit.
             </p>
             <ul className="space-y-3">
               <li className="flex items-center gap-3">
                 <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                <span className="text-muted-foreground">Suivi en temps réel de tous vos chantiers</span>
+                <span className="text-muted-foreground">Suivi en temps réel de tous vos projets</span>
               </li>
               <li className="flex items-center gap-3">
                 <div className="w-2 h-2 bg-white/50 rounded-full"></div>

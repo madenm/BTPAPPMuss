@@ -105,20 +105,20 @@ export function PlanningListView({
     <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white min-w-0 overflow-hidden">
       <CardHeader className="px-4 sm:px-6">
         <CardTitle className="text-base sm:text-lg break-words">
-          CHANTIERS DE {monthLabel.toUpperCase()} {year} ({sortedChantiers.length} chantier{sortedChantiers.length !== 1 ? 's' : ''})
+          PROJETS DE {monthLabel.toUpperCase()} {year} ({sortedChantiers.length} projet{sortedChantiers.length !== 1 ? 's' : ''})
         </CardTitle>
       </CardHeader>
       <CardContent className="px-4 sm:px-6 min-w-0">
         {sortedChantiers.length === 0 ? (
           <div className="text-center py-12 text-white/70">
-            <p className="mb-4">Aucun chantier en {monthLabel} {year}.</p>
+            <p className="mb-4">Aucun projet en {monthLabel} {year}.</p>
             {canCreateChantier && (
               <Button
                 variant="outline"
                 onClick={() => setLocation('/dashboard/projects?openDialog=true')}
                 className="border-white/20 text-white hover:bg-white/10"
               >
-                Créer un chantier
+                Créer un projet
               </Button>
             )}
           </div>
@@ -205,7 +205,7 @@ export function PlanningListView({
                         className="border-white/20 text-white hover:bg-white/10 w-full sm:w-auto justify-center"
                       >
                         <Pencil className="h-4 w-4 mr-2 shrink-0" />
-                        <span className="truncate">Modifier le chantier</span>
+                        <span className="truncate">Modifier le projet</span>
                       </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>

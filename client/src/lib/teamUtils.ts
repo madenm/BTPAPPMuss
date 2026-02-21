@@ -4,7 +4,7 @@ import { parseLocalDate, calculateEndDate } from './planningUtils';
 
 /** Permissions par défaut selon le rôle */
 export const ROLE_DEFAULT_PERMISSIONS: Record<string, Partial<TeamMember>> = {
-  'Chef de chantier': {
+  'Chef de projet': {
     can_view_dashboard: true,
     can_view_planning: true,
     can_manage_planning: true,
@@ -83,7 +83,7 @@ export function generateRandomCode(): string {
 
 /** Icône par rôle */
 export const ROLE_ICONS: Record<string, string> = {
-  'Chef de chantier': '👨‍💼',
+  'Chef de projet': '👨‍💼',
   Ouvrier: '🔧',
   Commercial: '📞',
   Assistant: '📋',

@@ -76,7 +76,7 @@ export default function TeamSidebar({ variant = 'fixed', onNavigate }: TeamSideb
   
   // Mes Chantiers - accessible si can_view_all_chantiers ou can_manage_chantiers
   if (teamMember?.can_view_all_chantiers || teamMember?.can_manage_chantiers) {
-    menuItems.push({ icon: Building, label: 'Mes Chantiers', path: '/team-dashboard/projects', active: location === '/team-dashboard/projects' });
+    menuItems.push({ icon: Building, label: 'Mes Projets', path: '/team-dashboard/projects', active: location === '/team-dashboard/projects' });
   }
   
   // Planning - accessible si can_view_planning ou can_manage_planning

@@ -17,7 +17,7 @@ export default function Sidebar() {
   const menuItems = [
     { icon: Home, label: 'Vue d\'ensemble', path: '/dashboard' },
     { icon: Calculator, label: 'Estimation automatique', path: '/dashboard/estimation' },
-    { icon: Building, label: 'Mes Chantiers', path: '/dashboard/projects' },
+    { icon: Building, label: 'Mes Projets', path: '/dashboard/projects' },
     { icon: Calendar, label: 'Planning', path: '/dashboard/planning' },
     { icon: Workflow, label: 'CRM Pipeline', path: '/dashboard/crm' },
     { icon: FileText, label: 'Générateur de Devis', path: '/dashboard/quotes' },

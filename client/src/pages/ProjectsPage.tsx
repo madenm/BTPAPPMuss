@@ -341,7 +341,7 @@ export default function ProjectsPage() {
     const missingFields: string[] = [];
     
     if (!newChantier.nom || !newChantier.nom.trim()) {
-      missingFields.push('Nom du chantier');
+      missingFields.push('Nom du projet');
     }
     
     if (!newChantier.clientId || !newChantier.clientId.trim()) {
@@ -414,14 +414,14 @@ export default function ProjectsPage() {
       setIsDialogOpen(false);
       
       toast({
-        title: 'Chantier créé',
-        description: 'Le chantier a été créé avec succès.',
+        title: 'Projet créé',
+        description: 'Le projet a été créé avec succès.',
       });
     } catch (error: any) {
-      console.error('Erreur lors de la création du chantier:', error);
+      console.error('Erreur lors de la création du projet:', error);
       toast({
         title: 'Erreur',
-        description: error?.message || 'Impossible de créer le chantier. Veuillez réessayer.',
+        description: error?.message || 'Impossible de créer le projet. Veuillez réessayer.',
         variant: 'destructive',
       });
     }
@@ -583,7 +583,7 @@ export default function ProjectsPage() {
     setEditUploadedImages([]);
     setEditAssignedMemberIds([]);
   } catch (error) {
-      console.error('Erreur lors de la mise à jour du chantier:', error);
+      console.error('Erreur lors de la mise à jour du projet:', error);
       alert('Une erreur est survenue lors de la sauvegarde. Veuillez réessayer.');
     }
   };
@@ -709,7 +709,7 @@ export default function ProjectsPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
           <div className="min-w-0 w-full sm:flex-1 pl-20">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
-              Mes Chantiers
+              Mes Projets
             </h1>
             <p className="text-xs sm:text-sm text-white/70 sm:truncate">Gérez tous vos projets en cours et terminés</p>
           </div>
@@ -733,20 +733,20 @@ export default function ProjectsPage() {
               <DialogTrigger asChild>
                 <Button size="sm" className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30 h-9 px-2 sm:px-3 text-sm">
                   <Plus className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Ajouter un Chantier</span>
+                  <span className="hidden sm:inline">Ajouter un Projet</span>
                   <span className="sm:hidden">Ajouter</span>
                 </Button>
               </DialogTrigger>
               <DialogContent className="bg-black/20 backdrop-blur-xl border border-white/10 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle className="text-white">Nouveau Chantier</DialogTitle>
-                  <DialogDescription className="text-white/70">
-                    Créez un nouveau chantier avec toutes les informations nécessaires
+<DialogTitle className="text-white">Nouveau Projet</DialogTitle>
+            <DialogDescription className="text-white/70">
+              Créez un nouveau projet avec toutes les informations nécessaires
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
-                    <Label className="text-white">Nom du chantier</Label>
+                    <Label className="text-white">Nom du projet</Label>
                     <Input
                       value={newChantier.nom}
                       onChange={(e) => setNewChantier({ ...newChantier, nom: e.target.value })}
@@ -785,7 +785,7 @@ export default function ProjectsPage() {
                   </div>
 
                   <div>
-                    <Label className="text-white">Type de chantier</Label>
+                    <Label className="text-white">Type de projet</Label>
                     <Select
                       value={newChantier.typeChantier}
                       onValueChange={(value) => setNewChantier({ ...newChantier, typeChantier: value })}
@@ -990,7 +990,7 @@ export default function ProjectsPage() {
 
                   <div className="space-y-2">
                     <Label className="text-white">Membres affectés</Label>
-                    <p className="text-xs text-white/60">Membres de l'équipe ayant accès à ce chantier.</p>
+                    <p className="text-xs text-white/60">Membres de l'équipe ayant accès à ce projet.</p>
                     {newChantierLoadingMembers ? (
                       <p className="text-sm text-white/50">Chargement...</p>
                     ) : newChantierTeamMembers.length === 0 ? (
@@ -1110,14 +1110,14 @@ export default function ProjectsPage() {
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="bg-black/20 backdrop-blur-xl border border-white/10 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-white">Modifier le chantier</DialogTitle>
+            <DialogTitle className="text-white">Modifier le projet</DialogTitle>
             <DialogDescription className="text-white/70">
-              Modifiez les informations du chantier et ajoutez des notes sur l'avancement
+              Modifiez les informations du projet et ajoutez des notes sur l'avancement
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label className="text-white">Nom du chantier</Label>
+              <Label className="text-white">Nom du projet</Label>
               <Input
                 value={editChantier.nom}
                 onChange={(e) => setEditChantier({ ...editChantier, nom: e.target.value })}
@@ -1239,7 +1239,7 @@ export default function ProjectsPage() {
             </div>
 
             <div>
-              <Label className="text-white">Type de chantier</Label>
+              <Label className="text-white">Type de projet</Label>
               <Select
                 value={editChantier.typeChantier ?? ''}
                 onValueChange={(value) => setEditChantier({ ...editChantier, typeChantier: value || undefined })}
@@ -1392,7 +1392,7 @@ export default function ProjectsPage() {
 
             <div className="space-y-2">
               <Label className="text-white">Membres affectés</Label>
-              <p className="text-xs text-white/60">Membres de l'équipe ayant accès à ce chantier.</p>
+              <p className="text-xs text-white/60">Membres de l'équipe ayant accès à ce projet.</p>
               {loadingAssignments ? (
                 <p className="text-sm text-white/50">Chargement...</p>
               ) : teamMembers.length === 0 ? (
@@ -1423,7 +1423,7 @@ export default function ProjectsPage() {
                 <p className="text-sm text-white/50">Chargement...</p>
               ) : chantierQuotes.length === 0 ? (
                 <div className="rounded-lg bg-black/20 border border-white/10 p-4 space-y-2">
-                  <p className="text-sm text-white/70">Aucun devis pour ce chantier.</p>
+                  <p className="text-sm text-white/70">Aucun devis pour ce projet.</p>
                   <Link href={selectedChantier ? `/dashboard/quotes?chantierId=${selectedChantier.id}` : '/dashboard/quotes'}>
                     <Button
                       type="button"
@@ -1444,7 +1444,7 @@ export default function ProjectsPage() {
                     </p>
                   )}
                   <div className="flex items-center justify-between gap-2 mb-2">
-                    <p className="text-xs text-white/60">Tous les devis de ce chantier :</p>
+                    <p className="text-xs text-white/60">Tous les devis de ce projet :</p>
                     <Link href={selectedChantier ? `/dashboard/quotes?chantierId=${selectedChantier.id}` : '/dashboard/quotes'}>
                       <Button
                         type="button"
@@ -1632,12 +1632,12 @@ export default function ProjectsPage() {
 
             <div className="space-y-2">
               <Label className="text-white">Factures</Label>
-              <p className="text-xs text-white/60">Factures associées à ce chantier.</p>
+              <p className="text-xs text-white/60">Factures associées à ce projet.</p>
               {chantierInvoicesLoading ? (
                 <p className="text-sm text-white/50">Chargement...</p>
               ) : chantierInvoices.length === 0 ? (
                 <div className="rounded-lg bg-black/20 border border-white/10 p-4 space-y-2">
-                  <p className="text-sm text-white/70">Aucune facture pour ce chantier.</p>
+                  <p className="text-sm text-white/70">Aucune facture pour ce projet.</p>
                   <Button
                     type="button"
                     variant="outline"
@@ -1751,18 +1751,18 @@ export default function ProjectsPage() {
                 <div className="w-16 h-16 mx-auto rounded-xl bg-black/20 backdrop-blur-md border border-white/10 flex items-center justify-center mb-4">
                   <Building className="h-8 w-8 text-white/70" />
                 </div>
-                <CardTitle className="text-xl text-white">Aucun chantier</CardTitle>
+                <CardTitle className="text-xl text-white">Aucun projet</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-white/70 mb-4">
-                  Commencez par ajouter votre premier chantier
+                  Commencez par ajouter votre premier projet
                 </p>
                 <Button
                   onClick={() => setIsDialogOpen(true)}
                   className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30"
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  Ajouter un chantier
+                  Ajouter un projet
                 </Button>
               </CardContent>
             </Card>
@@ -1958,7 +1958,7 @@ export default function ProjectsPage() {
           setDeleteLoading(true);
           try {
             await deleteChantier(chantierToDelete.id);
-            toast({ title: 'Chantier supprimé', description: 'Le chantier a été masqué.' });
+            toast({ title: 'Projet supprimé', description: 'Le projet a été masqué.' });
             setChantierToDelete(null);
           } catch (err) {
             const errMsg = err instanceof Error ? err.message : (err && typeof err === 'object' && 'message' in err) ? String((err as { message: unknown }).message) : 'Impossible de supprimer.';

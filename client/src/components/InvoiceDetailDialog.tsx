@@ -290,7 +290,7 @@ export function InvoiceDetailDialog({
                   </p>
                   {invoice.chantier_id && (
                     <p className="text-white/70">
-                      <span className="text-white/50">Chantier:</span>{' '}
+                      <span className="text-white/50">Projet:</span>{' '}
                       {chantiers.find((c) => c.id === invoice.chantier_id)?.nom || '—'}
                     </p>
                   )}

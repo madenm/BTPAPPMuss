@@ -33,9 +33,9 @@ export function DeleteChantierConfirmDialog({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="bg-black/20 backdrop-blur-xl border border-white/10 text-white">
         <AlertDialogHeader>
-          <AlertDialogTitle className="text-white">Supprimer ce chantier ?</AlertDialogTitle>
+          <AlertDialogTitle className="text-white">Supprimer ce projet ?</AlertDialogTitle>
           <AlertDialogDescription className="text-white/70">
-            Êtes-vous sûr de supprimer « {chantierName} » ? Cette action masquera le chantier (suppression douce). Vous pourrez le restaurer plus tard depuis les archivés si besoin.
+            Êtes-vous sûr de supprimer « {chantierName} » ? Cette action masquera le projet (suppression douce). Vous pourrez le restaurer plus tard depuis les archivés si besoin.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

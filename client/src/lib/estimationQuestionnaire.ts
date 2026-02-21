@@ -90,7 +90,7 @@ const QUESTIONS_BY_TYPE: Record<string, QuestionnaireQuestion[]> = {
       { value: 'ouverture', label: 'Création ouverture(s)' },
       { value: 'creation_cloison', label: 'Création cloison(s)' },
     ]},
-    { id: 'renovation_acces', label: 'Accès au chantier ?', type: 'choice', options: [
+    { id: 'renovation_acces', label: 'Accès au projet ?', type: 'choice', options: [
       { value: 'facile', label: 'Facile (rez-de-chaussée, portes larges)' },
       { value: 'moyen', label: 'Moyen (étage, escalier standard)' },
       { value: 'difficile', label: 'Difficile (escalier étroit, accès limité)' },
@@ -207,7 +207,7 @@ const QUESTIONS_BY_TYPE: Record<string, QuestionnaireQuestion[]> = {
       { value: 'led_chauffage', label: 'Éclairage LED / Chauffage électrique' },
       { value: 'domotique', label: 'Domotique / PAC' },
     ]},
-    { id: 'electricite_acces_chantier', label: 'Accès au chantier ?', type: 'choice', options: [
+    { id: 'electricite_acces_chantier', label: 'Accès au projet ?', type: 'choice', options: [
       { value: 'facile', label: 'Facile' },
       { value: 'moyen', label: 'Moyen' },
       { value: 'difficile', label: 'Difficile (étroit, étage élevé)' },

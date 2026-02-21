@@ -218,7 +218,7 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
       onOpenChange(false);
       onSaved?.();
     } catch (error) {
-      console.error('Erreur lors de la mise à jour du chantier:', error);
+      console.error('Erreur lors de la mise à jour du projet:', error);
       alert("Une erreur est survenue lors de la sauvegarde. Veuillez réessayer.");
     }
   };
@@ -229,14 +229,14 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-black/20 backdrop-blur-xl border border-white/10 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-white">Modifier le chantier</DialogTitle>
+          <DialogTitle className="text-white">Modifier le projet</DialogTitle>
           <DialogDescription className="text-white/70">
-            Modifiez les informations du chantier et ajoutez des notes sur l'avancement
+            Modifiez les informations du projet et ajoutez des notes sur l'avancement
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <Label className="text-white">Nom du chantier</Label>
+            <Label className="text-white">Nom du projet</Label>
             <Input
               value={editChantier.nom}
               onChange={(e) => setEditChantier({ ...editChantier, nom: e.target.value })}
@@ -321,7 +321,7 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
           </div>
 
           <div>
-            <Label className="text-white">Type de chantier</Label>
+            <Label className="text-white">Type de projet</Label>
             <Select
               value={editChantier.typeChantier ?? ''}
               onValueChange={(value) => setEditChantier({ ...editChantier, typeChantier: value || undefined })}
@@ -459,7 +459,7 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
 
           <div className="space-y-2">
             <Label className="text-white">Membres affectés</Label>
-            <p className="text-xs text-white/60">Membres de l'équipe ayant accès à ce chantier.</p>
+            <p className="text-xs text-white/60">Membres de l'équipe ayant accès à ce projet.</p>
             {loadingAssignments ? (
               <p className="text-sm text-white/50">Chargement...</p>
             ) : teamMembers.length === 0 ? (

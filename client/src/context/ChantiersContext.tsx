@@ -169,7 +169,7 @@ export function ChantiersProvider({ children }: { children: ReactNode }) {
         }
       } catch (e: any) {
         console.error('Error loading chantiers', e);
-        setError('Impossible de charger les chantiers.');
+        setError('Impossible de charger les projets.');
       } finally {
         setLoading(false);
         loadingRef.current = false;
