@@ -316,28 +316,117 @@ const QUESTIONS_BY_TYPE: Record<string, QuestionnaireQuestion[]> = {
     ]},
   ],
   chauffage: [
-    { id: 'chauffage_type', label: "Type d'installation ?", type: 'choice', options: [
-      { value: 'chaudiere', label: 'Chaudière' },
-      { value: 'pac', label: 'Pompe à chaleur' },
-      { value: 'electrique', label: 'Électrique (radiateurs)' },
+    { id: 'chauffage_type', label: "Type d'installation ?", type: 'choice', required: true, options: [
+      { value: 'chaudiere_gaz', label: 'Chaudière gaz' },
+      { value: 'chaudiere_fioul', label: 'Chaudière fioul' },
+      { value: 'pac_air_air', label: 'PAC air/air (climatisation réversible)' },
+      { value: 'pac_air_eau', label: 'PAC air/eau' },
+      { value: 'electrique', label: 'Radiateurs électriques' },
       { value: 'sol', label: 'Plancher chauffant' },
+      { value: 'poele', label: 'Poêle à bois / granulés' },
     ]},
-    { id: 'chauffage_neuf', label: 'Installation neuve ou remplacement ?', type: 'yesno' },
+    { id: 'chauffage_neuf', label: 'Installation neuve ou remplacement ?', type: 'choice', options: [
+      { value: 'neuf', label: 'Installation neuve' },
+      { value: 'remplacement', label: 'Remplacement (retrait ancien)' },
+      { value: 'complement', label: 'Complément (ajout à l\'existant)' },
+    ]},
+    { id: 'chauffage_nb_pieces', label: 'Nombre de pièces à équiper ?', type: 'choice', options: [
+      { value: '1_2', label: '1–2 pièces' },
+      { value: '3_5', label: '3–5 pièces' },
+      { value: '6_plus', label: '6+ pièces (maison entière)' },
+    ]},
+    { id: 'chauffage_isolation', label: 'État de l\'isolation du logement ?', type: 'choice', options: [
+      { value: 'bien_isole', label: 'Bien isolé (récent ou rénové)' },
+      { value: 'moyen', label: 'Moyen (quelques déperditions)' },
+      { value: 'mal_isole', label: 'Mal isolé (ancien, simple vitrage)' },
+    ]},
+    { id: 'chauffage_raccordement', label: 'Raccordements existants ?', type: 'choice', options: [
+      { value: 'complet', label: 'Tout en place (gaz, électrique)' },
+      { value: 'partiel', label: 'Partiellement (à compléter)' },
+      { value: 'rien', label: 'Rien (tout à créer)' },
+    ]},
+    { id: 'chauffage_regulation', label: 'Régulation souhaitée ?', type: 'choice', options: [
+      { value: 'manuelle', label: 'Manuelle (thermostat simple)' },
+      { value: 'programmable', label: 'Programmable (horaires)' },
+      { value: 'connectee', label: 'Connectée (smartphone, domotique)' },
+    ]},
   ],
   isolation: [
-    { id: 'isolation_zone', label: 'Zone à isoler ?', type: 'choice', options: [
-      { value: 'combles', label: 'Combles' },
-      { value: 'murs', label: 'Murs' },
-      { value: 'sol', label: 'Sol' },
+    { id: 'isolation_zone', label: 'Zone à isoler ?', type: 'choice', required: true, options: [
+      { value: 'combles_perdus', label: 'Combles perdus' },
+      { value: 'combles_amenages', label: 'Combles aménagés / sous rampants' },
+      { value: 'murs_interieur', label: 'Murs par l\'intérieur (ITI)' },
+      { value: 'murs_exterieur', label: 'Murs par l\'extérieur (ITE)' },
+      { value: 'sol', label: 'Sol / Plancher bas' },
       { value: 'global', label: 'Global (combles + murs)' },
+    ]},
+    { id: 'isolation_materiau', label: 'Matériau isolant préféré ?', type: 'choice', options: [
+      { value: 'laine_verre', label: 'Laine de verre' },
+      { value: 'laine_roche', label: 'Laine de roche' },
+      { value: 'polystyrene', label: 'Polystyrène (PSE / XPS)' },
+      { value: 'ouate_cellulose', label: 'Ouate de cellulose (soufflée)' },
+      { value: 'fibre_bois', label: 'Fibre de bois' },
+      { value: 'pas_preference', label: 'Pas de préférence' },
+    ]},
+    { id: 'isolation_epaisseur', label: 'Épaisseur / Performance visée ?', type: 'choice', options: [
+      { value: 'minimum', label: 'Minimum réglementaire (RT)' },
+      { value: 'performant', label: 'Performant (R ≥ 6)' },
+      { value: 'tres_performant', label: 'Très performant (BBC / passif)' },
+    ]},
+    { id: 'isolation_etat', label: 'Isolation existante ?', type: 'choice', options: [
+      { value: 'aucune', label: 'Aucune isolation actuellement' },
+      { value: 'ancienne', label: 'Ancienne à retirer et remplacer' },
+      { value: 'complement', label: 'Complément sur isolation existante' },
+    ]},
+    { id: 'isolation_acces', label: 'Accès à la zone ?', type: 'choice', options: [
+      { value: 'facile', label: 'Facile (accès direct, hauteur standard)' },
+      { value: 'moyen', label: 'Moyen (trappe, rampants)' },
+      { value: 'difficile', label: 'Difficile (étroit, échafaudage ext.)' },
+    ]},
+    { id: 'isolation_finitions', label: 'Finitions après isolation ?', type: 'choice', options: [
+      { value: 'non', label: 'Non (combles perdus)' },
+      { value: 'plaques', label: 'Plaques de plâtre (BA13)' },
+      { value: 'enduit', label: 'Enduit / Crépi (ITE)' },
+      { value: 'bardage', label: 'Bardage (ITE)' },
     ]},
   ],
   paysage: [
-    { id: 'paysage_type', label: "Type d'aménagement ?", type: 'choice', options: [
+    { id: 'paysage_type', label: "Type d'aménagement principal ?", type: 'choice', required: true, options: [
       { value: 'terrasse_allees', label: 'Terrasse / Allées' },
-      { value: 'plantation', label: 'Plantation / Gazon' },
-      { value: 'cloture', label: 'Clôture / Portail' },
+      { value: 'plantation', label: 'Plantation / Gazon / Massifs' },
+      { value: 'cloture', label: 'Clôture / Portail / Grillage' },
       { value: 'eclairage', label: 'Éclairage extérieur' },
+      { value: 'arrosage', label: 'Système d\'arrosage' },
+      { value: 'complet', label: 'Aménagement complet' },
+    ]},
+    { id: 'paysage_terrain', label: 'État actuel du terrain ?', type: 'choice', options: [
+      { value: 'nu', label: 'Terrain nu (terre)' },
+      { value: 'friche', label: 'En friche (à débroussailler)' },
+      { value: 'gazon_existant', label: 'Gazon existant (à refaire)' },
+      { value: 'amenage', label: 'Déjà aménagé (modification)' },
+    ]},
+    { id: 'paysage_surface_verte', label: 'Surface à aménager ?', type: 'choice', options: [
+      { value: 'petit', label: '< 50 m²' },
+      { value: 'moyen', label: '50–200 m²' },
+      { value: 'grand', label: '200–500 m²' },
+      { value: 'tres_grand', label: '> 500 m²' },
+    ]},
+    { id: 'paysage_style', label: 'Style souhaité ?', type: 'choice', options: [
+      { value: 'moderne', label: 'Moderne / Contemporain' },
+      { value: 'naturel', label: 'Naturel / Champêtre' },
+      { value: 'mediterraneen', label: 'Méditerranéen' },
+      { value: 'japonais', label: 'Zen / Japonais' },
+      { value: 'fonctionnel', label: 'Fonctionnel (simple, entretien facile)' },
+    ]},
+    { id: 'paysage_terrassement', label: 'Terrassement nécessaire ?', type: 'choice', options: [
+      { value: 'non', label: 'Non (terrain plat)' },
+      { value: 'leger', label: 'Léger (mise à niveau)' },
+      { value: 'important', label: 'Important (pente, déblais)' },
+    ]},
+    { id: 'paysage_evacuation', label: 'Évacuation des déchets ?', type: 'choice', options: [
+      { value: 'peu', label: 'Peu (quelques brouettes)' },
+      { value: 'moyen', label: 'Moyen (benne nécessaire)' },
+      { value: 'important', label: 'Important (camion, évacuation gravats)' },
     ]},
   ],
   autre: [

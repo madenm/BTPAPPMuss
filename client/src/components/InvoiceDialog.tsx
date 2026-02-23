@@ -233,7 +233,7 @@ export function InvoiceDialog({
       const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : null;
       downloadInvoicePdf({
         invoice: draftInvoice,
-        companyName: profile?.full_name || '',
+        companyName: profile?.company_name || profile?.full_name || '',
         companyAddress: profile?.company_address || '',
         companyCityPostal: profile?.company_city_postal || '',
         companyPhone: profile?.company_phone || '',

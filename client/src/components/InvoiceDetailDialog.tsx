@@ -108,7 +108,7 @@ export function InvoiceDetailDialog({
       const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : null;
       downloadInvoicePdf({
         invoice,
-        companyName: profile?.full_name || '',
+        companyName: profile?.company_name || profile?.full_name || '',
         companyAddress: profile?.company_address || '',
         companyCityPostal: profile?.company_city_postal || '',
         companyPhone: profile?.company_phone || '',
@@ -151,7 +151,7 @@ export function InvoiceDetailDialog({
         total: invoice.total_ttc ?? 0,
         dueDate: invoice.due_date ?? new Date().toISOString(),
         paymentTerms: invoice.payment_terms ?? '',
-        companyName: profile?.full_name ?? undefined,
+        companyName: profile?.company_name || profile?.full_name || undefined,
         companyAddress: profile?.company_address,
         companyCityPostal: profile?.company_city_postal,
         companyPhone: profile?.company_phone,

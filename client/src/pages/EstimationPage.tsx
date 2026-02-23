@@ -1,17 +1,29 @@
 import { PageWrapper } from '@/components/PageWrapper';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import { UserAccountButton } from '@/components/UserAccountButton';
-import { Upload, Wand2, Plus, Calculator, User, ArrowRight, ArrowLeft, CheckCircle2, Search, Loader2, FileDown, Building } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  Upload, Wand2, Plus, Calculator, User, ArrowRight, ArrowLeft, CheckCircle2,
+  Search, Loader2, FileDown, Building, ChevronDown, ChevronUp, AlertTriangle,
+  Clock, Users, DollarSign, Pencil, RefreshCw, FileText, Camera, SkipForward,
+  TrendingUp, TrendingDown, Shield,
+} from 'lucide-react';
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useLocation } from 'wouter';
-import jsPDF from 'jspdf';
 import { motion, AnimatePresence } from 'framer-motion';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { getApiPostHeaders } from '@/lib/apiHeaders';
 import { useAuth } from '@/context/AuthContext';
 import { useChantiers } from '@/context/ChantiersContext';
+import { useUserSettings } from '@/context/UserSettingsContext';
 import { uploadFile } from '@/lib/supabaseStorage';
-import { Input } from '@/components/ui/input';
+import { fetchTariffs } from '@/lib/supabaseTariffs';
+import { getCatalogForMetier, ARTIPRIX_CHAPTERS, type ArtiprixChapter } from '@/lib/artiprixCatalog';
+import { downloadQuotePdf, fetchLogoDataUrl } from '@/lib/quotePdf';
 import { TYPE_CHANTIER_LABELS } from '@/lib/planningUtils';
 import { getQuestionsForType, hasQuestionsForType, validateAnswers } from '@/lib/estimationQuestionnaire';
 import { EstimationQuestionnaire } from '@/components/EstimationQuestionnaire';
@@ -28,11 +40,105 @@ interface Client {
   phone: string;
 }
 
+interface EditableMaterial {
+  nom: string;
+  quantite: string;
+  prix: number;
+  prixUnitaire?: number;
+  notes?: string;
+}
+
 const ESTIMATION_STORAGE_KEY = 'estimationForChantier';
+const ESTIMATION_DEVIS_KEY = 'estimationForDevis';
+
+const DONUT_COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#06b6d4'];
+
+function StepIndicator({ current, total }: { current: number; total: number }) {
+  const labels = ['Photos', 'Questions', 'Résultats'];
+  return (
+    <div className="flex items-center justify-center gap-0 w-full max-w-md mx-auto my-4">
+      {Array.from({ length: total }, (_, i) => {
+        const stepNum = i + 1;
+        const isActive = stepNum === current;
+        const isDone = stepNum < current;
+        return (
+          <div key={i} className="flex items-center flex-1">
+            <div className="flex flex-col items-center flex-1">
+              <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                  isDone
+                    ? 'bg-emerald-500 text-white'
+                    : isActive
+                      ? 'bg-white/20 text-white border-2 border-white/60'
+                      : 'bg-white/5 text-white/40 border border-white/15'
+                }`}
+              >
+                {isDone ? <CheckCircle2 className="h-4 w-4" /> : stepNum}
+              </div>
+              <span className={`text-[10px] mt-1 ${isActive || isDone ? 'text-white/80' : 'text-white/40'}`}>
+                {labels[i]}
+              </span>
+            </div>
+            {i < total - 1 && (
+              <div className={`h-0.5 flex-1 mx-1 mt-[-14px] ${isDone ? 'bg-emerald-500' : 'bg-white/15'}`} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ConfidenceBadge({ value }: { value: number }) {
+  const pct = Math.round(value * 100);
+  const color = pct >= 80 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+    : pct >= 50 ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+      : 'bg-red-500/20 text-red-400 border-red-500/30';
+  const Icon = pct >= 80 ? Shield : pct >= 50 ? AlertTriangle : AlertTriangle;
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${color}`}>
+      <Icon className="h-3 w-3" />
+      Confiance: {pct}%
+    </span>
+  );
+}
+
+function CollapsibleSection({
+  title,
+  icon: Icon,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div className="p-4 bg-black/20 backdrop-blur-md border border-white/10 rounded-lg">
+        <CollapsibleTrigger asChild>
+          <button className="flex items-center justify-between w-full text-left">
+            <h3 className="text-base font-semibold text-white flex items-center gap-2">
+              <Icon className="h-5 w-5 text-white/70" />
+              {title}
+            </h3>
+            {open ? <ChevronUp className="h-4 w-4 text-white/50" /> : <ChevronDown className="h-4 w-4 text-white/50" />}
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="mt-3">
+          {children}
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
+  );
+}
 
 export default function EstimationPage() {
   const { user, session } = useAuth();
   const { clients: existingClients } = useChantiers();
+  const { profile, logoUrl, themeColor } = useUserSettings();
   const [, setLocation] = useLocation();
   const [step, setStep] = useState(1);
   const [images, setImages] = useState<UploadedImage[]>([]);
@@ -67,6 +173,15 @@ export default function EstimationPage() {
   const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false);
   const [photoAnalysisError, setPhotoAnalysisError] = useState<string | null>(null);
   const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<string, string>>({});
+  const [editableMaterials, setEditableMaterials] = useState<EditableMaterial[]>([]);
+  const [editingMaterials, setEditingMaterials] = useState(false);
+  const [userTariffs, setUserTariffs] = useState<{ label: string; unit: string; price_ht: number; category: string }[]>([]);
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchTariffs(user.id).then((t) => setUserTariffs(t)).catch(() => {});
+    }
+  }, [user?.id]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -81,40 +196,29 @@ export default function EstimationPage() {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-
     const files = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
     handleFiles(files);
   }, []);
 
   const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files);
-      handleFiles(files);
-    }
+    if (e.target.files) handleFiles(Array.from(e.target.files));
   }, []);
 
   const handleFiles = useCallback(async (files: File[]) => {
     if (!user?.id) {
-      const newImages = files.map(file => ({
-        file,
-        preview: URL.createObjectURL(file)
-      }));
-      setImages(prev => [...prev, ...newImages]);
+      setImages(prev => [...prev, ...files.map(file => ({ file, preview: URL.createObjectURL(file) }))]);
       return;
     }
     setUploadingImages(true);
     const pathPrefix = `${user.id}/estimations/${Date.now()}`;
     const newUrls: UploadedImage[] = [];
     for (let i = 0; i < files.length; i++) {
-      const file = files[i];
       try {
-        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const path = `${pathPrefix}-${i}-${safeName}`;
-        const url = await uploadFile(path, file);
-        newUrls.push({ file, preview: url });
-      } catch (err) {
-        console.error('Upload failed:', err);
-        newUrls.push({ file, preview: URL.createObjectURL(file) });
+        const safeName = files[i].name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const url = await uploadFile(`${pathPrefix}-${i}-${safeName}`, files[i]);
+        newUrls.push({ file: files[i], preview: url });
+      } catch {
+        newUrls.push({ file: files[i], preview: URL.createObjectURL(files[i]) });
       }
     }
     setUploadingImages(false);
@@ -127,17 +231,10 @@ export default function EstimationPage() {
 
   const removeImage = (index: number) => {
     setImages(prev => {
-      const newImages = prev.filter((_, i) => i !== index);
       const p = prev[index].preview;
-      if (p && p.startsWith('blob:')) URL.revokeObjectURL(p);
-      return newImages;
+      if (p?.startsWith('blob:')) URL.revokeObjectURL(p);
+      return prev.filter((_, i) => i !== index);
     });
-  };
-
-  const handleNext = () => {
-    if (step === 1 && images.length > 0) {
-      setStep(2);
-    }
   };
 
   const fileToBase64 = (file: File): Promise<{ base64: string; mimeType: string }> =>
@@ -152,16 +249,17 @@ export default function EstimationPage() {
       reader.readAsDataURL(file);
     });
 
-  /** Lance l'analyse photo (première image) et retourne le résultat. Utilisé à l'étape 2 avant l'estimation ; les résultats sont affichés à l'étape 3. */
-  const runPhotoAnalysisForEstimate = async (): Promise<{ descriptionZone: string; suggestions?: { typeProjet?: string; typeProjetConfiance?: number; surfaceEstimee?: string; etatGeneral?: string; complexite?: string; acces?: string; pointsAttention?: string[] } } | null> => {
+  const runPhotoAnalysis = async (): Promise<typeof photoAnalysis> => {
     if (images.length === 0) return null;
     setPhotoAnalysisError(null);
+    setIsAnalyzingPhoto(true);
     try {
-      const { base64, mimeType } = await fileToBase64(images[0].file);
+      const photosToAnalyze = images.slice(0, 3);
+      const photoData = await Promise.all(photosToAnalyze.map(img => fileToBase64(img.file)));
       const res = await fetch('/api/analyze-estimation-photo', {
         method: 'POST',
         headers: getApiPostHeaders(session?.access_token),
-        body: JSON.stringify({ imageBase64: base64, mimeType })
+        body: JSON.stringify({ imageBase64: photoData[0].base64, mimeType: photoData[0].mimeType })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -174,6 +272,8 @@ export default function EstimationPage() {
     } catch {
       setPhotoAnalysisError('Erreur réseau. Réessayez.');
       return null;
+    } finally {
+      setIsAnalyzingPhoto(false);
     }
   };
 
@@ -183,22 +283,21 @@ export default function EstimationPage() {
     setPhotoAnalysisError(null);
     setIsEstimating(true);
     try {
-      // Analyse photo si des images sont présentes et pas encore analysées (résultat affiché à l'étape 3)
       let descriptionZoneForApi = photoAnalysis?.descriptionZone ?? undefined;
       if (images.length > 0 && !descriptionZoneForApi) {
-        const analysis = await runPhotoAnalysisForEstimate();
+        const analysis = await runPhotoAnalysis();
         if (analysis) descriptionZoneForApi = analysis.descriptionZone;
       }
+
+      const tariffsContext = userTariffs.length > 0
+        ? userTariffs.slice(0, 30).map(t => `${t.label} (${t.category}): ${t.price_ht}€/${t.unit}`).join(', ')
+        : undefined;
 
       const res = await fetch('/api/estimate-chantier', {
         method: 'POST',
         headers: getApiPostHeaders(session?.access_token),
         body: JSON.stringify({
-          client: selectedClient ? {
-            name: selectedClient.name,
-            email: selectedClient.email,
-            phone: selectedClient.phone
-          } : undefined,
+          client: selectedClient ? { name: selectedClient.name, email: selectedClient.email, phone: selectedClient.phone } : undefined,
           chantierInfo: {
             surface: chantierInfo.surface,
             materiaux: chantierInfo.materiaux,
@@ -207,7 +306,8 @@ export default function EstimationPage() {
             metier: chantierInfo.metier
           },
           photoAnalysis: descriptionZoneForApi,
-          questionnaireAnswers: Object.keys(questionnaireAnswers).length > 0 ? questionnaireAnswers : undefined
+          questionnaireAnswers: Object.keys(questionnaireAnswers).length > 0 ? questionnaireAnswers : undefined,
+          userTariffs: tariffsContext,
         })
       });
       const data = await res.json().catch(() => ({}));
@@ -216,6 +316,10 @@ export default function EstimationPage() {
         return;
       }
       setAnalysisResults(data);
+      setEditableMaterials((data.materiaux ?? []).map((m: any) => ({
+        nom: m.nom ?? '', quantite: m.quantite ?? '', prix: m.prix ?? 0, prixUnitaire: m.prixUnitaire, notes: m.notes
+      })));
+      setEditingMaterials(false);
       setStep(3);
     } catch {
       setEstimateError('Erreur réseau. Réessayez.');
@@ -225,55 +329,50 @@ export default function EstimationPage() {
   };
 
   const handleCreateClient = () => {
-    const client: Client = {
-      id: Date.now().toString(),
-      ...newClient
-    };
-    setSelectedClient(client);
+    setSelectedClient({ id: Date.now().toString(), ...newClient });
     setNewClient({ name: '', email: '', phone: '' });
     setShowNewClientForm(false);
   };
 
-  const handleExportPdf = useCallback(() => {
+  const handleExportPdf = useCallback(async () => {
     if (!analysisResults) return;
-    const doc = new jsPDF();
-    let y = 15;
-    doc.setFontSize(16);
-    doc.text('Estimation de projet', 14, y);
-    y += 10;
-    doc.setFontSize(10);
-    doc.text(`Type: ${chantierInfo.metier ? (TYPE_CHANTIER_LABELS[chantierInfo.metier] ?? chantierInfo.metier) : '—'} | Surface: ${chantierInfo.surface ?? '—'} m²`, 14, y);
-    y += 8;
-    doc.text(`Temps estimé: ${analysisResults.tempsRealisation ?? '—'} | Ouvriers: ${analysisResults.nombreOuvriers ?? 1}`, 14, y);
-    y += 8;
-    if (analysisResults.materiaux?.length) {
-      doc.text('Matériaux:', 14, y);
-      y += 6;
-      analysisResults.materiaux.forEach((m: { nom?: string; quantite?: string; prix?: number }) => {
-        doc.text(`  • ${m.nom ?? ''} — ${m.quantite ?? ''} — ${m.prix ?? 0} €`, 14, y);
-        y += 5;
-      });
-      y += 3;
-    }
-    if (analysisResults.outils?.length) {
-      doc.text('Outils: ' + (analysisResults.outils as string[]).join(', '), 14, y);
-      y += 8;
-    }
-    const coutTotal = analysisResults.coutTotal ?? analysisResults.couts?.prixTTC ?? 0;
-    const marge = analysisResults.marge ?? analysisResults.couts?.margeBrute ?? 0;
-    const benefice = analysisResults.benefice ?? 0;
-    doc.text(`Coût de base: ${coutTotal} € | Marge: ${marge} € | Bénéfice estimé: ${benefice} €`, 14, y);
-    y += 8;
-    if (Array.isArray(analysisResults.recommandations) && analysisResults.recommandations.length) {
-      doc.text('Recommandations:', 14, y);
-      y += 6;
-      analysisResults.recommandations.slice(0, 5).forEach((r: string) => {
-        doc.text(`  • ${r}`, 14, y);
-        y += 5;
-      });
-    }
-    doc.save('estimation-chantier.pdf');
-  }, [analysisResults, chantierInfo.metier, chantierInfo.surface]);
+    const materials = editingMaterials ? editableMaterials : (analysisResults.materiaux ?? []);
+    const subtotal = materials.reduce((s: number, m: any) => s + (m.prix ?? 0), 0);
+    const tvaRate = parseFloat(profile?.default_tva_rate || '20') || 20;
+    const tva = subtotal * (tvaRate / 100);
+    const total = subtotal + tva;
+    const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : null;
+
+    downloadQuotePdf({
+      clientInfo: {
+        name: selectedClient?.name ?? '',
+        email: selectedClient?.email ?? '',
+        phone: selectedClient?.phone ?? '',
+        address: '',
+      },
+      projectType: TYPE_CHANTIER_LABELS[chantierInfo.metier] ?? chantierInfo.metier,
+      projectDescription: `Estimation automatique — ${chantierInfo.surface} m²`,
+      validityDays: profile?.default_validity_days ?? '30',
+      items: materials.map((m: any) => ({
+        description: m.nom,
+        quantity: parseFloat(m.quantite) || 1,
+        unitPrice: m.prixUnitaire ?? m.prix,
+        total: m.prix,
+      })),
+      subtotal,
+      tva,
+      total,
+      themeColor: themeColor || undefined,
+      logoDataUrl: logoDataUrl ?? undefined,
+      companyName: profile?.company_name || profile?.full_name || undefined,
+      companyAddress: profile?.company_address ?? undefined,
+      companyCityPostal: profile?.company_city_postal ?? undefined,
+      companyPhone: profile?.company_phone ?? undefined,
+      companyEmail: profile?.company_email ?? undefined,
+      companySiret: profile?.company_siret ?? undefined,
+      companyLegal: [profile?.company_name, profile?.company_siret && `SIRET ${profile.company_siret}`, profile?.company_tva_number && `TVA ${profile.company_tva_number}`].filter(Boolean).join(' — ') || undefined,
+    });
+  }, [analysisResults, editableMaterials, editingMaterials, selectedClient, chantierInfo, profile, logoUrl, themeColor]);
 
   const handleCreateChantierFromEstimation = useCallback(() => {
     if (!analysisResults) return;
@@ -287,62 +386,101 @@ export default function EstimationPage() {
       notes: [photoAnalysis?.descriptionZone, Object.keys(questionnaireAnswers).length ? 'Réponses questionnaire: ' + JSON.stringify(questionnaireAnswers) : ''].filter(Boolean).join('\n\n'),
       montantDevis: typeof prixTTC === 'number' && !isNaN(prixTTC) ? prixTTC : undefined,
     };
-    try {
-      sessionStorage.setItem(ESTIMATION_STORAGE_KEY, JSON.stringify(payload));
-    } catch {
-      // ignore
-    }
+    try { sessionStorage.setItem(ESTIMATION_STORAGE_KEY, JSON.stringify(payload)); } catch {}
     setLocation('/dashboard/projects?openDialog=true&fromEstimation=1');
   }, [analysisResults, selectedClient, chantierInfo.metier, photoAnalysis?.descriptionZone, questionnaireAnswers, setLocation]);
+
+  const handleCreateDevisFromEstimation = useCallback(() => {
+    if (!analysisResults) return;
+    const materials = editingMaterials ? editableMaterials : (analysisResults.materiaux ?? []);
+    const payload = {
+      clientName: selectedClient?.name ?? '',
+      clientEmail: selectedClient?.email ?? '',
+      clientPhone: selectedClient?.phone ?? '',
+      projectType: TYPE_CHANTIER_LABELS[chantierInfo.metier] ?? chantierInfo.metier,
+      projectDescription: `Estimation — ${chantierInfo.surface} m² — ${TYPE_CHANTIER_LABELS[chantierInfo.metier] ?? chantierInfo.metier}`,
+      items: materials.map((m: any) => ({
+        description: m.nom ?? 'Matériau',
+        quantity: parseFloat(m.quantite) || 1,
+        unitPrice: m.prixUnitaire ?? m.prix ?? 0,
+        unit: '',
+      })),
+      conditions: profile?.default_conditions ?? '',
+    };
+    try { sessionStorage.setItem(ESTIMATION_DEVIS_KEY, JSON.stringify(payload)); } catch {}
+    setLocation('/dashboard/quotes?new=1&fromEstimation=1');
+  }, [analysisResults, editableMaterials, editingMaterials, selectedClient, chantierInfo, profile, setLocation]);
+
+  const handleRetryEstimation = () => {
+    setAnalysisResults(null);
+    setEstimateError(null);
+    setStep(2);
+  };
+
+  const handleFullReset = () => {
+    setStep(1);
+    setImages([]);
+    setSelectedClient(null);
+    setChantierInfo({ surface: '', materiaux: '', localisation: '', delai: '', metier: '' });
+    setAnalysisResults(null);
+    setPhotoAnalysis(null);
+    setPhotoAnalysisError(null);
+    setQuestionnaireAnswers({});
+    setEditableMaterials([]);
+    setEditingMaterials(false);
+  };
 
   const filteredExistingClients = useMemo(() => {
     const list = existingClients ?? [];
     const term = clientSearch.trim().toLowerCase();
     if (!term) return list.slice(0, 8);
-    return list
-      .filter(
-        (c) =>
-          c.name.toLowerCase().includes(term) ||
-          (c.email ?? '').toLowerCase().includes(term) ||
-          (c.phone ?? '').toLowerCase().includes(term)
-      )
-      .slice(0, 8);
+    return list.filter(c => c.name.toLowerCase().includes(term) || (c.email ?? '').toLowerCase().includes(term) || (c.phone ?? '').toLowerCase().includes(term)).slice(0, 8);
   }, [existingClients, clientSearch]);
 
   const step2Questions = chantierInfo.metier ? getQuestionsForType(chantierInfo.metier) : [];
   const questionnaireValidationErrors = chantierInfo.metier ? validateAnswers(chantierInfo.metier, questionnaireAnswers) : [];
   const allQuestionnaireAnswersFilled = step2Questions.length === 0 || (step2Questions.every((q) => questionnaireAnswers[q.id]?.trim()) && questionnaireValidationErrors.length === 0);
 
-  const safeMateriaux = analysisResults?.materiaux ?? [];
-  const safeOutils = analysisResults?.outils ?? [];
-  const safeRepartitionCouts = analysisResults?.repartitionCouts ?? {};
-  const safeRecommandations = analysisResults?.recommandations ?? [];
-  const safeTempsRealisation = analysisResults?.tempsRealisation ?? 'Non estimé';
-  const safeTempsDecomposition = analysisResults?.tempsRealisationDecomposition as { preparation?: string; travauxPrincipaux?: string; finitions?: string; imprevu?: string } | undefined;
-  const safeOutilsALouer = analysisResults?.outilsaLouer as { nom: string; duree?: string; coutLocation?: number }[] | undefined;
-  const safeOutilsFournis = analysisResults?.outilsFournis as string[] | undefined;
-  const safeEstimationLocationTotal = analysisResults?.estimationLocationTotal as number | undefined;
-  const safeEquipe = analysisResults?.equipe as { composition?: string; joursPresence?: number; productivite?: string } | undefined;
-  const safeCouts = analysisResults?.couts as { materiaux?: number; mainOeuvre?: number; transportLivraison?: number; locationEquipements?: number; sousTotal?: number; imprevu?: number; coutDeBase?: number; fraisGeneraux?: number; margeBrute?: number; prixTTC?: number } | undefined;
-  const safeHypotheses = analysisResults?.hypotheses as string[] | undefined;
+  const safeCouts = analysisResults?.couts as { materiaux?: number; mainOeuvre?: number; transportLivraison?: number; locationEquipements?: number; sousTotal?: number; imprevu?: number; coutDeBase?: number; fraisGeneraux?: number; margeBrute?: number; prixTTC?: number; fourchetteBasse?: number; fourchetteHaute?: number } | undefined;
   const safeConfiance = analysisResults?.confiance as number | undefined;
   const safeConfianceExplication = analysisResults?.confiance_explication as string | undefined;
+  const safeTempsRealisation = analysisResults?.tempsRealisation ?? 'Non estimé';
+  const safeTempsDecomposition = analysisResults?.tempsRealisationDecomposition as { preparation?: string; travauxPrincipaux?: string; finitions?: string; imprevu?: string } | undefined;
   const safeNombreOuvriers = analysisResults?.nombreOuvriers ?? 1;
   const safeCoutTotal = analysisResults?.coutTotal ?? 0;
   const safeMarge = analysisResults?.marge ?? 0;
   const safeBenefice = analysisResults?.benefice ?? 0;
+  const safeRecommandations = analysisResults?.recommandations ?? [];
+  const safeHypotheses = analysisResults?.hypotheses as string[] | undefined;
+  const safeOutilsALouer = analysisResults?.outilsaLouer as { nom: string; duree?: string; coutLocation?: number }[] | undefined;
+  const safeOutilsFournis = analysisResults?.outilsFournis as string[] | undefined;
+  const safeOutils = analysisResults?.outils ?? [];
+  const safeEquipe = analysisResults?.equipe as { composition?: string; joursPresence?: number; productivite?: string } | undefined;
+  const safeRepartitionCouts = analysisResults?.repartitionCouts ?? {};
+  const safeEstimationLocationTotal = analysisResults?.estimationLocationTotal as number | undefined;
+
+  const prixPrincipal = safeCouts?.prixTTC ?? safeCoutTotal;
+  const fourchetteBasse = safeCouts?.fourchetteBasse ?? Math.round(prixPrincipal * 0.85);
+  const fourchetteHaute = safeCouts?.fourchetteHaute ?? Math.round(prixPrincipal * 1.2);
+
+  const donutData = useMemo(() => {
+    const rep = safeRepartitionCouts;
+    if (!rep || Object.keys(rep).length === 0) return [];
+    return Object.entries(rep)
+      .filter(([, v]) => typeof v === 'number' && (v as number) > 0)
+      .map(([key, value]) => ({
+        name: key === 'mainOeuvre' ? 'Main-d\'œuvre' : key === 'materiaux' ? 'Matériaux' : key.charAt(0).toUpperCase() + key.slice(1),
+        value: value as number,
+      }));
+  }, [safeRepartitionCouts]);
+
+  const materialTotal = useMemo(() => editableMaterials.reduce((s, m) => s + (m.prix || 0), 0), [editableMaterials]);
 
   const selectExistingClient = (c: { id: string; name: string; email: string; phone?: string }) => {
-    setSelectedClient({
-      id: c.id,
-      name: c.name,
-      email: c.email,
-      phone: c.phone ?? ''
-    });
+    setSelectedClient({ id: c.id, name: c.name, email: c.email, phone: c.phone ?? '' });
     setClientSearch('');
   };
 
-  // Map suggestion label (e.g. "Rénovation") to metier key (e.g. "renovation")
   const suggestionLabelToMetier = useCallback((typeProjet: string): string | null => {
     if (!typeProjet?.trim()) return null;
     const trimmed = typeProjet.trim();
@@ -358,11 +496,9 @@ export default function EstimationPage() {
     if (step !== 2 || !photoAnalysis?.suggestions) return;
     setChantierInfo(prev => {
       let next = { ...prev };
-      if (photoAnalysis.suggestions?.surfaceEstimee && !prev.surface)
-        next = { ...next, surface: photoAnalysis.suggestions.surfaceEstimee };
+      if (photoAnalysis.suggestions?.surfaceEstimee && !prev.surface) next = { ...next, surface: photoAnalysis.suggestions.surfaceEstimee };
       const confiance = photoAnalysis.suggestions?.typeProjetConfiance;
-      const shouldPrefillType = confiance != null && confiance > 0.75;
-      if (shouldPrefillType && photoAnalysis.suggestions?.typeProjet && !prev.metier) {
+      if (confiance != null && confiance > 0.75 && photoAnalysis.suggestions?.typeProjet && !prev.metier) {
         const metierKey = suggestionLabelToMetier(photoAnalysis.suggestions.typeProjet);
         if (metierKey) next = { ...next, metier: metierKey };
       }
@@ -370,16 +506,18 @@ export default function EstimationPage() {
     });
   }, [step, photoAnalysis?.suggestions, suggestionLabelToMetier]);
 
+  const cardClass = "bg-black/20 backdrop-blur-xl border border-white/10 text-white";
+
   return (
     <PageWrapper>
       <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
           <div className="min-w-0 w-full sm:flex-1 pl-20">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
-              Estimation Automatique des Chantiers
+              Estimation Automatique
             </h1>
             <p className="text-xs sm:text-sm text-white/70 sm:truncate">
-              Étape {step}/3 - {step === 1 ? 'Photo de la zone' : step === 2 ? 'Questions' : 'Résultats de l\'estimation'}
+              {step === 1 ? 'Ajoutez des photos (optionnel)' : step === 2 ? 'Décrivez votre projet' : 'Résultats de l\'estimation'}
             </p>
           </div>
           <div className="flex-shrink-0 w-full sm:w-auto">
@@ -389,23 +527,20 @@ export default function EstimationPage() {
       </header>
 
       <main className="flex-1 py-4 sm:py-6 px-4 sm:px-0">
+        <StepIndicator current={step} total={3} />
+
         <AnimatePresence mode="wait">
+          {/* ==================== ÉTAPE 1 — PHOTOS (OPTIONNEL) ==================== */}
           {step === 1 && (
-            <motion.div
-              key="step1"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="max-w-4xl mx-auto w-full"
-            >
-              <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white">
+            <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="max-w-4xl mx-auto w-full">
+              <Card className={cardClass}>
                 <CardHeader className="px-4 sm:px-6">
                   <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                    <Upload className="h-4 w-4 sm:h-5 sm:w-5 text-white/70 flex-shrink-0" />
-                    <span className="break-words">Photo de la zone du projet</span>
+                    <Camera className="h-5 w-5 text-white/70" />
+                    Photo de la zone du projet
                   </CardTitle>
                   <p className="text-xs sm:text-sm text-white/60 mt-1">
-                    Insérez une photo de la zone où aura lieu le chantier. Elle sera analysée par l’IA.
+                    Ajoutez des photos pour une analyse IA plus précise, ou passez directement aux questions.
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-4 px-4 sm:px-6">
@@ -413,66 +548,37 @@ export default function EstimationPage() {
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
-                    className={`border-2 border-dashed rounded-lg p-6 sm:p-12 text-center transition-colors ${
-                      isDragging
-                        ? 'border-white/40 bg-white/10'
-                        : 'border-white/20 hover:border-white/30'
+                    className={`border-2 border-dashed rounded-xl p-6 sm:p-10 text-center transition-colors ${
+                      isDragging ? 'border-white/40 bg-white/10' : 'border-white/20 hover:border-white/30'
                     }`}
                   >
-                    <Upload className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3 sm:mb-4 text-white/70" />
-                    <p className="text-sm sm:text-lg font-medium text-white mb-1 sm:mb-2">
-                      Glissez-déposez une photo ici
-                    </p>
-                    <p className="text-xs sm:text-sm text-white/60 mb-3 sm:mb-4">
-                      ou cliquez pour sélectionner un fichier
-                    </p>
-                    <input
-                      id="photo-upload"
-                      name="photo"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileInput}
-                      className="hidden"
-                    />
-                    <Button
-                      variant="outline"
-                      className="text-white border-white/20 hover:bg-white/10"
-                      onClick={() => document.getElementById('photo-upload')?.click()}
-                      disabled={uploadingImages}
-                    >
-                      {uploadingImages ? 'Upload en cours...' : 'Sélectionner une photo'}
+                    <Upload className="h-10 w-10 mx-auto mb-3 text-white/50" />
+                    <p className="text-sm font-medium text-white mb-1">Glissez-déposez vos photos ici</p>
+                    <p className="text-xs text-white/50 mb-3">ou cliquez pour sélectionner</p>
+                    <input id="photo-upload" type="file" accept="image/*" multiple onChange={handleFileInput} className="hidden" />
+                    <Button variant="outline" className="text-white border-white/20 hover:bg-white/10" onClick={() => document.getElementById('photo-upload')?.click()} disabled={uploadingImages}>
+                      {uploadingImages ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Upload...</> : 'Sélectionner des photos'}
                     </Button>
                   </div>
 
                   {images.length > 0 && (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       {images.map((image, index) => (
                         <div key={index} className="relative group">
-                          <img
-                            src={image.preview}
-                            alt={`Preview ${index + 1}`}
-                            className="w-full h-32 object-cover rounded-lg border border-white/20"
-                          />
-                          <button
-                            onClick={() => { setPhotoAnalysis(null); setPhotoAnalysisError(null); removeImage(index); }}
-                            className="absolute top-2 right-2 bg-red-500/80 hover:bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            ×
-                          </button>
+                          <img src={image.preview} alt={`Photo ${index + 1}`} className="w-full h-28 object-cover rounded-lg border border-white/20" />
+                          <button onClick={() => { setPhotoAnalysis(null); removeImage(index); }} className="absolute top-1.5 right-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">×</button>
                         </div>
                       ))}
                     </div>
                   )}
 
-                  <p className="text-white/60 text-sm mt-2">L&apos;analyse de la photo et tous les résultats seront affichés à l&apos;étape 3.</p>
-
-                  <div className="flex justify-end mt-6 gap-2">
-                    <Button
-                      onClick={handleNext}
-                      disabled={images.length === 0}
-                      className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30 disabled:opacity-50"
-                    >
-                      Continuer
+                  <div className="flex justify-between mt-4 gap-2">
+                    <Button variant="outline" onClick={() => setStep(2)} className="text-white/70 border-white/20 hover:bg-white/10">
+                      <SkipForward className="h-4 w-4 mr-2" />
+                      Passer cette étape
+                    </Button>
+                    <Button onClick={() => setStep(2)} className="bg-white/20 text-white border border-white/10 hover:bg-white/30">
+                      {images.length > 0 ? `Continuer avec ${images.length} photo${images.length > 1 ? 's' : ''}` : 'Continuer sans photo'}
                       <ArrowRight className="h-4 w-4 ml-2" />
                     </Button>
                   </div>
@@ -481,289 +587,160 @@ export default function EstimationPage() {
             </motion.div>
           )}
 
+          {/* ==================== ÉTAPE 2 — QUESTIONS ==================== */}
           {step === 2 && (
-            <motion.div
-              key="step2"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="max-w-4xl mx-auto"
-            >
-              <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white">
+            <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="max-w-4xl mx-auto">
+              <Card className={cardClass}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Calculator className="h-5 w-5 text-white/70" />
-                    Questions pour l&apos;estimation
+                    Décrivez votre projet
                   </CardTitle>
-                  <p className="text-sm text-white/60 mt-1">
-                    Répondez aux questions suivantes pour obtenir une estimation.
-                  </p>
+                  <div className="space-y-1 mt-1">
+                    {userTariffs.length > 0 && (
+                      <p className="text-xs text-emerald-400/80 flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3" />
+                        {userTariffs.length} tarifs personnels seront utilisés en priorité
+                      </p>
+                    )}
+                    {chantierInfo.metier && (
+                      <p className="text-xs text-blue-400/80 flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3" />
+                        + {getCatalogForMetier(chantierInfo.metier).length} prix de référence Artiprix ({(getCatalogForMetier(chantierInfo.metier).map(e => e.chapter as ArtiprixChapter).filter((v, i, a) => a.indexOf(v) === i).map(c => ARTIPRIX_CHAPTERS[c]).join(', '))})
+                      </p>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   {/* Client (optionnel) */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-white">Client (optionnel)</h3>
+                  <div className="space-y-3">
+                    <Label className="text-base font-semibold text-white">Client (optionnel)</Label>
                     {selectedClient ? (
-                      <div className="p-4 bg-black/20 backdrop-blur-md border border-white/10 rounded-lg">
-                        <p className="text-white font-medium">{selectedClient.name}</p>
-                        <p className="text-sm text-white/70">{selectedClient.email}</p>
-                        <p className="text-sm text-white/70">{selectedClient.phone}</p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="mt-2 text-white border-white/20 hover:bg-white/10"
-                          onClick={() => setSelectedClient(null)}
-                        >
-                          Changer de client
-                        </Button>
+                      <div className="p-3 bg-black/20 border border-white/10 rounded-xl flex items-center justify-between">
+                        <div>
+                          <p className="text-white font-medium text-sm">{selectedClient.name}</p>
+                          <p className="text-xs text-white/60">{selectedClient.email} {selectedClient.phone && `• ${selectedClient.phone}`}</p>
+                        </div>
+                        <Button variant="outline" size="sm" className="text-white/70 border-white/20 hover:bg-white/10" onClick={() => setSelectedClient(null)}>Changer</Button>
                       </div>
                     ) : (
-                      <div className="space-y-4 p-4 bg-black/20 backdrop-blur-md border border-white/10 rounded-lg">
-                        <label className="text-sm font-medium text-white block mb-2">Rechercher un client existant</label>
+                      <div className="space-y-3 p-4 bg-black/20 border border-white/10 rounded-xl">
                         <div className="relative">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
-                          <Input
-                            type="text"
-                            value={clientSearch}
-                            onChange={(e) => setClientSearch(e.target.value)}
-                            placeholder="Nom, email ou téléphone..."
-                            className="pl-9 bg-black/20 border-white/10 text-white placeholder:text-white/50"
-                          />
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+                          <Input type="text" value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} placeholder="Rechercher un client..." className="pl-9 bg-black/20 border-white/10 text-white placeholder:text-white/40" />
                         </div>
                         {filteredExistingClients.length > 0 && (
-                          <ul className="border border-white/10 rounded-lg overflow-hidden divide-y divide-white/10 max-h-48 overflow-y-auto">
+                          <ul className="border border-white/10 rounded-lg overflow-hidden divide-y divide-white/10 max-h-36 overflow-y-auto">
                             {filteredExistingClients.map((c) => (
                               <li key={c.id}>
-                                <button
-                                  type="button"
-                                  onClick={() => selectExistingClient(c)}
-                                  className="w-full px-4 py-3 text-left hover:bg-white/10 transition-colors flex flex-col gap-0.5"
-                                >
-                                  <span className="font-medium text-white">{c.name}</span>
-                                  <span className="text-sm text-white/70">{c.email}</span>
-                                  {c.phone && (
-                                    <span className="text-sm text-white/60">{c.phone}</span>
-                                  )}
+                                <button type="button" onClick={() => selectExistingClient(c)} className="w-full px-3 py-2 text-left hover:bg-white/10 transition-colors">
+                                  <span className="font-medium text-white text-sm">{c.name}</span>
+                                  <span className="text-xs text-white/60 ml-2">{c.email}</span>
                                 </button>
                               </li>
                             ))}
                           </ul>
                         )}
-                        {(existingClients ?? []).length === 0 && !showNewClientForm && (
-                          <p className="text-sm text-white/60">Aucun client enregistré. Créez-en un ci-dessous.</p>
+                        {!showNewClientForm ? (
+                          <Button type="button" variant="outline" size="sm" className="text-white/70 border-white/20 hover:bg-white/10" onClick={() => setShowNewClientForm(true)}>
+                            <Plus className="h-4 w-4 mr-1" /> Nouveau client
+                          </Button>
+                        ) : (
+                          <div className="space-y-3 border-t border-white/10 pt-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              <div className="space-y-1">
+                                <Label className="text-xs text-white/70">Nom</Label>
+                                <Input value={newClient.name} onChange={(e) => setNewClient({ ...newClient, name: e.target.value })} placeholder="Nom" className="bg-black/20 border-white/10 text-white placeholder:text-white/40" />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs text-white/70">Email</Label>
+                                <Input type="email" value={newClient.email} onChange={(e) => setNewClient({ ...newClient, email: e.target.value })} placeholder="email@ex.fr" className="bg-black/20 border-white/10 text-white placeholder:text-white/40" />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs text-white/70">Téléphone</Label>
+                                <Input type="tel" value={newClient.phone} onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })} placeholder="06..." className="bg-black/20 border-white/10 text-white placeholder:text-white/40" />
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={handleCreateClient} disabled={!newClient.name || !newClient.email} className="bg-white/20 text-white border border-white/10 hover:bg-white/30"><Plus className="h-3 w-3 mr-1" />Ajouter</Button>
+                              <Button size="sm" variant="outline" className="text-white/60 border-white/15 hover:bg-white/10" onClick={() => { setShowNewClientForm(false); setNewClient({ name: '', email: '', phone: '' }); }}>Annuler</Button>
+                            </div>
+                          </div>
                         )}
-                        <div className="pt-2 border-t border-white/10">
-                          {!showNewClientForm ? (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="text-white border-white/20 hover:bg-white/10"
-                              onClick={() => setShowNewClientForm(true)}
-                            >
-                              <Plus className="h-4 w-4 mr-2" />
-                              Créer un nouveau client
-                            </Button>
-                          ) : (
-                            <>
-                              <p className="text-sm font-medium text-white mb-3">Nouveau client</p>
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                  <label className="text-sm font-medium text-white/80 block mb-2" htmlFor="new-client-name">Nom</label>
-                                  <input
-                                    id="new-client-name"
-                                    name="newClientName"
-                                    type="text"
-                                    value={newClient.name}
-                                    onChange={(e) => setNewClient({ ...newClient, name: e.target.value })}
-                                    className="w-full px-3 py-2 rounded-md border bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
-                                    placeholder="Nom du client"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="text-sm font-medium text-white/80 block mb-2" htmlFor="new-client-email">Email</label>
-                                  <input
-                                    id="new-client-email"
-                                    name="newClientEmail"
-                                    type="email"
-                                    value={newClient.email}
-                                    onChange={(e) => setNewClient({ ...newClient, email: e.target.value })}
-                                    className="w-full px-3 py-2 rounded-md border bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
-                                    placeholder="email@example.com"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="text-sm font-medium text-white/80 block mb-2" htmlFor="new-client-phone">Téléphone</label>
-                                  <input
-                                    id="new-client-phone"
-                                    name="newClientPhone"
-                                    type="tel"
-                                    value={newClient.phone}
-                                    onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })}
-                                    className="w-full px-3 py-2 rounded-md border bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
-                                    placeholder="06 12 34 56 78"
-                                  />
-                                </div>
-                              </div>
-                              <div className="flex gap-2 mt-3">
-                                <Button
-                                  onClick={handleCreateClient}
-                                  disabled={!newClient.name || !newClient.email || !newClient.phone}
-                                  className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30 disabled:opacity-50"
-                                >
-                                  <Plus className="h-4 w-4 mr-2" />
-                                  Ajouter le client
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  className="text-white border-white/20 hover:bg-white/10"
-                                  onClick={() => {
-                                    setShowNewClientForm(false);
-                                    setNewClient({ name: '', email: '', phone: '' });
-                                  }}
-                                >
-                                  Annuler
-                                </Button>
-                              </div>
-                            </>
-                          )}
-                        </div>
                       </div>
                     )}
                   </div>
 
-                  {/* Questions */}
+                  {/* Infos projet */}
                   <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-white">Réponses</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-sm font-medium text-white block mb-2" htmlFor="chantier-metier">Quel est le type de projet ?</label>
-                        <select
-                          id="chantier-metier"
-                          name="metier"
-                          value={chantierInfo.metier}
-                          onChange={(e) => {
-                            const metier = e.target.value;
-                            setChantierInfo({ ...chantierInfo, metier });
-                            setQuestionnaireAnswers({});
-                          }}
-                          className="w-full px-3 py-2 rounded-md border bg-black/20 backdrop-blur-md border-white/10 text-white"
-                        >
-                          <option value="">Sélectionner un type</option>
-                          {Object.entries(TYPE_CHANTIER_LABELS).map(([value, label]) => (
-                            <option key={value} value={value}>{label}</option>
-                          ))}
-                        </select>
+                    <Label className="text-base font-semibold text-white">Détails du projet</Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label className="text-sm text-white/70">Type de projet *</Label>
+                        <Select value={chantierInfo.metier} onValueChange={(v) => { setChantierInfo({ ...chantierInfo, metier: v }); setQuestionnaireAnswers({}); }}>
+                          <SelectTrigger className="bg-black/20 border-white/10 text-white"><SelectValue placeholder="Sélectionner un type" /></SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(TYPE_CHANTIER_LABELS).map(([value, label]) => (
+                              <SelectItem key={value} value={value}>{label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
-                      <div>
-                        <label className="text-sm font-medium text-white block mb-2" htmlFor="chantier-surface">Quelle est la surface en m² ?</label>
-                        <input
-                          id="chantier-surface"
-                          name="surface"
-                          type="number"
-                          value={chantierInfo.surface}
-                          onChange={(e) => setChantierInfo({ ...chantierInfo, surface: e.target.value })}
-                          className="w-full px-3 py-2 rounded-md border bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
-                          placeholder="Ex: 50"
-                        />
+                      <div className="space-y-1.5">
+                        <Label className="text-sm text-white/70">Surface en m² *</Label>
+                        <Input type="number" value={chantierInfo.surface} onChange={(e) => setChantierInfo({ ...chantierInfo, surface: e.target.value })} placeholder="Ex: 50" className="bg-black/20 border-white/10 text-white placeholder:text-white/40" />
                       </div>
+
                       {chantierInfo.metier && getQuestionsForType(chantierInfo.metier).length > 0 && (
-                        <EstimationQuestionnaire
-                          type={chantierInfo.metier}
-                          answers={questionnaireAnswers}
-                          onChange={(id, value) => setQuestionnaireAnswers((prev) => ({ ...prev, [id]: value }))}
-                        />
+                        <EstimationQuestionnaire type={chantierInfo.metier} answers={questionnaireAnswers} onChange={(id, value) => setQuestionnaireAnswers((prev) => ({ ...prev, [id]: value }))} />
                       )}
                       {chantierInfo.metier && !hasQuestionsForType(chantierInfo.metier) && (
-                        <div className="md:col-span-2">
-                          <label className="text-sm font-medium text-white block mb-2" htmlFor="chantier-materiaux">Précisez le projet ou les matériaux</label>
-                          <input
-                            id="chantier-materiaux"
-                            name="materiaux"
-                            type="text"
-                            value={chantierInfo.materiaux}
-                            onChange={(e) => setChantierInfo({ ...chantierInfo, materiaux: e.target.value })}
-                            className="w-full px-3 py-2 rounded-md border bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
-                            placeholder="Ex: Carrelage, Peinture, détail du projet..."
-                          />
+                        <div className="sm:col-span-2 space-y-1.5">
+                          <Label className="text-sm text-white/70">Précisez le projet ou les matériaux</Label>
+                          <Input value={chantierInfo.materiaux} onChange={(e) => setChantierInfo({ ...chantierInfo, materiaux: e.target.value })} placeholder="Ex: Carrelage, Peinture..." className="bg-black/20 border-white/10 text-white placeholder:text-white/40" />
                         </div>
                       )}
-                      <div>
-                        <label className="text-sm font-medium text-white block mb-2" htmlFor="chantier-localisation">Localisation ?</label>
-                        <input
-                          id="chantier-localisation"
-                          name="localisation"
-                          type="text"
-                          value={chantierInfo.localisation}
-                          onChange={(e) => setChantierInfo({ ...chantierInfo, localisation: e.target.value })}
-                          className="w-full px-3 py-2 rounded-md border bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
-                          placeholder="Ex: Paris 75001"
-                        />
+
+                      <div className="space-y-1.5">
+                        <Label className="text-sm text-white/70">Localisation</Label>
+                        <Input value={chantierInfo.localisation} onChange={(e) => setChantierInfo({ ...chantierInfo, localisation: e.target.value })} placeholder="Ex: Paris 75001" className="bg-black/20 border-white/10 text-white placeholder:text-white/40" />
                       </div>
-                      <div>
-                        <label className="text-sm font-medium text-white block mb-2" htmlFor="chantier-delai">Délai souhaité ?</label>
-                        <select
-                          id="chantier-delai"
-                          name="delai"
-                          value={chantierInfo.delai}
-                          onChange={(e) => setChantierInfo({ ...chantierInfo, delai: e.target.value })}
-                          className="w-full px-3 py-2 rounded-md border bg-black/20 backdrop-blur-md border-white/10 text-white"
-                        >
-                          <option value="">— Optionnel —</option>
-                          <option value="ASAP">ASAP</option>
-                          <option value="1-2 semaines">1–2 semaines</option>
-                          <option value="2-4 semaines">2–4 semaines</option>
-                          <option value="1-3 mois">1–3 mois</option>
-                          <option value="Flexible">Flexible</option>
-                        </select>
+                      <div className="space-y-1.5">
+                        <Label className="text-sm text-white/70">Délai souhaité</Label>
+                        <Select value={chantierInfo.delai} onValueChange={(v) => setChantierInfo({ ...chantierInfo, delai: v })}>
+                          <SelectTrigger className="bg-black/20 border-white/10 text-white"><SelectValue placeholder="— Optionnel —" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="ASAP">ASAP</SelectItem>
+                            <SelectItem value="1-2 semaines">1–2 semaines</SelectItem>
+                            <SelectItem value="2-4 semaines">2–4 semaines</SelectItem>
+                            <SelectItem value="1-3 mois">1–3 mois</SelectItem>
+                            <SelectItem value="Flexible">Flexible</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
                   </div>
 
                   {questionnaireValidationErrors.length > 0 && (
-                    <div className="p-4 rounded-lg bg-amber-500/20 border border-amber-400/30 text-amber-200 text-sm space-y-1">
-                      {questionnaireValidationErrors.map((err, i) => (
-                        <p key={i}>{err}</p>
-                      ))}
+                    <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-400/25 text-amber-200 text-sm space-y-0.5">
+                      {questionnaireValidationErrors.map((err, i) => <p key={i}>{err}</p>)}
                     </div>
                   )}
                   {photoAnalysisError && (
-                    <div className="p-4 rounded-lg bg-amber-500/20 border border-amber-400/30 text-amber-200 text-sm">
-                      Analyse photo : {photoAnalysisError} L&apos;estimation a été calculée sans la photo.
+                    <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-400/25 text-amber-200 text-sm">
+                      Analyse photo : {photoAnalysisError}
                     </div>
                   )}
                   {estimateError && (
-                    <div className="p-4 rounded-lg bg-red-500/20 border border-red-400/30 text-red-200 text-sm">
-                      {estimateError}
-                    </div>
+                    <div className="p-3 rounded-xl bg-red-500/15 border border-red-400/25 text-red-200 text-sm">{estimateError}</div>
                   )}
-                  <div className="flex justify-between mt-6">
-                    <Button
-                      variant="outline"
-                      onClick={() => { setEstimateError(null); setStep(1); }}
-                      disabled={isEstimating}
-                      className="text-white border-white/20 hover:bg-white/10"
-                    >
-                      <ArrowLeft className="h-4 w-4 mr-2" />
-                      Retour
+
+                  <div className="flex justify-between mt-4">
+                    <Button variant="outline" onClick={() => { setEstimateError(null); setStep(1); }} disabled={isEstimating} className="text-white/70 border-white/20 hover:bg-white/10">
+                      <ArrowLeft className="h-4 w-4 mr-2" />Retour
                     </Button>
-                    <Button
-                      onClick={handleLaunchAnalysis}
-                      disabled={!chantierInfo.surface || !chantierInfo.metier || !allQuestionnaireAnswersFilled || isEstimating}
-                      className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30 disabled:opacity-50"
-                    >
-                      {isEstimating ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Estimation en cours...
-                        </>
-                      ) : (
-                        <>
-                          <Wand2 className="h-4 w-4 mr-2" />
-                          Obtenir l&apos;estimation
-                        </>
-                      )}
+                    <Button onClick={handleLaunchAnalysis} disabled={!chantierInfo.surface || !chantierInfo.metier || !allQuestionnaireAnswersFilled || isEstimating} className="bg-white/20 text-white border border-white/10 hover:bg-white/30 disabled:opacity-50">
+                      {isEstimating ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Estimation en cours...</> : <><Wand2 className="h-4 w-4 mr-2" />Obtenir l&apos;estimation</>}
                     </Button>
                   </div>
                 </CardContent>
@@ -771,359 +748,268 @@ export default function EstimationPage() {
             </motion.div>
           )}
 
+          {/* ==================== ÉTAPE 3 — RÉSULTATS ==================== */}
           {step === 3 && analysisResults && (
-            <motion.div
-              key="step3"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="max-w-6xl mx-auto space-y-6"
-            >
-              <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CheckCircle2 className="h-5 w-5 text-green-400" />
-                    Résultats de l'Analyse IA
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  {/* Récapitulatif de la saisie */}
-                  <div className="p-4 bg-black/20 backdrop-blur-md border border-white/10 rounded-lg">
-                    <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-                      <User className="h-5 w-5 text-white/70" />
-                      Récapitulatif de votre saisie
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                      {selectedClient && (
-                        <>
-                          <div><span className="text-white/60">Client :</span> <span className="text-white">{selectedClient.name}</span></div>
-                          {selectedClient.email && <div><span className="text-white/60">Email :</span> <span className="text-white">{selectedClient.email}</span></div>}
-                          {selectedClient.phone && <div><span className="text-white/60">Tél :</span> <span className="text-white">{selectedClient.phone}</span></div>}
-                        </>
-                      )}
-                      {chantierInfo.surface && <div><span className="text-white/60">Surface :</span> <span className="text-white">{chantierInfo.surface} m²</span></div>}
-                      {chantierInfo.metier && <div><span className="text-white/60">Type :</span> <span className="text-white">{TYPE_CHANTIER_LABELS[chantierInfo.metier] ?? chantierInfo.metier}</span></div>}
-                      {chantierInfo.materiaux && <div><span className="text-white/60">Matériaux :</span> <span className="text-white">{chantierInfo.materiaux}</span></div>}
-                      {chantierInfo.localisation && <div><span className="text-white/60">Localisation :</span> <span className="text-white">{chantierInfo.localisation}</span></div>}
-                      {chantierInfo.delai && <div><span className="text-white/60">Délai :</span> <span className="text-white">{chantierInfo.delai}</span></div>}
-                    </div>
-                  </div>
-
-                  {/* Photo(s) du chantier (gardées en mémoire) */}
-                  {images.length > 0 && (
-                    <div className="p-4 bg-black/20 backdrop-blur-md border border-white/10 rounded-lg">
-                      <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-                        <Upload className="h-5 w-5 text-white/70" />
-                        Photo(s) du chantier
-                      </h3>
-                      <div className="flex flex-wrap gap-3">
-                        {images.slice(0, 6).map((img, idx) => (
-                          <div key={idx} className="relative rounded-lg overflow-hidden border border-white/10 w-24 h-24 flex-shrink-0">
-                            <img src={img.preview} alt={`Chantier ${idx + 1}`} className="w-full h-full object-cover" />
-                          </div>
-                        ))}
+            <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="max-w-6xl mx-auto space-y-4">
+              {/* KPI Cards */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <Card className="bg-black/40 backdrop-blur-xl border-2 border-emerald-500/40 shadow-lg shadow-emerald-500/10">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                        <DollarSign className="h-4 w-4 text-emerald-400" />
                       </div>
+                      <span className="text-xs font-medium text-emerald-400 uppercase tracking-wide">Prix estimé</span>
                     </div>
-                  )}
-
-                  {/* Résultat de l'analyse (photo) — affiché à l'étape 3 */}
-                  {photoAnalysis && (
-                    <div className="p-4 bg-black/20 backdrop-blur-md border border-white/10 rounded-lg">
-                      <h3 className="text-sm font-semibold text-white mb-2">Résultat de l&apos;analyse</h3>
-                      <p className="text-white/90 text-sm whitespace-pre-wrap">{photoAnalysis.descriptionZone}</p>
-                      {photoAnalysis.suggestions && (photoAnalysis.suggestions.typeProjet || photoAnalysis.suggestions.surfaceEstimee) && (
-                        <p className="text-white/70 text-xs mt-2">
-                          Suggestions : type {photoAnalysis.suggestions.typeProjet ?? '—'}, surface ~{photoAnalysis.suggestions.surfaceEstimee ?? '—'} m²
-                        </p>
-                      )}
-                      {photoAnalysis.suggestions?.etatGeneral && (
-                        <p className="text-white/60 text-xs mt-1">État général : {photoAnalysis.suggestions.etatGeneral}</p>
-                      )}
-                      {photoAnalysis.suggestions?.complexite && (
-                        <p className="text-white/60 text-xs mt-0.5">Complexité : {photoAnalysis.suggestions.complexite}</p>
-                      )}
-                      {photoAnalysis.suggestions?.acces && (
-                        <p className="text-white/60 text-xs mt-0.5">Accès : {photoAnalysis.suggestions.acces}</p>
-                      )}
-                      {photoAnalysis.suggestions?.pointsAttention && photoAnalysis.suggestions.pointsAttention.length > 0 && (
-                        <div className="mt-2">
-                          <p className="text-white/60 text-xs font-medium mb-1">Points d&apos;attention :</p>
-                          <ul className="text-white/60 text-xs list-disc list-inside space-y-0.5">
-                            {photoAnalysis.suggestions.pointsAttention.map((p, i) => (
-                              <li key={i}>{p}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Estimation du temps */}
-                  <div className="p-4 bg-black/20 backdrop-blur-md border border-white/10 rounded-lg">
-                    <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
-                      <CheckCircle2 className="h-5 w-5 text-green-400" />
-                      Estimation du temps de réalisation
-                    </h3>
-                    <p className="text-2xl font-bold text-white">{safeTempsRealisation}</p>
-                    {safeTempsDecomposition && (safeTempsDecomposition.preparation || safeTempsDecomposition.travauxPrincipaux || safeTempsDecomposition.finitions || safeTempsDecomposition.imprevu) && (
-                      <div className="mt-3 pt-3 border-t border-white/10 space-y-1 text-sm text-white/80">
-                        <p><span className="text-white/60">Décomposition :</span></p>
-                        {safeTempsDecomposition.preparation && <p>• Préparation : {safeTempsDecomposition.preparation}</p>}
-                        {safeTempsDecomposition.travauxPrincipaux && <p>• Travaux principaux : {safeTempsDecomposition.travauxPrincipaux}</p>}
-                        {safeTempsDecomposition.finitions && <p>• Finitions : {safeTempsDecomposition.finitions}</p>}
-                        {safeTempsDecomposition.imprevu && <p>• Imprévus : {safeTempsDecomposition.imprevu}</p>}
+                    <p className="text-2xl font-extrabold text-white">{prixPrincipal.toLocaleString('fr-FR')} €</p>
+                    <p className="text-xs text-white/60 mt-1">{fourchetteBasse.toLocaleString('fr-FR')} – {fourchetteHaute.toLocaleString('fr-FR')} €</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-black/40 backdrop-blur-xl border-2 border-blue-500/40 shadow-lg shadow-blue-500/10">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                        <Clock className="h-4 w-4 text-blue-400" />
                       </div>
-                    )}
-                  </div>
-
-                  {/* Liste des matériaux */}
-                  <div className="p-4 bg-black/20 backdrop-blur-md border border-white/10 rounded-lg">
-                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                      <CheckCircle2 className="h-5 w-5 text-green-400" />
-                      Liste des matériaux nécessaires
-                    </h3>
-                    <div className="space-y-2">
-                      {safeMateriaux.length > 0 ? (
-                        safeMateriaux.map((mat: { nom?: string; quantite?: string; prix?: number; prixUnitaire?: number; notes?: string }, index: number) => (
-                          <div key={index} className="flex justify-between items-center p-2 bg-black/10 rounded">
-                            <div>
-                              <p className="text-white font-medium">{mat.nom}</p>
-                              <p className="text-sm text-white/70">{mat.quantite}{mat.notes ? ` — ${mat.notes}` : ''}</p>
-                            </div>
-                            <div className="text-right">
-                              {mat.prixUnitaire != null && <p className="text-white/60 text-xs">P.U. {mat.prixUnitaire} €</p>}
-                              <p className="text-white font-semibold">{mat.prix ?? 0} €</p>
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-white/60 text-sm">Aucun matériau listé par l’estimation.</p>
-                      )}
+                      <span className="text-xs font-medium text-blue-400 uppercase tracking-wide">Durée</span>
                     </div>
-                  </div>
-
-                  {/* Outils nécessaires */}
-                  <div className="p-4 bg-black/20 backdrop-blur-md border border-white/10 rounded-lg">
-                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                      <CheckCircle2 className="h-5 w-5 text-green-400" />
-                      Outils nécessaires
-                    </h3>
-                    {(safeOutilsALouer?.length || safeOutilsFournis?.length) ? (
-                      <div className="space-y-4">
-                        {safeOutilsALouer && safeOutilsALouer.length > 0 && (
-                          <div>
-                            <p className="text-white/80 font-medium text-sm mb-2">Équipements à louer</p>
-                            <ul className="space-y-2">
-                              {safeOutilsALouer.map((o, i) => (
-                                <li key={i} className="flex items-start gap-2 text-white/90 text-sm">
-                                  <span className="text-green-400 mt-0.5">•</span>
-                                  <span>{o.nom}{o.duree ? ` (${o.duree})` : ''}{o.coutLocation != null ? ` — ${o.coutLocation} €` : ''}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                        {safeOutilsFournis && safeOutilsFournis.length > 0 && (
-                          <div>
-                            <p className="text-white/80 font-medium text-sm mb-2">Fournis par l’artisan</p>
-                            <ul className="space-y-2">
-                              {safeOutilsFournis.map((o, i) => (
-                                <li key={i} className="flex items-start gap-2 text-white/90 text-sm">
-                                  <span className="text-green-400 mt-0.5">•</span>
-                                  <span>{o}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                        {safeEstimationLocationTotal != null && (
-                          <p className="text-white/70 text-sm">Estimation location totale : <span className="font-semibold text-white">{safeEstimationLocationTotal} €</span></p>
-                        )}
+                    <p className="text-2xl font-extrabold text-white">{safeTempsRealisation}</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-black/40 backdrop-blur-xl border-2 border-violet-500/40 shadow-lg shadow-violet-500/10">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center">
+                        <Users className="h-4 w-4 text-violet-400" />
                       </div>
-                    ) : safeOutils.length > 0 ? (
-                      <ul className="space-y-2">
-                        {safeOutils.map((outil: string, index: number) => (
-                          <li key={index} className="flex items-start gap-2 text-white/90">
-                            <span className="text-green-400 mt-1">•</span>
-                            <span>{outil}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-white/60 text-sm">Aucun outil listé.</p>
-                    )}
-                  </div>
-
-                  {/* Équipe / Nombre d'ouvriers */}
-                  <div className="p-4 bg-black/20 backdrop-blur-md border border-white/10 rounded-lg">
-                    <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
-                      <CheckCircle2 className="h-5 w-5 text-green-400" />
-                      Équipe requise
-                    </h3>
-                    <p className="text-2xl font-bold text-white">{safeNombreOuvriers} ouvrier(s)</p>
-                    {safeEquipe && (safeEquipe.composition || safeEquipe.joursPresence != null || safeEquipe.productivite) && (
-                      <div className="mt-3 pt-3 border-t border-white/10 space-y-1 text-sm text-white/80">
-                        {safeEquipe.composition && <p><span className="text-white/60">Composition :</span> {safeEquipe.composition}</p>}
-                        {safeEquipe.joursPresence != null && <p><span className="text-white/60">Jours de présence :</span> {safeEquipe.joursPresence}</p>}
-                        {safeEquipe.productivite && <p><span className="text-white/60">Productivité :</span> {safeEquipe.productivite}</p>}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Coût total */}
-                  <div className="p-4 bg-black/20 backdrop-blur-md border border-white/10 rounded-lg">
-                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                      <CheckCircle2 className="h-5 w-5 text-green-400" />
-                      Coût total prévisionnel
-                    </h3>
-                    {safeCouts && (safeCouts.materiaux != null || safeCouts.mainOeuvre != null || safeCouts.prixTTC != null) ? (
-                      <div className="space-y-2">
-                        {safeCouts.materiaux != null && <div className="flex justify-between"><span className="text-white/70">Matériaux</span><span className="text-white font-semibold">{safeCouts.materiaux} €</span></div>}
-                        {safeCouts.mainOeuvre != null && <div className="flex justify-between"><span className="text-white/70">Main-d’œuvre</span><span className="text-white font-semibold">{safeCouts.mainOeuvre} €</span></div>}
-                        {safeCouts.transportLivraison != null && <div className="flex justify-between"><span className="text-white/70">Transport / livraison</span><span className="text-white font-semibold">{safeCouts.transportLivraison} €</span></div>}
-                        {safeCouts.locationEquipements != null && <div className="flex justify-between"><span className="text-white/70">Location équipements</span><span className="text-white font-semibold">{safeCouts.locationEquipements} €</span></div>}
-                        {safeCouts.sousTotal != null && <div className="flex justify-between"><span className="text-white/70">Sous-total</span><span className="text-white font-semibold">{safeCouts.sousTotal} €</span></div>}
-                        {safeCouts.imprevu != null && <div className="flex justify-between"><span className="text-white/70">Imprévus (15%)</span><span className="text-white font-semibold">{safeCouts.imprevu} €</span></div>}
-                        {safeCouts.coutDeBase != null && <div className="flex justify-between"><span className="text-white/70">Coût de base</span><span className="text-white font-semibold">{safeCouts.coutDeBase} €</span></div>}
-                        {safeCouts.fraisGeneraux != null && <div className="flex justify-between"><span className="text-white/70">Frais généraux</span><span className="text-white font-semibold">{safeCouts.fraisGeneraux} €</span></div>}
-                        {safeCouts.margeBrute != null && <div className="flex justify-between"><span className="text-white/70">Marge</span><span className="text-white font-semibold">{safeCouts.margeBrute} €</span></div>}
-                        {safeCouts.prixTTC != null && <div className="flex justify-between border-t border-white/10 pt-2"><span className="text-white font-semibold">Prix TTC estimé</span><span className="text-green-400 font-bold text-xl">{safeCouts.prixTTC} €</span></div>}
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <div className="flex justify-between">
-                          <span className="text-white/70">Coût de base</span>
-                          <span className="text-white font-semibold">{safeCoutTotal} €</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-white/70">Marge</span>
-                          <span className="text-white font-semibold">{safeMarge} €</span>
-                        </div>
-                        <div className="flex justify-between border-t border-white/10 pt-2">
-                          <span className="text-white font-semibold">Bénéfice estimé</span>
-                          <span className="text-green-400 font-bold text-xl">{safeBenefice} €</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Graphique de répartition */}
-                  <div className="p-4 bg-black/20 backdrop-blur-md border border-white/10 rounded-lg">
-                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                      <CheckCircle2 className="h-5 w-5 text-green-400" />
-                      Répartition des coûts
-                    </h3>
-                    <div className="space-y-3">
-                      {Object.keys(safeRepartitionCouts).length > 0 ? (
-                        Object.entries(safeRepartitionCouts).map(([key, value]: [string, any]) => (
-                          <div key={key} className="space-y-1">
-                            <div className="flex justify-between text-sm">
-                              <span className="text-white/70 capitalize">{key === 'mainOeuvre' ? 'Main-d\'œuvre' : key}</span>
-                              <span className="text-white font-semibold">{value} €</span>
-                            </div>
-                            <div className="w-full bg-black/20 rounded-full h-2">
-                              <div
-                                className="bg-white/30 h-2 rounded-full"
-                                style={{ width: `${(safeCoutTotal ? (value / safeCoutTotal) * 100 : 0)}%` }}
-                              />
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-white/60 text-sm">Aucune répartition fournie.</p>
-                      )}
+                      <span className="text-xs font-medium text-violet-400 uppercase tracking-wide">Équipe</span>
                     </div>
-                  </div>
-
-                  {/* Recommandations */}
-                  <div className="p-4 bg-black/20 backdrop-blur-md border border-white/10 rounded-lg">
-                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                      <CheckCircle2 className="h-5 w-5 text-green-400" />
-                      Recommandations automatiques
-                    </h3>
-                    {safeRecommandations.length > 0 ? (
-                      <ul className="space-y-2">
-                        {safeRecommandations.map((rec: string, index: number) => (
-                          <li key={index} className="flex items-start gap-2 text-white/90">
-                            <span className="text-green-400 mt-1">•</span>
-                            <span>{rec}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-white/60 text-sm">Aucune recommandation fournie.</p>
-                    )}
-                  </div>
-
-                  {/* Hypothèses */}
-                  {safeHypotheses && safeHypotheses.length > 0 && (
-                    <div className="p-4 bg-black/20 backdrop-blur-md border border-white/10 rounded-lg">
-                      <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                        <CheckCircle2 className="h-5 w-5 text-green-400" />
-                        Hypothèses utilisées
-                      </h3>
-                      <ul className="space-y-2">
-                        {safeHypotheses.map((h, i) => (
-                          <li key={i} className="flex items-start gap-2 text-white/90 text-sm">
-                            <span className="text-green-400 mt-0.5">•</span>
-                            <span>{h}</span>
-                          </li>
-                        ))}
-                      </ul>
+                    <p className="text-2xl font-extrabold text-white">{safeNombreOuvriers} ouvrier{safeNombreOuvriers > 1 ? 's' : ''}</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-black/40 backdrop-blur-xl border-2 border-amber-500/40 shadow-lg shadow-amber-500/10">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                        <TrendingUp className="h-4 w-4 text-amber-400" />
+                      </div>
+                      <span className="text-xs font-medium text-amber-400 uppercase tracking-wide">Marge</span>
                     </div>
-                  )}
+                    <p className="text-2xl font-extrabold text-white">{(safeCouts?.margeBrute ?? safeMarge).toLocaleString('fr-FR')} €</p>
+                    {safeConfiance != null && <div className="mt-2"><ConfidenceBadge value={safeConfiance} /></div>}
+                  </CardContent>
+                </Card>
+              </div>
 
-                  {/* Confiance */}
-                  {(safeConfiance != null || safeConfianceExplication) && (
-                    <div className="p-4 bg-black/20 backdrop-blur-md border border-white/10 rounded-lg">
-                      <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
-                        <CheckCircle2 className="h-5 w-5 text-green-400" />
-                        Niveau de confiance
-                      </h3>
-                      {safeConfiance != null && (
-                        <p className="text-2xl font-bold text-white">{(safeConfiance * 100).toFixed(0)} %</p>
-                      )}
-                      {safeConfianceExplication && (
-                        <p className="text-white/80 text-sm mt-2">{safeConfianceExplication}</p>
-                      )}
+              {/* Actions principales */}
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={handleCreateDevisFromEstimation} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                  <FileText className="h-4 w-4 mr-2" />Créer un devis
+                </Button>
+                <Button variant="outline" onClick={handleCreateChantierFromEstimation} className="text-white border-white/20 hover:bg-white/10">
+                  <Building className="h-4 w-4 mr-2" />Créer un projet
+                </Button>
+                <Button variant="outline" onClick={handleExportPdf} className="text-white border-white/20 hover:bg-white/10">
+                  <FileDown className="h-4 w-4 mr-2" />Export PDF
+                </Button>
+                <Button variant="outline" onClick={handleRetryEstimation} className="text-white border-white/20 hover:bg-white/10">
+                  <RefreshCw className="h-4 w-4 mr-2" />Refaire l&apos;estimation
+                </Button>
+                <Button variant="outline" onClick={handleFullReset} className="text-white/60 border-white/15 hover:bg-white/10">
+                  Nouvelle estimation
+                </Button>
+              </div>
+
+              {/* Fourchette */}
+              <Card className={cardClass}>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <h3 className="text-sm font-semibold text-white">Fourchette de prix</h3>
+                    {safeConfianceExplication && <span className="text-xs text-white/50">{safeConfianceExplication}</span>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-center">
+                      <TrendingDown className="h-4 w-4 text-blue-400 mx-auto" />
+                      <p className="text-sm font-bold text-white">{fourchetteBasse.toLocaleString('fr-FR')} €</p>
+                      <p className="text-[10px] text-white/40">Basse</p>
                     </div>
-                  )}
-
-                  <div className="flex flex-wrap justify-end gap-2 mt-6">
-                    <Button
-                      variant="outline"
-                      onClick={handleExportPdf}
-                      className="text-white border-white/20 hover:bg-white/10"
-                    >
-                      <FileDown className="h-4 w-4 mr-2" />
-                      Exporter en PDF
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={handleCreateChantierFromEstimation}
-                      className="text-white border-white/20 hover:bg-white/10"
-                    >
-                      <Building className="h-4 w-4 mr-2" />
-                      Créer un chantier
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        setStep(1);
-                        setImages([]);
-                        setSelectedClient(null);
-                        setChantierInfo({ surface: '', materiaux: '', localisation: '', delai: '', metier: '' });
-                        setAnalysisResults(null);
-                        setPhotoAnalysis(null);
-                        setPhotoAnalysisError(null);
-                        setQuestionnaireAnswers({});
-                      }}
-                      className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30"
-                    >
-                      Nouvelle estimation
-                    </Button>
+                    <div className="flex-1 h-2 bg-white/10 rounded-full relative mx-2">
+                      <div className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-500 via-emerald-500 to-amber-500 opacity-60" />
+                      <div className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-lg border-2 border-emerald-400" style={{ left: `${Math.min(90, Math.max(10, ((prixPrincipal - fourchetteBasse) / (fourchetteHaute - fourchetteBasse)) * 100))}%` }} />
+                    </div>
+                    <div className="text-center">
+                      <TrendingUp className="h-4 w-4 text-amber-400 mx-auto" />
+                      <p className="text-sm font-bold text-white">{fourchetteHaute.toLocaleString('fr-FR')} €</p>
+                      <p className="text-[10px] text-white/40">Haute</p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Détail coûts */}
+              <CollapsibleSection title="Détail des coûts" icon={DollarSign} defaultOpen>
+                {safeCouts && (safeCouts.materiaux != null || safeCouts.mainOeuvre != null) ? (
+                  <div className="space-y-2">
+                    {safeCouts.materiaux != null && <div className="flex justify-between text-sm"><span className="text-white/70">Matériaux</span><span className="text-white font-medium">{safeCouts.materiaux.toLocaleString('fr-FR')} €</span></div>}
+                    {safeCouts.mainOeuvre != null && <div className="flex justify-between text-sm"><span className="text-white/70">Main-d&apos;œuvre</span><span className="text-white font-medium">{safeCouts.mainOeuvre.toLocaleString('fr-FR')} €</span></div>}
+                    {safeCouts.transportLivraison != null && <div className="flex justify-between text-sm"><span className="text-white/70">Transport</span><span className="text-white font-medium">{safeCouts.transportLivraison.toLocaleString('fr-FR')} €</span></div>}
+                    {safeCouts.locationEquipements != null && <div className="flex justify-between text-sm"><span className="text-white/70">Location</span><span className="text-white font-medium">{safeCouts.locationEquipements.toLocaleString('fr-FR')} €</span></div>}
+                    {safeCouts.imprevu != null && <div className="flex justify-between text-sm"><span className="text-white/70">Imprévus</span><span className="text-white font-medium">{safeCouts.imprevu.toLocaleString('fr-FR')} €</span></div>}
+                    {safeCouts.fraisGeneraux != null && <div className="flex justify-between text-sm"><span className="text-white/70">Frais généraux</span><span className="text-white font-medium">{safeCouts.fraisGeneraux.toLocaleString('fr-FR')} €</span></div>}
+                    {safeCouts.margeBrute != null && <div className="flex justify-between text-sm"><span className="text-white/70">Marge</span><span className="text-white font-medium">{safeCouts.margeBrute.toLocaleString('fr-FR')} €</span></div>}
+                    {safeCouts.prixTTC != null && <div className="flex justify-between text-sm border-t border-white/10 pt-2 mt-2"><span className="text-white font-semibold">Prix TTC</span><span className="text-emerald-400 font-bold">{safeCouts.prixTTC.toLocaleString('fr-FR')} €</span></div>}
+                  </div>
+                ) : (
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between"><span className="text-white/70">Coût de base</span><span className="text-white font-medium">{safeCoutTotal.toLocaleString('fr-FR')} €</span></div>
+                    <div className="flex justify-between"><span className="text-white/70">Marge</span><span className="text-white font-medium">{safeMarge.toLocaleString('fr-FR')} €</span></div>
+                    <div className="flex justify-between border-t border-white/10 pt-2"><span className="text-white font-semibold">Bénéfice</span><span className="text-emerald-400 font-bold">{safeBenefice.toLocaleString('fr-FR')} €</span></div>
+                  </div>
+                )}
+              </CollapsibleSection>
+
+              {/* Répartition donut + temps */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {donutData.length > 0 && (
+                  <Card className={cardClass}>
+                    <CardContent className="p-4">
+                      <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2"><DollarSign className="h-4 w-4 text-white/60" />Répartition</h3>
+                      <div className="h-48">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie data={donutData} cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={3} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                              {donutData.map((_, i) => <Cell key={i} fill={DONUT_COLORS[i % DONUT_COLORS.length]} />)}
+                            </Pie>
+                            <Tooltip formatter={(v: number) => `${v.toLocaleString('fr-FR')} €`} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+                <CollapsibleSection title="Temps de réalisation" icon={Clock} defaultOpen>
+                  <p className="text-lg font-bold text-white">{safeTempsRealisation}</p>
+                  {safeTempsDecomposition && (
+                    <div className="mt-2 space-y-1 text-sm text-white/80">
+                      {safeTempsDecomposition.preparation && <p>• Préparation : {safeTempsDecomposition.preparation}</p>}
+                      {safeTempsDecomposition.travauxPrincipaux && <p>• Travaux : {safeTempsDecomposition.travauxPrincipaux}</p>}
+                      {safeTempsDecomposition.finitions && <p>• Finitions : {safeTempsDecomposition.finitions}</p>}
+                      {safeTempsDecomposition.imprevu && <p>• Imprévus : {safeTempsDecomposition.imprevu}</p>}
+                    </div>
+                  )}
+                  {safeEquipe && (
+                    <div className="mt-3 pt-3 border-t border-white/10 space-y-1 text-sm text-white/80">
+                      {safeEquipe.composition && <p><span className="text-white/50">Composition:</span> {safeEquipe.composition}</p>}
+                      {safeEquipe.joursPresence != null && <p><span className="text-white/50">Jours:</span> {safeEquipe.joursPresence}</p>}
+                    </div>
+                  )}
+                </CollapsibleSection>
+              </div>
+
+              {/* Matériaux éditables */}
+              <CollapsibleSection title={`Matériaux (${editableMaterials.length}) — Total: ${materialTotal.toLocaleString('fr-FR')} €`} icon={FileText} defaultOpen>
+                <div className="flex justify-end mb-2">
+                  <Button size="sm" variant="outline" onClick={() => setEditingMaterials(!editingMaterials)} className="text-white/70 border-white/20 hover:bg-white/10 text-xs">
+                    <Pencil className="h-3 w-3 mr-1" />{editingMaterials ? 'Terminer' : 'Modifier'}
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {editableMaterials.map((mat, i) => (
+                    <div key={i} className="flex items-center gap-2 p-2 bg-black/10 rounded-lg">
+                      {editingMaterials ? (
+                        <>
+                          <Input value={mat.nom} onChange={(e) => { const m = [...editableMaterials]; m[i] = { ...m[i], nom: e.target.value }; setEditableMaterials(m); }} className="flex-1 bg-black/20 border-white/10 text-white text-sm h-8" />
+                          <Input value={mat.quantite} onChange={(e) => { const m = [...editableMaterials]; m[i] = { ...m[i], quantite: e.target.value }; setEditableMaterials(m); }} className="w-20 bg-black/20 border-white/10 text-white text-sm h-8" />
+                          <Input type="number" value={mat.prix} onChange={(e) => { const m = [...editableMaterials]; m[i] = { ...m[i], prix: parseFloat(e.target.value) || 0 }; setEditableMaterials(m); }} className="w-24 bg-black/20 border-white/10 text-white text-sm h-8" />
+                          <span className="text-white/50 text-xs">€</span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex-1">
+                            <p className="text-white text-sm font-medium">{mat.nom}</p>
+                            <p className="text-white/50 text-xs">{mat.quantite}{mat.notes ? ` — ${mat.notes}` : ''}</p>
+                          </div>
+                          <div className="text-right">
+                            {mat.prixUnitaire != null && <p className="text-white/40 text-[10px]">P.U. {mat.prixUnitaire} €</p>}
+                            <p className="text-white font-medium text-sm">{mat.prix.toLocaleString('fr-FR')} €</p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                  {editableMaterials.length === 0 && <p className="text-white/50 text-sm">Aucun matériau.</p>}
+                </div>
+              </CollapsibleSection>
+
+              {/* Outils */}
+              <CollapsibleSection title="Outils nécessaires" icon={Wand2}>
+                {(safeOutilsALouer?.length || safeOutilsFournis?.length) ? (
+                  <div className="space-y-3">
+                    {safeOutilsALouer && safeOutilsALouer.length > 0 && (
+                      <div>
+                        <p className="text-white/70 text-xs font-medium mb-1">À louer</p>
+                        <ul className="space-y-1">{safeOutilsALouer.map((o, i) => <li key={i} className="text-white/80 text-sm flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>{o.nom}{o.duree ? ` (${o.duree})` : ''}{o.coutLocation != null ? ` — ${o.coutLocation} €` : ''}</li>)}</ul>
+                      </div>
+                    )}
+                    {safeOutilsFournis && safeOutilsFournis.length > 0 && (
+                      <div>
+                        <p className="text-white/70 text-xs font-medium mb-1">Fournis</p>
+                        <ul className="space-y-1">{safeOutilsFournis.map((o, i) => <li key={i} className="text-white/80 text-sm flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>{o}</li>)}</ul>
+                      </div>
+                    )}
+                    {safeEstimationLocationTotal != null && <p className="text-white/50 text-xs mt-2">Location totale: <span className="text-white font-medium">{safeEstimationLocationTotal} €</span></p>}
+                  </div>
+                ) : safeOutils.length > 0 ? (
+                  <ul className="space-y-1">{safeOutils.map((o: string, i: number) => <li key={i} className="text-white/80 text-sm flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>{o}</li>)}</ul>
+                ) : <p className="text-white/50 text-sm">Aucun outil listé.</p>}
+              </CollapsibleSection>
+
+              {/* Recommandations */}
+              {safeRecommandations.length > 0 && (
+                <CollapsibleSection title="Recommandations" icon={CheckCircle2}>
+                  <ul className="space-y-1.5">{safeRecommandations.map((r: string, i: number) => <li key={i} className="text-white/80 text-sm flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>{r}</li>)}</ul>
+                </CollapsibleSection>
+              )}
+
+              {/* Hypothèses */}
+              {safeHypotheses && safeHypotheses.length > 0 && (
+                <CollapsibleSection title="Hypothèses" icon={AlertTriangle}>
+                  <ul className="space-y-1.5">{safeHypotheses.map((h, i) => <li key={i} className="text-white/70 text-sm flex items-start gap-1.5"><span className="text-amber-400 mt-0.5">•</span>{h}</li>)}</ul>
+                </CollapsibleSection>
+              )}
+
+              {/* Photo analysis */}
+              {photoAnalysis && (
+                <CollapsibleSection title="Analyse photo IA" icon={Camera}>
+                  <p className="text-white/80 text-sm whitespace-pre-wrap">{photoAnalysis.descriptionZone}</p>
+                  {photoAnalysis.suggestions && (
+                    <div className="mt-2 space-y-0.5 text-xs text-white/50">
+                      {photoAnalysis.suggestions.typeProjet && <p>Type détecté: {photoAnalysis.suggestions.typeProjet}</p>}
+                      {photoAnalysis.suggestions.surfaceEstimee && <p>Surface estimée: ~{photoAnalysis.suggestions.surfaceEstimee} m²</p>}
+                      {photoAnalysis.suggestions.etatGeneral && <p>État: {photoAnalysis.suggestions.etatGeneral}</p>}
+                      {photoAnalysis.suggestions.complexite && <p>Complexité: {photoAnalysis.suggestions.complexite}</p>}
+                    </div>
+                  )}
+                </CollapsibleSection>
+              )}
+
+              {/* Récapitulatif */}
+              <CollapsibleSection title="Récapitulatif de saisie" icon={User}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                  {selectedClient && <div><span className="text-white/50">Client:</span> <span className="text-white">{selectedClient.name}</span></div>}
+                  {chantierInfo.surface && <div><span className="text-white/50">Surface:</span> <span className="text-white">{chantierInfo.surface} m²</span></div>}
+                  {chantierInfo.metier && <div><span className="text-white/50">Type:</span> <span className="text-white">{TYPE_CHANTIER_LABELS[chantierInfo.metier] ?? chantierInfo.metier}</span></div>}
+                  {chantierInfo.localisation && <div><span className="text-white/50">Lieu:</span> <span className="text-white">{chantierInfo.localisation}</span></div>}
+                  {chantierInfo.delai && <div><span className="text-white/50">Délai:</span> <span className="text-white">{chantierInfo.delai}</span></div>}
+                </div>
+                {images.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {images.slice(0, 6).map((img, i) => (
+                      <img key={i} src={img.preview} alt={`Photo ${i + 1}`} className="w-16 h-16 object-cover rounded-lg border border-white/10" />
+                    ))}
+                  </div>
+                )}
+              </CollapsibleSection>
             </motion.div>
           )}
         </AnimatePresence>

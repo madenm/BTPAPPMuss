@@ -6,11 +6,25 @@ export interface UserProfile {
   full_name: string | null;
   logo_url?: string | null;
   theme_color?: string | null;
+  company_name?: string | null;
   company_address?: string | null;
   company_city_postal?: string | null;
   company_phone?: string | null;
   company_email?: string | null;
   company_siret?: string | null;
+  company_tva_number?: string | null;
+  company_rcs?: string | null;
+  company_ape?: string | null;
+  company_capital?: string | null;
+  insurance_name?: string | null;
+  insurance_policy?: string | null;
+  qualifications?: string | null;
+  default_tva_rate?: string | null;
+  default_validity_days?: string | null;
+  default_conditions?: string | null;
+  invoice_mentions?: string | null;
+  quote_prefix?: string | null;
+  invoice_prefix?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -42,28 +56,27 @@ export class UserProfileUpdateError extends Error {
   }
 }
 
+export type UserProfilePayload = Partial<Omit<UserProfile, 'id' | 'email' | 'created_at' | 'updated_at'>>;
+
 export async function updateUserProfile(
   userId: string,
-  payload: {
-    logo_url?: string | null;
-    theme_color?: string | null;
-    company_address?: string | null;
-    company_city_postal?: string | null;
-    company_phone?: string | null;
-    company_email?: string | null;
-    company_siret?: string | null;
-  }
+  payload: UserProfilePayload
 ): Promise<UserProfile> {
   const updatePayload: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
-  if (payload.logo_url !== undefined) updatePayload.logo_url = payload.logo_url;
-  if (payload.theme_color !== undefined) updatePayload.theme_color = payload.theme_color;
-  if (payload.company_address !== undefined) updatePayload.company_address = payload.company_address;
-  if (payload.company_city_postal !== undefined) updatePayload.company_city_postal = payload.company_city_postal;
-  if (payload.company_phone !== undefined) updatePayload.company_phone = payload.company_phone;
-  if (payload.company_email !== undefined) updatePayload.company_email = payload.company_email;
-  if (payload.company_siret !== undefined) updatePayload.company_siret = payload.company_siret;
+  const keys: (keyof UserProfilePayload)[] = [
+    'full_name', 'logo_url', 'theme_color',
+    'company_name', 'company_address', 'company_city_postal',
+    'company_phone', 'company_email', 'company_siret',
+    'company_tva_number', 'company_rcs', 'company_ape', 'company_capital',
+    'insurance_name', 'insurance_policy', 'qualifications',
+    'default_tva_rate', 'default_validity_days', 'default_conditions',
+    'invoice_mentions', 'quote_prefix', 'invoice_prefix',
+  ];
+  for (const k of keys) {
+    if (payload[k] !== undefined) updatePayload[k] = payload[k];
+  }
 
   const existing = await supabase.from("user_profiles").select("id").eq("id", userId).maybeSingle();
 
@@ -102,7 +115,7 @@ export async function updateUserProfile(
       /undefined_column|logo_url|theme_color|company_address|company_city_postal|company_phone|company_email|company_siret/i.test(msg);
     if (isMissingColumn || msg.includes("400")) {
       throw new UserProfileUpdateError(
-        "Des colonnes du profil sont absentes. Exécutez les scripts SQL supabase-user-settings.sql et supabase_user_profiles_company.sql dans le SQL Editor de Supabase."
+        "Des colonnes du profil sont absentes. Exécutez le script SQL supabase/migrations/user_profiles_settings_columns.sql dans le SQL Editor de Supabase."
       );
     }
     throw error;

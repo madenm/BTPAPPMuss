@@ -34,6 +34,7 @@ import { InvoiceDialog } from '@/components/InvoiceDialog';
 import { QuotesQuestionnaire } from '@/components/QuotesQuestionnaire';
 import { hasQuestionsForType } from '@/lib/estimationQuestionnaire';
 import { fetchTariffs, type UserTariff } from '@/lib/supabaseTariffs';
+import { searchCatalog, getAllCatalog, ARTIPRIX_CHAPTERS, type ArtiprixEntry, type ArtiprixChapter } from '@/lib/artiprixCatalog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { 
   FileText, 
@@ -123,11 +124,14 @@ export default function QuotesPage() {
   const [projectDescription, setProjectDescription] = useState('');
   const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<string, string>>({});
   const [useAiForPrefill, setUseAiForPrefill] = useState(true);
-  const [validityDays, setValidityDays] = useState('30');
-  const [tvaRate, setTvaRate] = useState('20');
+  const defaultTva = profile?.default_tva_rate || '20';
+  const defaultValidity = profile?.default_validity_days || '30';
+  const defaultConditions = profile?.default_conditions || '';
+  const [validityDays, setValidityDays] = useState(defaultValidity);
+  const [tvaRate, setTvaRate] = useState(defaultTva);
   const [discountType, setDiscountType] = useState<'none' | 'percent' | 'fixed'>('none');
   const [discountValue, setDiscountValue] = useState('');
-  const [generalConditions, setGeneralConditions] = useState('');
+  const [generalConditions, setGeneralConditions] = useState(defaultConditions);
   const [items, setItems] = useState<QuoteItem[]>([
     { id: '1', description: '', quantity: 1, unitPrice: 0, total: 0, unit: '' }
   ]);
@@ -135,6 +139,8 @@ export default function QuotesPage() {
   const [openTariffPopoverId, setOpenTariffPopoverId] = useState<string | null>(null);
   const [tariffSearchQuery, setTariffSearchQuery] = useState('');
   const [tariffCategoryFilter, setTariffCategoryFilter] = useState<string>('all');
+  const [tariffSource, setTariffSource] = useState<'user' | 'artiprix'>('user');
+  const [artiprixChapterFilter, setArtiprixChapterFilter] = useState<string>('all');
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [dragOverItemId, setDragOverItemId] = useState<string | null>(null);
   const [dragOverPosition, setDragOverPosition] = useState<'before' | 'after' | null>(null);
@@ -185,16 +191,45 @@ export default function QuotesPage() {
     setProjectType('');
     setProjectDescription('');
     setQuestionnaireAnswers({});
-    setValidityDays('30');
-    setTvaRate('20');
+    setValidityDays(defaultValidity);
+    setTvaRate(defaultTva);
     setDiscountType('none');
     setDiscountValue('');
-    setGeneralConditions('');
+    setGeneralConditions(defaultConditions);
     setItems([{ id: '1', description: '', quantity: 1, unitPrice: 0, total: 0, unit: '' }]);
     setSelectedClientId(null);
     setSelectedChantierId(null);
     setQuoteLoadState('idle');
     lastAppliedQuoteIdRef.current = null;
+
+    if (searchParams.get('fromEstimation') === '1') {
+      try {
+        const raw = sessionStorage.getItem('estimationForDevis');
+        if (raw) {
+          const est = JSON.parse(raw) as {
+            clientName?: string; clientEmail?: string; clientPhone?: string;
+            projectType?: string; projectDescription?: string;
+            items?: { description: string; quantity: number; unitPrice: number; unit: string }[];
+            conditions?: string;
+          };
+          if (est.clientName) setClientInfo(prev => ({ ...prev, name: est.clientName!, email: est.clientEmail || '', phone: est.clientPhone || '' }));
+          if (est.projectType) setProjectType(est.projectType);
+          if (est.projectDescription) setProjectDescription(est.projectDescription);
+          if (est.conditions) setGeneralConditions(est.conditions);
+          if (est.items?.length) {
+            setItems(est.items.map((it, i) => ({
+              id: String(i + 1),
+              description: it.description,
+              quantity: it.quantity || 1,
+              unitPrice: it.unitPrice || 0,
+              total: (it.quantity || 1) * (it.unitPrice || 0),
+              unit: it.unit || '',
+            })));
+          }
+          sessionStorage.removeItem('estimationForDevis');
+        }
+      } catch {}
+    }
   }, [showForm, pathname, searchParams.get('new'), searchParams.get('quoteId')]);
 
   useEffect(() => {
@@ -380,6 +415,24 @@ export default function QuotesPage() {
         return {
           ...it,
           description: tariff.label,
+          unitPrice,
+          total: quantity * unitPrice,
+          unit,
+        };
+      })
+    );
+  };
+
+  const applyArtiprixToItem = (itemId: string, entry: ArtiprixEntry) => {
+    setItems((prev) =>
+      prev.map((it) => {
+        if (it.id !== itemId) return it;
+        const quantity = it.quantity || 1;
+        const unitPrice = entry.total;
+        const unit = normalizeUnitFromTariff(entry.unit) || (it.unit ?? '');
+        return {
+          ...it,
+          description: `${entry.label} [Artiprix ${entry.ref}]`,
           unitPrice,
           total: quantity * unitPrice,
           unit,
@@ -630,11 +683,11 @@ export default function QuotesPage() {
     setProjectType('');
     setProjectDescription('');
     setQuestionnaireAnswers({});
-    setValidityDays('30');
-    setTvaRate('20');
+    setValidityDays(defaultValidity);
+    setTvaRate(defaultTva);
     setDiscountType('none');
     setDiscountValue('');
-    setGeneralConditions('');
+    setGeneralConditions(defaultConditions);
     setItems([{ id: '1', description: '', quantity: 1, unitPrice: 0, total: 0, unit: '' }]);
     setQuoteLoadState('idle');
     setLocation('/dashboard/quotes/new');
@@ -699,12 +752,13 @@ export default function QuotesPage() {
         total: quote.total_ttc,
         themeColor: accentColor,
         quoteNumber: quoteNum || undefined,
-        companyName: profile?.full_name ?? undefined,
+        companyName: profile?.company_name || profile?.full_name || undefined,
         companyAddress: profile?.company_address ?? undefined,
         companyCityPostal: profile?.company_city_postal ?? undefined,
         companyPhone: profile?.company_phone ?? undefined,
         companyEmail: profile?.company_email ?? undefined,
         companySiret: profile?.company_siret ?? undefined,
+        companyLegal: [profile?.company_name, profile?.company_siret && `SIRET ${profile.company_siret}`, profile?.company_tva_number && `TVA ${profile.company_tva_number}`, profile?.company_rcs && `RCS ${profile.company_rcs}`, profile?.company_capital && `Capital ${profile.company_capital} €`].filter(Boolean).join(' — ') || undefined,
         ...(logoDataUrl && { logoDataUrl }),
       });
       toast({ title: 'Devis téléchargé', description: 'Le PDF a été téléchargé.' });
@@ -1040,12 +1094,13 @@ export default function QuotesPage() {
           total,
           quoteNumber: quoteNum,
           themeColor: accentColor,
-          companyName: profile?.full_name ?? undefined,
+          companyName: profile?.company_name || profile?.full_name || undefined,
           companyAddress: profile?.company_address ?? undefined,
           companyCityPostal: profile?.company_city_postal ?? undefined,
           companyPhone: profile?.company_phone ?? undefined,
           companyEmail: profile?.company_email ?? undefined,
           companySiret: profile?.company_siret ?? undefined,
+          companyLegal: [profile?.company_name, profile?.company_siret && `SIRET ${profile.company_siret}`, profile?.company_tva_number && `TVA ${profile.company_tva_number}`, profile?.company_rcs && `RCS ${profile.company_rcs}`, profile?.company_capital && `Capital ${profile.company_capital} €`].filter(Boolean).join(' — ') || undefined,
           ...(logoDataUrl && { logoDataUrl }),
         });
         setIsGenerating(false);
@@ -1153,12 +1208,13 @@ export default function QuotesPage() {
           total,
           themeColor: accentColor,
           quoteNumber: quoteNum,
-          companyName: profile?.full_name ?? undefined,
+          companyName: profile?.company_name || profile?.full_name || undefined,
           companyAddress: profile?.company_address ?? undefined,
           companyCityPostal: profile?.company_city_postal ?? undefined,
           companyPhone: profile?.company_phone ?? undefined,
           companyEmail: profile?.company_email ?? undefined,
           companySiret: profile?.company_siret ?? undefined,
+          companyLegal: [profile?.company_name, profile?.company_siret && `SIRET ${profile.company_siret}`, profile?.company_tva_number && `TVA ${profile.company_tva_number}`, profile?.company_rcs && `RCS ${profile.company_rcs}`, profile?.company_capital && `Capital ${profile.company_capital} €`].filter(Boolean).join(' — ') || undefined,
           ...(logoDataUrl && { logoDataUrl }),
         });
         toast({ title: 'Devis téléchargé', description: 'Le PDF a été téléchargé avec succès.' });
@@ -1970,7 +2026,7 @@ export default function QuotesPage() {
                                 />
                                 <Popover open={openTariffPopoverId === item.id} onOpenChange={(open) => {
                                   setOpenTariffPopoverId(open ? item.id : null);
-                                  if (!open) { setTariffSearchQuery(''); setTariffCategoryFilter('all'); }
+                                  if (!open) { setTariffSearchQuery(''); setTariffCategoryFilter('all'); setArtiprixChapterFilter('all'); }
                                 }}>
                                   <PopoverTrigger asChild>
                                     <Button
@@ -1978,72 +2034,151 @@ export default function QuotesPage() {
                                       variant="outline"
                                       size="sm"
                                       className="rounded-xl rounded-l-none border-l-0 px-2 text-gray-500 hover:text-gray-900 dark:hover:text-gray-100"
-                                      title="Choisir parmi mes tarifs enregistrés"
+                                      title="Choisir parmi mes tarifs ou le catalogue Artiprix"
                                     >
                                       <ChevronDown className="h-4 w-4" />
                                     </Button>
                                   </PopoverTrigger>
-                                  <PopoverContent align="end" className="w-96 p-0">
-                                    {userTariffs.length === 0 ? (
-                                      <p className="p-3 text-sm text-gray-500 dark:text-gray-400">Aucun tarif enregistré. Ajoutez-en dans la page Tarifs.</p>
-                                    ) : (
-                                      <div>
-                                        <div className="p-2 border-b border-gray-200 dark:border-gray-700 space-y-2">
-                                          <div className="relative">
-                                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
-                                            <Input
-                                              placeholder="Rechercher un tarif..."
-                                              value={tariffSearchQuery}
-                                              onChange={(e) => setTariffSearchQuery(e.target.value)}
-                                              className="pl-8 h-8 text-sm rounded-lg"
-                                            />
+                                  <PopoverContent align="end" className="w-[420px] p-0">
+                                    <div>
+                                      <div className="flex border-b border-gray-200 dark:border-gray-700">
+                                        <button
+                                          type="button"
+                                          onClick={() => { setTariffSource('user'); setTariffSearchQuery(''); }}
+                                          className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${tariffSource === 'user' ? 'text-violet-600 dark:text-violet-400 border-b-2 border-violet-500 bg-violet-50 dark:bg-violet-500/10' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                                        >
+                                          Mes tarifs ({userTariffs.length})
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => { setTariffSource('artiprix'); setTariffSearchQuery(''); }}
+                                          className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${tariffSource === 'artiprix' ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-500 bg-blue-50 dark:bg-blue-500/10' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                                        >
+                                          Catalogue Artiprix ({getAllCatalog().length})
+                                        </button>
+                                      </div>
+
+                                      {tariffSource === 'user' ? (
+                                        userTariffs.length === 0 ? (
+                                          <p className="p-3 text-sm text-gray-500 dark:text-gray-400">Aucun tarif enregistré. Ajoutez-en dans la page Tarifs.</p>
+                                        ) : (
+                                          <div>
+                                            <div className="p-2 border-b border-gray-200 dark:border-gray-700 space-y-2">
+                                              <div className="relative">
+                                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                                                <Input
+                                                  placeholder="Rechercher un tarif..."
+                                                  value={tariffSearchQuery}
+                                                  onChange={(e) => setTariffSearchQuery(e.target.value)}
+                                                  className="pl-8 h-8 text-sm rounded-lg"
+                                                />
+                                              </div>
+                                              <div className="flex gap-1 flex-wrap">
+                                                {['all', 'matériau', 'service', "main-d'œuvre", 'location', 'sous-traitance', 'transport', 'équipement', 'fourniture', 'autre'].map((cat) => (
+                                                  <button
+                                                    key={cat}
+                                                    type="button"
+                                                    onClick={() => setTariffCategoryFilter(cat)}
+                                                    className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${tariffCategoryFilter === cat ? 'bg-violet-500 text-white border-violet-500' : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                                                  >
+                                                    {cat === 'all' ? 'Tous' : cat}
+                                                  </button>
+                                                ))}
+                                              </div>
+                                            </div>
+                                            <ul className="max-h-[220px] overflow-y-auto py-1">
+                                              {(() => {
+                                                const q = tariffSearchQuery.trim().toLowerCase();
+                                                const filtered = userTariffs.filter((t) => {
+                                                  if (tariffCategoryFilter !== 'all' && t.category !== tariffCategoryFilter) return false;
+                                                  if (q && !t.label.toLowerCase().includes(q)) return false;
+                                                  return true;
+                                                });
+                                                return filtered.length === 0 ? (
+                                                  <li className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400 text-center">Aucun tarif trouvé</li>
+                                                ) : (
+                                                  filtered.map((t) => (
+                                                    <li key={t.id}>
+                                                      <button
+                                                        type="button"
+                                                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex justify-between items-center gap-2"
+                                                        onClick={() => {
+                                                          applyTariffToItem(item.id, t);
+                                                          setOpenTariffPopoverId(null);
+                                                          setTariffSearchQuery('');
+                                                          setTariffCategoryFilter('all');
+                                                        }}
+                                                      >
+                                                        <span className="truncate">{t.label}</span>
+                                                        <span className="text-gray-500 dark:text-gray-400 shrink-0">{Number(t.price_ht).toFixed(2)} € / {t.unit}</span>
+                                                      </button>
+                                                    </li>
+                                                  ))
+                                                );
+                                              })()}
+                                            </ul>
                                           </div>
-                                          <div className="flex gap-1 flex-wrap">
-                                            {['all', 'matériau', 'service', "main-d'œuvre", 'location', 'sous-traitance', 'transport', 'équipement', 'fourniture', 'autre'].map((cat) => (
-                                              <button
-                                                key={cat}
-                                                type="button"
-                                                onClick={() => setTariffCategoryFilter(cat)}
-                                                className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${tariffCategoryFilter === cat ? 'bg-violet-500 text-white border-violet-500' : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-                                              >
-                                                {cat === 'all' ? 'Tous' : cat}
-                                              </button>
-                                            ))}
+                                        )
+                                      ) : (
+                                        <div>
+                                          <div className="p-2 border-b border-gray-200 dark:border-gray-700 space-y-2">
+                                            <div className="relative">
+                                              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                                              <Input
+                                                placeholder="Rechercher dans le catalogue..."
+                                                value={tariffSearchQuery}
+                                                onChange={(e) => setTariffSearchQuery(e.target.value)}
+                                                className="pl-8 h-8 text-sm rounded-lg"
+                                              />
+                                            </div>
+                                            <div className="flex gap-1 flex-wrap">
+                                              {['all', ...Object.keys(ARTIPRIX_CHAPTERS)].map((ch) => (
+                                                <button
+                                                  key={ch}
+                                                  type="button"
+                                                  onClick={() => setArtiprixChapterFilter(ch)}
+                                                  className={`px-2 py-0.5 text-xs rounded-full border transition-colors whitespace-nowrap ${artiprixChapterFilter === ch ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                                                >
+                                                  {ch === 'all' ? 'Tous' : ARTIPRIX_CHAPTERS[ch as ArtiprixChapter]}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          </div>
+                                          <ul className="max-h-[220px] overflow-y-auto py-1">
+                                            {(() => {
+                                              const results = searchCatalog(tariffSearchQuery, artiprixChapterFilter !== 'all' ? artiprixChapterFilter as ArtiprixChapter : undefined);
+                                              return results.length === 0 ? (
+                                                <li className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400 text-center">Aucun poste trouvé</li>
+                                              ) : (
+                                                results.map((entry) => (
+                                                  <li key={entry.ref}>
+                                                    <button
+                                                      type="button"
+                                                      className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 dark:hover:bg-blue-900/20 flex justify-between items-center gap-2"
+                                                      onClick={() => {
+                                                        applyArtiprixToItem(item.id, entry);
+                                                        setOpenTariffPopoverId(null);
+                                                        setTariffSearchQuery('');
+                                                        setArtiprixChapterFilter('all');
+                                                      }}
+                                                    >
+                                                      <div className="flex flex-col gap-0.5 min-w-0">
+                                                        <span className="truncate text-gray-900 dark:text-gray-100">{entry.label}</span>
+                                                        <span className="text-[10px] text-blue-500/70">{ARTIPRIX_CHAPTERS[entry.chapter as ArtiprixChapter]} • Réf. {entry.ref}</span>
+                                                      </div>
+                                                      <span className="text-blue-600 dark:text-blue-400 font-medium shrink-0">{entry.total.toFixed(2)} € / {entry.unit}</span>
+                                                    </button>
+                                                  </li>
+                                                ))
+                                              );
+                                            })()}
+                                          </ul>
+                                          <div className="px-3 py-1.5 border-t border-gray-200 dark:border-gray-700">
+                                            <p className="text-[10px] text-gray-400">Source : Artiprix GO-SO • Prix indicatifs MO+fournitures</p>
                                           </div>
                                         </div>
-                                        <ul className="max-h-[220px] overflow-y-auto py-1">
-                                          {(() => {
-                                            const q = tariffSearchQuery.trim().toLowerCase();
-                                            const filtered = userTariffs.filter((t) => {
-                                              if (tariffCategoryFilter !== 'all' && t.category !== tariffCategoryFilter) return false;
-                                              if (q && !t.label.toLowerCase().includes(q)) return false;
-                                              return true;
-                                            });
-                                            return filtered.length === 0 ? (
-                                              <li className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400 text-center">Aucun tarif trouvé</li>
-                                            ) : (
-                                              filtered.map((t) => (
-                                                <li key={t.id}>
-                                                  <button
-                                                    type="button"
-                                                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex justify-between items-center gap-2"
-                                                    onClick={() => {
-                                                      applyTariffToItem(item.id, t);
-                                                      setOpenTariffPopoverId(null);
-                                                      setTariffSearchQuery('');
-                                                      setTariffCategoryFilter('all');
-                                                    }}
-                                                  >
-                                                    <span className="truncate">{t.label}</span>
-                                                    <span className="text-gray-500 dark:text-gray-400 shrink-0">{Number(t.price_ht).toFixed(2)} € / {t.unit}</span>
-                                                  </button>
-                                                </li>
-                                              ))
-                                            );
-                                          })()}
-                                        </ul>
-                                      </div>
-                                    )}
+                                      )}
+                                    </div>
                                   </PopoverContent>
                                 </Popover>
                               </div>

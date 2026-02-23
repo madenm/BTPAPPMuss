@@ -475,7 +475,7 @@ export function CRMPipeline() {
       if (hasQuote && quoteModalSelectedQuote) {
         const params = quoteToPdfParams(quoteModalSelectedQuote)
         params.themeColor = accentColor
-        params.companyName = profile?.full_name ?? undefined
+        params.companyName = profile?.company_name || profile?.full_name || undefined
         params.companyAddress = profile?.company_address ?? undefined
         params.companyCityPostal = profile?.company_city_postal ?? undefined
         params.companyPhone = profile?.company_phone ?? undefined
@@ -515,7 +515,7 @@ export function CRMPipeline() {
               subtotal: quoteModalSelectedQuote.total_ht ?? undefined,
               tva: (quoteModalSelectedQuote.total_ttc ?? 0) - (quoteModalSelectedQuote.total_ht ?? 0),
               validityDays: String(quoteModalSelectedQuote.validity_days ?? 30),
-              companyName: profile?.full_name ?? undefined,
+              companyName: profile?.company_name || profile?.full_name || undefined,
               quoteNumber: undefined,
               items: (quoteModalSelectedQuote.items ?? []).map((i) => ({
                 description: i.description,
@@ -625,7 +625,7 @@ export function CRMPipeline() {
         total: invoiceModalSelectedInvoice.total_ttc ?? 0,
         dueDate: invoiceModalSelectedInvoice.due_date ?? new Date().toISOString(),
         paymentTerms: invoiceModalSelectedInvoice.payment_terms ?? "",
-        companyName: profile?.full_name ?? undefined,
+        companyName: profile?.company_name || profile?.full_name || undefined,
         companyAddress: profile?.company_address != null ? profile.company_address : undefined,
         companyCityPostal: profile?.company_city_postal != null ? profile.company_city_postal : undefined,
         companyPhone: profile?.company_phone != null ? profile.company_phone : undefined,

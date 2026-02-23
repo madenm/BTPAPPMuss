@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import { storage } from "./storage";
 
 import { generateInvoicePdfBuffer } from "./lib/invoicePdfServer";
+import { getArtiprixForMetier } from "./lib/artiprixCatalog";
 
 import { Resend } from "resend";
 import { GoogleGenAI } from "@google/genai";
@@ -552,11 +553,12 @@ Règles :
   });
 
   app.post("/api/estimate-chantier", async (req: Request, res: Response) => {
-    const { client, chantierInfo, photoAnalysis, questionnaireAnswers } = req.body as {
+    const { client, chantierInfo, photoAnalysis, questionnaireAnswers, userTariffs: userTariffsStr } = req.body as {
       client?: { name?: string; email?: string; phone?: string };
       chantierInfo?: { surface?: string | number; materiaux?: string; localisation?: string; delai?: string; metier?: string };
       photoAnalysis?: string;
       questionnaireAnswers?: Record<string, string>;
+      userTariffs?: string;
     };
     const surface = chantierInfo?.surface != null ? String(chantierInfo.surface).trim() : "";
     const metier = typeof chantierInfo?.metier === "string" ? chantierInfo.metier.trim() : "";
@@ -584,53 +586,68 @@ Règles :
         ? "RÉPONSES AU QUESTIONNAIRE (détail du projet): " + questionnaireEntries.join(", ")
         : "";
 
+    const tariffsStr = typeof userTariffsStr === "string" ? userTariffsStr.trim() : "";
+    const artiprixStr = getArtiprixForMetier(metier);
+
     const userMessage = [
       "Tu es un expert en estimation de chantiers BTP/rénovation en France. À partir des données ci-dessous, tu DOIS produire une estimation COMPLÈTE au format JSON.",
       "",
-      "--- DONNÉES DU CHANTIER (utilise-les pour tout calculer) ---",
+      "--- DONNÉES DU CHANTIER ---",
       "Type de projet: " + typeLabel,
       "Surface: " + surface + " m²",
       "Localisation: " + (localisationStr || "France (non précisée)"),
-      "Délai souhaité: " + (delaiStr || "Flexible") + " (impact sur coût si délai court)",
+      "Délai souhaité: " + (delaiStr || "Flexible"),
       clientName ? "Client: " + clientName + (clientEmail ? " " + clientEmail : "") + (clientPhone ? " " + clientPhone : "") : "",
       materiauxStr ? "Matériaux / précisions: " + materiauxStr : "",
       photoAnalysisStr ? "Analyse de la photo (état des lieux, accès, complexité): " + photoAnalysisStr : "",
       questionnaireStr ? "Réponses au questionnaire: " + questionnaireStr : "",
+      tariffsStr ? "TARIFS DE L'ARTISAN (utilise ces prix en PRIORITÉ quand les matériaux correspondent): " + tariffsStr : "",
+      artiprixStr ? "BARÈME ARTIPRIX (prix de référence du marché français, MO+fournitures, à utiliser quand pas de tarif artisan):\n" + artiprixStr : "",
       "",
-      "--- INSTRUCTIONS OBLIGATOIRES ---",
-      "1. Utilise TOUTES les données ci-dessus (photo, questionnaire, localisation, surface, type) pour estimer.",
-      "2. La localisation peut influencer coûts (Paris/Île-de-France plus cher, zones rurales différences).",
-      "3. Règles: main-d'œuvre 150€/jour/ouvrier, marge 25%, frais généraux 20%, imprévus 15%. Accès difficile = +20-30% délai.",
-      "4. Tu DOIS remplir TOUS les champs du JSON ci-dessous. Aucun tableau vide, aucun 0 pour coutTotal/marge/benefice. Minimum 3 matériaux, 3 outils, 3 recommandations.",
+      "--- INSTRUCTIONS ---",
+      "1. Utilise TOUTES les données ci-dessus pour estimer.",
+      "2. Priorité des prix: 1) tarifs artisan, 2) barème Artiprix (référence marché), 3) estimation marché. Cite la référence Artiprix quand utilisée.",
+      "3. Localisation: Paris/IDF = +10-15%. Accès difficile = +20-30% délai.",
+      "4. Règles par défaut: main-d'œuvre 150€/jour/ouvrier, marge 25%, frais généraux 20%, imprévus 15%.",
+      "5. Fournis une FOURCHETTE de prix (basse = conditions optimales, haute = imprévus/complexité).",
+      "6. Minimum 3 matériaux, 3 outils, 3 recommandations. Aucun tableau vide, aucun 0 pour coutTotal.",
       "",
-      "Réponds UNIQUEMENT par un objet JSON valide (pas de texte avant ni après), avec exactement les clés suivantes. Utilise des nombres réalistes selon le type et la surface.",
+      "JSON OBLIGATOIRE (pas de texte avant/après):",
       JSON.stringify({
-        tempsRealisation: "ex: \"2 semaines\" ou \"3 semaines (15 jours ouvrables)\"",
-        materiaux: [{ nom: "string", quantite: "string", prix: 0 }],
-        outils: ["string", "string"],
+        tempsRealisation: "string",
+        materiaux: [{ nom: "string", quantite: "string", prix: 0, prixUnitaire: 0 }],
+        outils: ["string"],
         nombreOuvriers: 1,
         coutTotal: 0,
         marge: 0,
         benefice: 0,
         repartitionCouts: { transport: 0, mainOeuvre: 0, materiaux: 0, autres: 0 },
-        recommandations: ["string", "string", "string"],
+        recommandations: ["string"],
+        couts: { materiaux: 0, mainOeuvre: 0, imprevu: 0, fraisGeneraux: 0, margeBrute: 0, prixTTC: 0, fourchetteBasse: 0, fourchetteHaute: 0 },
+        confiance: 0.8,
+        confiance_explication: "string",
+        hypotheses: ["string"],
       }),
     ].filter(Boolean).join("\n");
 
     const systemInstruction = `Tu es un expert en estimation de chantiers (BTP, rénovation) en France. Tu produis UNIQUEMENT un JSON valide, sans markdown ni texte autour.
 
-OBLIGATOIRE: le JSON doit contenir exactement:
-- tempsRealisation: string (ex "2 semaines", "1 mois")
-- materiaux: tableau d'au moins 3 objets avec nom, quantite (string), prix (number)
-- outils: tableau d'au moins 3 strings (noms d'outils/équipements)
-- nombreOuvriers: number >= 1
-- coutTotal: number > 0 (coût total en euros)
-- marge: number >= 0
-- benefice: number >= 0
-- repartitionCouts: objet avec transport, mainOeuvre, materiaux, autres (chacun number >= 0, la somme proche de coutTotal)
-- recommandations: tableau d'au moins 3 strings (conseils sécurité, préparation, bonnes pratiques)
+CHAMPS OBLIGATOIRES:
+- tempsRealisation: string (ex "2 semaines")
+- materiaux: tableau ≥3 objets {nom, quantite (string), prix (number), prixUnitaire (number)}
+- outils: tableau ≥3 strings
+- nombreOuvriers: number ≥1
+- coutTotal: number >0
+- marge, benefice: number ≥0
+- repartitionCouts: {transport, mainOeuvre, materiaux, autres} (numbers, somme ≈ coutTotal)
+- recommandations: tableau ≥3 strings
+- couts: {materiaux, mainOeuvre, imprevu, fraisGeneraux, margeBrute, prixTTC, fourchetteBasse, fourchetteHaute}
+  fourchetteBasse = estimation optimiste (-15%), fourchetteHaute = pessimiste (+20%)
+- confiance: number 0-1 (fiabilité de l'estimation)
+- confiance_explication: string courte
+- hypotheses: tableau de strings (hypothèses utilisées)
 
-Calcule les montants à partir du type de chantier, de la surface, de la localisation et des réponses au questionnaire. Ne renvoie jamais de tableaux vides ni coutTotal à 0.`;
+Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marché estimés. Ne renvoie jamais de tableaux vides ni coutTotal à 0.`;
 
     const geminiClient = getGeminiClient();
     if (!geminiClient) {

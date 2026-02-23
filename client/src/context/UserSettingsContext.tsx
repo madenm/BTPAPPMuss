@@ -11,6 +11,7 @@ import {
   fetchUserProfile,
   updateUserProfile,
   type UserProfile,
+  type UserProfilePayload,
 } from "@/lib/supabaseUserProfile";
 
 const DEFAULT_THEME_COLOR = "#8b5cf6";
@@ -30,6 +31,7 @@ interface UserSettingsContextType {
     company_email?: string | null;
     company_siret?: string | null;
   }) => Promise<void>;
+  updateProfile: (payload: UserProfilePayload) => Promise<void>;
 }
 
 const UserSettingsContext = createContext<UserSettingsContextType | undefined>(
@@ -102,6 +104,15 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
     [user?.id, loadProfile]
   );
 
+  const updateProfileCb = useCallback(
+    async (payload: UserProfilePayload) => {
+      if (!user?.id) return;
+      await updateUserProfile(user.id, payload);
+      await loadProfile();
+    },
+    [user?.id, loadProfile]
+  );
+
   const value: UserSettingsContextType = {
     profile,
     loading,
@@ -111,6 +122,7 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
     setLogoUrl,
     setThemeColor,
     setCompanyInfo,
+    updateProfile: updateProfileCb,
   };
 
   return (

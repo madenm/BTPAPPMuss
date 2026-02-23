@@ -1605,7 +1605,7 @@ export default function ProjectsPage() {
                                   const allQuotes = await fetchQuotesForUser(user.id);
                                   params.quoteNumber = getQuoteDisplayNumber(allQuotes, q.id);
                                 }
-                                params.companyName = profile?.full_name ?? undefined;
+                                params.companyName = profile?.company_name || profile?.full_name || undefined;
                                 params.companyAddress = profile?.company_address ?? undefined;
                                 params.companyCityPostal = profile?.company_city_postal ?? undefined;
                                 params.companyPhone = profile?.company_phone ?? undefined;
