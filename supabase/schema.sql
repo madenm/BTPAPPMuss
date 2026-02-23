@@ -137,6 +137,32 @@ create policy "Users can manage own quotes"
   on public.quotes for all using (auth.uid() = user_id);
 
 -- -----------------------------------------------------------------------------
+-- user_tariffs (tarifs / listes de prix par utilisateur pour devis IA)
+-- -----------------------------------------------------------------------------
+create table if not exists public.user_tariffs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  label text not null,
+  category text not null default 'autre' check (category in ('matériau', 'service', 'autre')),
+  unit text not null default 'u',
+  price_ht numeric not null check (price_ht >= 0),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_user_tariffs_user_id on public.user_tariffs(user_id);
+alter table public.user_tariffs enable row level security;
+
+create policy "Users can select own user_tariffs"
+  on public.user_tariffs for select using (auth.uid() = user_id);
+create policy "Users can insert own user_tariffs"
+  on public.user_tariffs for insert with check (auth.uid() = user_id);
+create policy "Users can update own user_tariffs"
+  on public.user_tariffs for update using (auth.uid() = user_id);
+create policy "Users can delete own user_tariffs"
+  on public.user_tariffs for delete using (auth.uid() = user_id);
+
+-- -----------------------------------------------------------------------------
 -- planning_notes (notes du planning / jour)
 -- -----------------------------------------------------------------------------
 create table if not exists public.planning_notes (
@@ -224,6 +250,7 @@ comment on table public.user_profiles is 'Profil utilisateur (nom, logo, adresse
 comment on table public.clients is 'Clients (user_id = propriétaire)';
 comment on table public.chantiers is 'Chantiers (user_id = propriétaire)';
 comment on table public.quotes is 'Devis (user_id = propriétaire)';
+comment on table public.user_tariffs is 'Tarifs utilisateur (matériaux, services) pour génération devis IA';
 comment on table public.planning_notes is 'Note du jour par date (user_id = propriétaire)';
 comment on table public.invoices is 'Factures (user_id = propriétaire)';
 comment on table public.payments is 'Paiements factures ou revenus (user_id = propriétaire)';

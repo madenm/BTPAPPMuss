@@ -240,9 +240,6 @@ export default function ClientsPage() {
       setShareLink(link);
       setShareLinkOpen(true);
     } catch (e) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'66eecc'},body:JSON.stringify({sessionId:'66eecc',location:'ClientsPage.tsx:handleCreateShareLink:catch',message:'Share link error caught',data:{isError:e instanceof Error,name:(e as {constructor?:{name?:string}})?.constructor?.name,message:(e as {message?:string})?.message},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
-      // #endregion
       const raw = (e as { message?: string })?.message ?? (e instanceof Error ? e.message : null) ?? '';
       const isMissingTable = /client_form_links|schema cache|PGRST205/i.test(raw);
       const msg = isMissingTable

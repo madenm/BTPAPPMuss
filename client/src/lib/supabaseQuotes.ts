@@ -6,6 +6,8 @@ export interface QuoteSubItem {
   quantity: number;
   unitPrice: number;
   total: number;
+  /** Unité (ex. Pièce, Forfait, m², m, jour, lot, U). Affichée dans le PDF. */
+  unit?: string;
 }
 
 export interface QuoteItem {
@@ -14,6 +16,8 @@ export interface QuoteItem {
   quantity: number;
   unitPrice: number;
   total: number;
+  /** Unité (ex. Pièce, Forfait, m², m, jour, lot, U). Affichée dans le PDF. */
+  unit?: string;
   subItems?: QuoteSubItem[];
 }
 

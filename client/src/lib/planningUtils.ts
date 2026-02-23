@@ -31,6 +31,24 @@ export function calculateEndDate(dateDebut: string, duree: string): Date {
   return endDate;
 }
 
+/** Calcule une durée lisible (ex: "2 semaines") à partir de la date de début et de fin. */
+export function formatDurationFromDates(dateDebut: string, dateFin: string): string {
+  const start = parseLocalDate(dateDebut.slice(0, 10));
+  const end = parseLocalDate(dateFin.slice(0, 10));
+  const diffMs = end.getTime() - start.getTime();
+  const days = Math.round(diffMs / (24 * 60 * 60 * 1000));
+  if (days <= 0) return '1 jour';
+  if (days === 1) return '1 jour';
+  if (days < 7) return `${days} jours`;
+  if (days === 7) return '1 semaine';
+  if (days % 7 === 0 && days <= 84) return `${days / 7} semaines`;
+  if (days < 30) return `${days} jours`;
+  if (days <= 31) return '1 mois';
+  if (days <= 62) return '2 mois';
+  if (days % 30 < 15) return `${Math.round(days / 30)} mois`;
+  return `${days} jours`;
+}
+
 export interface DayInfo {
   date: Date;
   isCurrentMonth: boolean;

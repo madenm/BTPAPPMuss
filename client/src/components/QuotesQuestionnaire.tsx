@@ -26,7 +26,7 @@ export function QuotesQuestionnaire({ projectType, answers, onChange }: QuotesQu
   const visibleQuestions = questions.slice(0, endIndex + 1);
 
   return (
-    <Collapsible defaultOpen={false}>
+    <Collapsible defaultOpen={true}>
       <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 p-3 space-y-2">
         <CollapsibleTrigger asChild>
           <button

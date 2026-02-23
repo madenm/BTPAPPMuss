@@ -239,31 +239,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .join("\n")
         : "";
 
+    let userTariffsBlock = "";
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "https://hvnjlxxcxfxvuwlmnwtw.supabase.co";
+    const supabaseServiceKey = (process.env.SUPABASE_SERVICE_KEY || "").trim();
+    if (token && supabaseServiceKey) {
+      try {
+        const supabaseServer = createClient(supabaseUrl, supabaseServiceKey);
+        const { data: { user: authUser } } = await supabaseServer.auth.getUser(token);
+        if (authUser?.id) {
+          const { data: tariffs } = await supabaseServer
+            .from("user_tariffs")
+            .select("label, category, unit, price_ht")
+            .eq("user_id", authUser.id);
+          if (Array.isArray(tariffs) && tariffs.length > 0) {
+            const lines = (tariffs as { label?: string; category?: string; unit?: string; price_ht?: number }[])
+              .map((t) => `- ${t.label ?? ""} | ${t.category ?? ""} | ${t.unit ?? "u"} | ${Number(t.price_ht ?? 0)} € HT`)
+              .join("\n");
+            userTariffsBlock = [
+              "",
+              "--- LISTE DES TARIFS DE L'UTILISATEUR (à utiliser en priorité pour les prix unitaires) ---",
+              lines,
+              "",
+              "Pour chaque ligne du devis, si un tarif correspond (même libellé ou très proche), utilise le prix HT indiqué. Sinon utilise un prix réaliste France 2026 HT.",
+            ].join("\n");
+          }
+        }
+      } catch {
+        // ignore: continue without user tariffs
+      }
+    }
+
+    // Référence Artiprix Gros Œuvre / Second Œuvre 2026 — prix indicatifs fourniture + pose HT (€) pour caler les devis réalistes
+    const ARTIPRIX_REF = `
+PRIX INDICATIFS ARTIPRIX 2026 (fourniture + pose HT) — à utiliser pour des devis réalistes type artisan :
+- Gros œuvre : Terrasse béton ~80–85 €/m² | Trottoir béton désactivé 1,20 m ~170 €/ml | Semelle isolée 1 m³ ~300 €/U | Ouverture + linteau porte 215×90 ~765 €/U | Plancher poutrelles entrevous ~130–160 €/m² | Garage 15 m² ~5600 €/U | Massif béton 1×1×0,5 m ~196 €/U | Chaînage 150×200 mm ~36 €/ml.
+- Charpente : Rénovation charpente + couverture 45 m² ~10000 €/U | Charpente toiture 103 m² ~8400 €/U | Charpente industrielle 139 m² ~9900 €/U | Redressement + calage charpente ~85 €/m².
+- Couverture : Ardoises naturelles Espagne m² ~130–160 €/m² | Tôle galvanisée nervurée m² ~35–48 €/m² | Faîtière simple ~23 €/ml | Closoir ~20–32 €/ml.
+- Menuiserie ext. : Révision fenêtre 1 vantail ~34 €/U | Porte-fenêtre bois 215×80 ~830 €/U | Fenêtre bois 2 vantaux 135×100 ~710 €/U | Châssis bois fixe ~350–570 €/U | Remplacement vitrage fenêtre toit ~110–355 €/U.
+- Façade : Ravalement complet m² ~46–59 €/m² | Enduit finition taloché m² ~20–28 €/m² | Enduit finition feutré m² ~21–28 €/m² | ITE PSE + ravalement ~165–207 €/m² | Révision menuiseries (dégondage, réglage) ~25–68 €/U.
+- Cloisons / plafonds : Contre-cloison 1 plaque BA 13 m² ~36–45 €/m² | Plafond BA 13 m² ~28–52 €/m² | Réfection plafond BA 13 m² ~36 €/m².
+- Carrelage : Pose carrelage 30×30 m² ~47–60 €/m² | Pose 80×80 m² ~43–56 €/m² | Faïence douche ~320 €/U | Rénovation carrelage (pose seule) ~95–125 €/m².
+- Peinture : Peinture mate/satin phase aqueuse m² ~43–62 €/m² | Enduit finition m² ~20–49 €/m² | Travaux complets ravalement peinture m² ~45–59 €/m².
+Unité : m² = mètre carré, ml = mètre linéaire, U = unité, forf = forfait, jour = journée (main d’œuvre ~350–450 € HT/jour).`;
+
     const userMessage = [
-      "Tu rédiges ce devis comme un expert en estimation de travaux de " + typeLabel + " avec 20 ans d'expérience.",
+      "Tu rédiges un devis SIMPLE et LISIBLE comme un artisan du bâtiment (pas un catalogue technique).",
       "",
       "TYPE DE PROJET: " + typeLabel,
-      "DESCRIPTION DÉTAILLÉE: " + trimmed,
+      "DESCRIPTION: " + trimmed,
       "LOCALISATION: " + locValue,
-      ...(formattedAnswers ? ["", "RÉPONSES AU QUESTIONNAIRE (optionnel):", formattedAnswers] : []),
+      ...(formattedAnswers ? ["", "RÉPONSES AU QUESTIONNAIRE:", formattedAnswers] : []),
       "",
-      "INSTRUCTIONS - TRÈS IMPORTANT:",
-      "1. ANALYSE tout le projet : utilise le TYPE DE PROJET et la DESCRIPTION pour générer UNIQUEMENT des lignes en lien direct avec ce projet. Adapte les postes au type : Aménagement paysager → terrassement, dallage, terrasse, plantation, gazon, haies, clôture, éclairage extérieur ; Piscine → coque, liner, filtration, terrassement bassin ; Rénovation → peinture, carrelage, plomberie, électricité, démolition/dépose ; Menuiserie → portes, fenêtres, parquet, pose.",
-      "2. EXTRAIS les dimensions de la description (surface m², longueurs) et calcule les quantités en conséquence.",
-      "3. Minimum 15 lignes. Chaque ligne : description SPÉCIFIQUE au projet, quantité RÉALISTE, unité (m², m³, m, jours, forfait, u, etc.), prix RÉALISTE France 2026 HT.",
-      "4. Ne mets JAMAIS de lignes génériques ou hors sujet : uniquement des postes cohérents avec le type et la description.",
+      "CONSIGNES:",
+      "1. Style ARTISAN : 8 à 18 lignes selon l’ampleur du projet. Libellés COURTS et CLAIRS (ex. « Terrasse béton 30 m² », « Peinture murale mate 45 m² », « Ouverture porte 215×90 »). Pas de phrases longues ni de détails techniques superflus.",
+      "2. Quantités : extraire les dimensions de la description (surfaces, longueurs) et les utiliser pour les quantités. Unités : m², ml, U, forfait, jour.",
+      "3. Prix : utiliser les FOURCHETTES ARTIPRIX 2026 ci-dessous (prix HT fourniture + pose). Si une liste de TARIFS UTILISATEUR est fournie, les utiliser en priorité pour les lignes correspondantes ; sinon s’aligner sur Artiprix.",
+      "4. Uniquement des postes en lien direct avec le projet décrit. Aucune ligne générique ou hors sujet.",
+      "5. Utilise les RÉPONSES AU QUESTIONNAIRE pour choisir les postes et les libellés (pièces, type de travaux, matériaux).",
       "",
-      "Réponds UNIQUEMENT avec un JSON valide, sans texte avant ou après, au format : { \"lignes\": [ { \"description\": \"string\", \"quantite\": number, \"unite\": \"string\", \"prix_unitaire\": number } ] }",
+      "Exemples de libellés type artisan (à imiter) : Terrasse béton 30 m² | Peinture mate 45 m² | Carrelage 20 m² | Ouverture porte 215×90 | Fenêtre 2 vantaux 135×100 | Ravalement façade 80 m² | Main d'œuvre 5 jours.",
+      "À éviter : phrases longues, sous-détail technique inutile, lignes Étude, Coordination, Frais de dossier (sauf si explicitement demandé).",
+      ARTIPRIX_REF,
+      ...(userTariffsBlock ? [userTariffsBlock] : []),
+      "",
+      "Réponds UNIQUEMENT par un JSON valide, sans texte avant ou après : { \"lignes\": [ { \"description\": \"string\", \"quantite\": number, \"unite\": \"string\", \"prix_unitaire\": number } ] }",
     ].join("\n");
 
-    const systemInstruction = `Tu es un spécialiste en estimation de travaux (BTP, rénovation, piscines, aménagement paysager, menuiserie). Tu produis un devis RÉELLEMENT REPRÉSENTATIF de ce qu'un spécialiste rédigerait : tout est dérivé de la description du projet, sans template.
+    const systemInstruction = `Tu es un artisan en estimation de travaux (BTP, rénovation, menuiserie, couverture, façade, carrelage, peinture). Tu produis un devis SIMPLE, comme on en voit en vrai : peu de lignes, libellés courts, prix réalistes France 2026 (référence Artiprix Gros Œuvre / Second Œuvre).
 
-Règles strictes :
-- Réponds UNIQUEMENT avec un JSON valide. Aucun texte avant ou après.
-- Format exact : { "lignes": [ { "description": "string détaillé", "quantite": number, "unite": "m²|m³|kg|m|jours|forfait|u|L|etc.", "prix_unitaire": number } ] }
-- Tu lis la description du projet, le type (si fourni) et les RÉPONSES AU QUESTIONNAIRE si présentes. Tu DÉCOMPOSES le travail en étapes et postes nécessaires. Si des réponses au questionnaire sont fournies, tiens-en compte pour affiner les lignes du devis (matériaux, dimensions, complexité, etc.).
-- Tu CALCULES les quantités (surfaces, longueurs, volumes, jours, etc.) à partir des informations explicites ou implicites dans la description. Chaque ligne doit être justifiable par la description.
-- Pas de modèle type template : pas de lignes génériques ou réutilisables. Chaque ligne doit être SPÉCIFIQUE au projet décrit (dimensions, matériaux mentionnés, travaux décrits). Prix unitaire HT réaliste France 2026.`;
+Règles :
+- Réponds UNIQUEMENT par un JSON valide. Aucun texte avant ou après.
+- Format : { "lignes": [ { "description": "libellé court", "quantite": number, "unite": "m²|ml|U|forfait|jour", "prix_unitaire": number } ] }
+- Devis ARTISAN : 8 à 18 lignes max, descriptions courtes (ex. "Terrasse béton 30 m²", "Peinture mate 45 m²"). Pas de décomposition excessive ni de jargon inutile.
+- Quantités : si la description ou le questionnaire donne des dimensions (surfaces, longueurs), les utiliser pour les quantités (m², ml). Sinon utiliser une quantité raisonnable (1 U, 1 forfait, ou surface/journée estimée) avec un libellé court.
+- Prix unitaire HT : utiliser les fourchettes Artiprix 2026 fournies dans le message ; si des tarifs utilisateur sont donnés, les prioriser pour les lignes correspondantes.
+- Chaque ligne doit correspondre à un poste réel du projet décrit. Pas de lignes type "honoraires", "frais de dossier", "étude" ou "coordination" (sauf si explicitement demandé).`;
 
     const geminiClient = getGeminiClient();
     if (!geminiClient) {

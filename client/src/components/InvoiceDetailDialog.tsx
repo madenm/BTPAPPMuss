@@ -80,7 +80,7 @@ export function InvoiceDetailDialog({
   const effectiveUserId = useTeamEffectiveUserId();
   const userId = effectiveUserId ?? user?.id ?? null;
   const { chantiers } = useChantiers();
-  const { logoUrl, profile } = useUserSettings();
+  const { logoUrl, profile, themeColor } = useUserSettings();
   const { toast } = useToast();
   const [invoice, setInvoice] = useState<InvoiceWithPayments>(initialInvoice);
   const [loading, setLoading] = useState(false);
@@ -114,6 +114,7 @@ export function InvoiceDetailDialog({
         companyPhone: profile?.company_phone || '',
         companyEmail: profile?.company_email || '',
         companySiret: profile?.company_siret || '',
+        themeColor: themeColor || undefined,
         logoDataUrl,
       });
     } catch (error) {

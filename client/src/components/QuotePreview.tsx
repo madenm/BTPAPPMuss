@@ -86,9 +86,10 @@ export function QuotePreview({ quote, accentColor = "#8b5cf6", logoUrl, classNam
             <thead>
               <tr className="text-white font-medium" style={{ backgroundColor: accentColor }}>
                 <th className="text-left py-2 px-4">Description</th>
+                <th className="text-center py-2 px-4">Unité</th>
                 <th className="text-right py-2 px-4">Qté</th>
-                <th className="text-right py-2 px-4">Prix unit.</th>
-                <th className="text-right py-2 px-4">Total</th>
+                <th className="text-right py-2 px-4">Prix unit. HT</th>
+                <th className="text-right py-2 px-4">Total HT</th>
               </tr>
             </thead>
             <tbody>
@@ -98,6 +99,9 @@ export function QuotePreview({ quote, accentColor = "#8b5cf6", logoUrl, classNam
                     <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/30">
                       <td className="py-2 px-4 text-gray-900 dark:text-white font-medium">
                         {item.description || "—"}
+                      </td>
+                      <td className="py-2 px-4 text-center text-gray-700 dark:text-gray-300">
+                        {item.unit?.trim() || "—"}
                       </td>
                       <td className="py-2 px-4 text-right text-gray-700 dark:text-gray-300">—</td>
                       <td className="py-2 px-4 text-right text-gray-700 dark:text-gray-300">—</td>
@@ -109,6 +113,9 @@ export function QuotePreview({ quote, accentColor = "#8b5cf6", logoUrl, classNam
                       <tr key={sub.id} className="border-b border-gray-100 dark:border-gray-800">
                         <td className="py-2 px-4 pl-8 text-gray-700 dark:text-gray-300">
                           {sub.description || "—"}
+                        </td>
+                        <td className="py-2 px-4 text-center text-gray-700 dark:text-gray-300">
+                          {sub.unit?.trim() || "—"}
                         </td>
                         <td className="py-2 px-4 text-right text-gray-700 dark:text-gray-300">
                           {sub.quantity}
@@ -126,6 +133,9 @@ export function QuotePreview({ quote, accentColor = "#8b5cf6", logoUrl, classNam
                   <tr key={item.id} className="border-b border-gray-100 dark:border-gray-800">
                     <td className="py-2 px-4 text-gray-900 dark:text-white">
                       {item.description || "—"}
+                    </td>
+                    <td className="py-2 px-4 text-center text-gray-700 dark:text-gray-300">
+                      {item.unit?.trim() || "—"}
                     </td>
                     <td className="py-2 px-4 text-right text-gray-700 dark:text-gray-300">
                       {item.quantity}

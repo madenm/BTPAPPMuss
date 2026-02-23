@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { Link, useLocation } from 'wouter';
-import { Menu, X, ChevronLeft, Home, Calculator, Building, Calendar, Workflow, FileText, Users, User, Receipt, UserPlus } from 'lucide-react';
+import { Menu, X, ChevronLeft, Home, Calculator, Building, Calendar, Workflow, FileText, Users, User, Receipt, UserPlus, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 
@@ -20,7 +20,8 @@ export default function Sidebar() {
     { icon: Building, label: 'Mes Projets', path: '/dashboard/projects' },
     { icon: Calendar, label: 'Planning', path: '/dashboard/planning' },
     { icon: Workflow, label: 'CRM Pipeline', path: '/dashboard/crm' },
-    { icon: FileText, label: 'Générateur de Devis', path: '/dashboard/quotes' },
+    { icon: FileText, label: 'Devis', path: '/dashboard/quotes' },
+    { icon: DollarSign, label: 'Tarifs', path: '/dashboard/tarifs' },
     { icon: Receipt, label: 'Factures', path: '/dashboard/invoices' },
     { icon: Users, label: 'Équipe', path: '/dashboard/team' },
     { icon: User, label: 'Clients', path: '/dashboard/clients' },

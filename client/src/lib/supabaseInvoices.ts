@@ -309,7 +309,7 @@ export async function createInvoiceFromQuote(
     client_address: quote.client_address ?? null,
     invoice_date: invoiceDate,
     due_date: dueDateStr,
-    payment_terms: "30 jours net",
+    payment_terms: "Paiement à 30 jours (net)",
     items,
     subtotal_ht: totalHt,
     tva_amount: tvaAmount,

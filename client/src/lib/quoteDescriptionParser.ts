@@ -116,6 +116,7 @@ export function parseDescriptionToItems(description: string): QuoteItem[] {
       quantity,
       unitPrice,
       total: quantity * unitPrice,
+      unit: '',
     });
   }
 

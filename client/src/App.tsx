@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -15,22 +16,30 @@ import LoginPage from "@/pages/LoginPage";
 import LoadingRedirectPage from "@/pages/LoadingRedirectPage";
 import InvitePage from "@/pages/InvitePage";
 import ClientFormPage from "@/pages/ClientFormPage";
-import TeamDashboard from "@/pages/TeamDashboard";
-import Dashboard from "@/pages/Dashboard";
-import QuotesPage from "@/pages/QuotesPage";
-import AIVisualizationPage from "@/pages/AIVisualizationPage";
-import ProspectsPage from "@/pages/ProspectsPage";
-import ProjectsPage from "@/pages/ProjectsPage";
-import PlanningPage from "@/pages/PlanningPage";
-import EstimationPage from "@/pages/EstimationPage";
-import ClientsPage from "@/pages/ClientsPage";
-import CRMPipelinePage from "@/pages/CRMPipelinePage";
-import TeamPage from "@/pages/TeamPage";
-import SettingsPage from "@/pages/SettingsPage";
-import InvoicesPage from "@/pages/InvoicesPage";
-import CreateUserPage from "@/pages/CreateUserPage";
 import NotFound from "@/pages/not-found";
 import { UserSettingsProvider } from "@/context/UserSettingsContext";
+
+const TeamDashboard = lazy(() => import("@/pages/TeamDashboard"));
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const QuotesPage = lazy(() => import("@/pages/QuotesPage"));
+const EstimationPage = lazy(() => import("@/pages/EstimationPage"));
+const TarifsPage = lazy(() => import("@/pages/TarifsPage"));
+const AIVisualizationPage = lazy(() => import("@/pages/AIVisualizationPage"));
+const ProspectsPage = lazy(() => import("@/pages/ProspectsPage"));
+const ProjectsPage = lazy(() => import("@/pages/ProjectsPage"));
+const PlanningPage = lazy(() => import("@/pages/PlanningPage"));
+const ClientsPage = lazy(() => import("@/pages/ClientsPage"));
+const InvoicesPage = lazy(() => import("@/pages/InvoicesPage"));
+const CRMPipelinePage = lazy(() => import("@/pages/CRMPipelinePage"));
+const TeamPage = lazy(() => import("@/pages/TeamPage"));
+const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
+const CreateUserPage = lazy(() => import("@/pages/CreateUserPage"));
+
+const PageFallback = () => (
+  <div className="flex items-center justify-center min-h-[280px] text-gray-500 dark:text-gray-400">
+    Chargement…
+  </div>
+);
 
 const pageVariants = {
   initial: {
@@ -60,17 +69,18 @@ const pageVariants = {
 
 function Router() {
   const [location] = useLocation();
+  const pathname = location.includes('?') ? location.slice(0, location.indexOf('?')) : location;
 
   const getComponent = () => {
     // Routes publiques (sans auth)
-    if (location.startsWith('/invite/')) {
+    if (pathname.startsWith('/invite/')) {
       return <InvitePage />;
     }
-    if (location.startsWith('/client-form/')) {
+    if (pathname.startsWith('/client-form/')) {
       return <ClientFormPage />;
     }
 
-    switch (location) {
+    switch (pathname) {
       case "/":
         return <Home />;
       case "/auth":
@@ -88,33 +98,36 @@ function Router() {
       case "/team-dashboard/team":
       case "/team-dashboard/clients":
       case "/team-dashboard/ai-visualization":
-        return <ProtectedTeamRoute><TeamDashboard /></ProtectedTeamRoute>;
+        return <ProtectedTeamRoute><Suspense fallback={<PageFallback />}><TeamDashboard /></Suspense></ProtectedTeamRoute>;
       case "/dashboard":
-        return <ProtectedRoute><Dashboard /></ProtectedRoute>;
+        return <ProtectedRoute><Suspense fallback={<PageFallback />}><Dashboard /></Suspense></ProtectedRoute>;
       case "/dashboard/estimation":
-        return <ProtectedRoute><EstimationPage /></ProtectedRoute>;
+        return <ProtectedRoute><Suspense fallback={<PageFallback />}><EstimationPage /></Suspense></ProtectedRoute>;
       case "/dashboard/quotes":
-        return <ProtectedRoute><QuotesPage /></ProtectedRoute>;
+      case "/dashboard/quotes/new":
+        return <ProtectedRoute><Suspense fallback={<PageFallback />}><QuotesPage /></Suspense></ProtectedRoute>;
+      case "/dashboard/tarifs":
+        return <ProtectedRoute><Suspense fallback={<PageFallback />}><TarifsPage /></Suspense></ProtectedRoute>;
       case "/dashboard/ai-visualization":
-        return <ProtectedRoute><AIVisualizationPage /></ProtectedRoute>;
+        return <ProtectedRoute><Suspense fallback={<PageFallback />}><AIVisualizationPage /></Suspense></ProtectedRoute>;
       case "/dashboard/prospects":
-        return <ProtectedRoute><ProspectsPage /></ProtectedRoute>;
+        return <ProtectedRoute><Suspense fallback={<PageFallback />}><ProspectsPage /></Suspense></ProtectedRoute>;
       case "/dashboard/projects":
-        return <ProtectedRoute><ProjectsPage /></ProtectedRoute>;
+        return <ProtectedRoute><Suspense fallback={<PageFallback />}><ProjectsPage /></Suspense></ProtectedRoute>;
       case "/dashboard/clients":
-        return <ProtectedRoute><ClientsPage /></ProtectedRoute>;
+        return <ProtectedRoute><Suspense fallback={<PageFallback />}><ClientsPage /></Suspense></ProtectedRoute>;
       case "/dashboard/invoices":
-        return <ProtectedRoute><InvoicesPage /></ProtectedRoute>;
+        return <ProtectedRoute><Suspense fallback={<PageFallback />}><InvoicesPage /></Suspense></ProtectedRoute>;
       case "/dashboard/planning":
-        return <ProtectedRoute><PlanningPage /></ProtectedRoute>;
+        return <ProtectedRoute><Suspense fallback={<PageFallback />}><PlanningPage /></Suspense></ProtectedRoute>;
       case "/dashboard/crm":
-        return <ProtectedRoute><CRMPipelinePage /></ProtectedRoute>;
+        return <ProtectedRoute><Suspense fallback={<PageFallback />}><CRMPipelinePage /></Suspense></ProtectedRoute>;
       case "/dashboard/team":
-        return <ProtectedRoute><TeamPage /></ProtectedRoute>;
+        return <ProtectedRoute><Suspense fallback={<PageFallback />}><TeamPage /></Suspense></ProtectedRoute>;
       case "/dashboard/settings":
-        return <ProtectedRoute><SettingsPage /></ProtectedRoute>;
+        return <ProtectedRoute><Suspense fallback={<PageFallback />}><SettingsPage /></Suspense></ProtectedRoute>;
       case "/dashboard/create-user":
-        return <ProtectedRoute><CreateUserPage /></ProtectedRoute>;
+        return <ProtectedRoute><Suspense fallback={<PageFallback />}><CreateUserPage /></Suspense></ProtectedRoute>;
       default:
         return <NotFound />;
     }

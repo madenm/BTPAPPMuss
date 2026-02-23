@@ -25,12 +25,16 @@ import { useUserSettings } from '@/context/UserSettingsContext';
 import { useToast } from '@/hooks/use-toast';
 import { UserAccountButton } from '@/components/UserAccountButton';
 import { VoiceInputButton } from '@/components/VoiceInputButton';
-import { insertQuote, updateQuote, fetchQuoteById, fetchQuotesForUser, getQuoteDisplayNumber, type QuoteItem, type QuoteSubItem } from '@/lib/supabaseQuotes';
+import { insertQuote, updateQuote, fetchQuoteById, fetchQuotesForUser, getQuoteDisplayNumber, type QuoteItem, type QuoteSubItem, type SupabaseQuote } from '@/lib/supabaseQuotes';
+import { DEFAULT_THEME_COLOR, QUOTE_STATUS_LABELS, QUOTE_UNIT_NONE, QUOTE_UNIT_OPTIONS, inferUnitFromDescription, backfillUnitOnItems } from '@/lib/quoteConstants';
 import { downloadQuotePdf, fetchLogoDataUrl } from '@/lib/quotePdf';
 import { QuotePreview } from '@/components/QuotePreview';
+import { QuoteList } from '@/components/QuoteList';
 import { InvoiceDialog } from '@/components/InvoiceDialog';
 import { QuotesQuestionnaire } from '@/components/QuotesQuestionnaire';
 import { hasQuestionsForType } from '@/lib/estimationQuestionnaire';
+import { fetchTariffs, type UserTariff } from '@/lib/supabaseTariffs';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { 
   FileText, 
   Plus, 
@@ -50,8 +54,16 @@ import {
   Loader2,
   Receipt,
   Save,
-  Search
+  Search,
+  HelpCircle,
+  ChevronDown,
+  ChevronUp,
+  GripVertical,
+  List,
+  Pencil,
+  ExternalLink
 } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 
 interface ClientInfo {
   name: string;
@@ -60,14 +72,32 @@ interface ClientInfo {
   address: string;
 }
 
-const DEFAULT_THEME_COLOR = '#8b5cf6';
-
 export default function QuotesPage() {
   const { user, session } = useAuth();
   const { clients, chantiers, addChantier, addClient, updateChantier, refreshChantiers } = useChantiers();
   const { logoUrl, themeColor, profile } = useUserSettings();
   const accentColor = themeColor || DEFAULT_THEME_COLOR;
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
+  const pathname = location.includes('?') ? location.slice(0, location.indexOf('?')) : location;
+  const [showNewFormFromClick, setShowNewFormFromClick] = useState(false);
+  const keepFormVisibleRef = useRef(false);
+  const searchString = typeof window !== 'undefined' ? window.location.search : '';
+  const searchParams = new URLSearchParams(searchString || (location.includes('?') ? location.slice(location.indexOf('?')) : ''));
+  const [quoteIdToOpenFromList, setQuoteIdToOpenFromList] = useState<string | null>(null);
+  const [forceListView, setForceListView] = useState(false);
+  const showForm = !forceListView && !!(pathname === '/dashboard/quotes/new' || keepFormVisibleRef.current || showNewFormFromClick || searchParams.get('quoteId') || searchParams.get('chantierId') || searchParams.get('new') === '1' || quoteIdToOpenFromList);
+
+  useEffect(() => {
+    if (pathname === '/dashboard/quotes/new' || searchParams.get('quoteId') || searchParams.get('chantierId')) {
+      setForceListView(false);
+    }
+  }, [pathname, searchParams.get('quoteId'), searchParams.get('chantierId')]);
+
+  const [listQuotes, setListQuotes] = useState<SupabaseQuote[]>([]);
+  const [listLoading, setListLoading] = useState(false);
+  const [listStatusFilter, setListStatusFilter] = useState<string>('all');
+  const [listSearchQuery, setListSearchQuery] = useState('');
+
   const [step, setStep] = useState(1);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAiParsing, setIsAiParsing] = useState(false);
@@ -93,8 +123,13 @@ export default function QuotesPage() {
   const [useAiForPrefill, setUseAiForPrefill] = useState(true);
   const [validityDays, setValidityDays] = useState('30');
   const [items, setItems] = useState<QuoteItem[]>([
-    { id: '1', description: '', quantity: 1, unitPrice: 0, total: 0 }
+    { id: '1', description: '', quantity: 1, unitPrice: 0, total: 0, unit: '' }
   ]);
+  const [userTariffs, setUserTariffs] = useState<UserTariff[]>([]);
+  const [openTariffPopoverId, setOpenTariffPopoverId] = useState<string | null>(null);
+  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
+  const [dragOverItemId, setDragOverItemId] = useState<string | null>(null);
+  const [dragOverPosition, setDragOverPosition] = useState<'before' | 'after' | null>(null);
 
   const [highlightMissing, setHighlightMissing] = useState<{
     clientName?: boolean;
@@ -110,6 +145,45 @@ export default function QuotesPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isCreatingChantier, setIsCreatingChantier] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (!showForm && user?.id) {
+      setListLoading(true);
+      fetchQuotesForUser(user.id, listStatusFilter === 'all' ? undefined : listStatusFilter)
+        .then(setListQuotes)
+        .catch(() => setListQuotes([]))
+        .finally(() => setListLoading(false));
+    }
+  }, [showForm, user?.id, listStatusFilter]);
+
+  const hasResetForNewRef = useRef(false);
+  useEffect(() => {
+    if (!showForm) {
+      hasResetForNewRef.current = false;
+      return;
+    }
+    const isNewPath = pathname === '/dashboard/quotes/new';
+    const isNewParam = searchParams.get('new') === '1' && !searchParams.get('quoteId');
+    if (!isNewPath && !isNewParam) {
+      hasResetForNewRef.current = false;
+      return;
+    }
+    if (hasResetForNewRef.current) return;
+    hasResetForNewRef.current = true;
+    setStep(1);
+    setEditingQuoteId(null);
+    setEditingQuoteStatus(null);
+    setClientInfo({ name: '', email: '', phone: '', address: '' });
+    setProjectType('');
+    setProjectDescription('');
+    setQuestionnaireAnswers({});
+    setValidityDays('30');
+    setItems([{ id: '1', description: '', quantity: 1, unitPrice: 0, total: 0, unit: '' }]);
+    setSelectedClientId(null);
+    setSelectedChantierId(null);
+    setQuoteLoadState('idle');
+    lastAppliedQuoteIdRef.current = null;
+  }, [showForm, pathname, searchParams.get('new'), searchParams.get('quoteId')]);
 
   useEffect(() => {
     if (step !== 2 && step !== 3) return;
@@ -186,7 +260,8 @@ export default function QuotesPage() {
   useEffect(() => {
     if (!user?.id) return;
     const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
-    const quoteId = params.get('quoteId');
+    const quoteIdFromUrl = params.get('quoteId');
+    const quoteId = quoteIdFromUrl || quoteIdToOpenFromList;
     if (!quoteId) {
       setQuoteLoadState('idle');
       lastAppliedQuoteIdRef.current = null;
@@ -198,6 +273,7 @@ export default function QuotesPage() {
       if (!quote) {
         setQuoteLoadState('error');
         lastAppliedQuoteIdRef.current = null;
+        setQuoteIdToOpenFromList(null);
         toast({
           title: 'Devis introuvable',
           description: 'Ce devis n\'existe pas ou vous n\'y avez pas accès.',
@@ -210,6 +286,7 @@ export default function QuotesPage() {
       if (quote.status === 'validé') {
         setQuoteLoadState('error');
         lastAppliedQuoteIdRef.current = null;
+        setQuoteIdToOpenFromList(null);
         toast({
           title: 'Devis validé',
           description: 'Ce devis a été validé et ne peut plus être modifié.',
@@ -224,6 +301,10 @@ export default function QuotesPage() {
         return;
       }
       lastAppliedQuoteIdRef.current = quoteId;
+      setQuoteIdToOpenFromList(null);
+      if (typeof window !== 'undefined' && !quoteIdFromUrl) {
+        window.history.replaceState({}, '', `/dashboard/quotes?quoteId=${quoteId}`);
+      }
       setEditingQuoteId(quoteId);
       setEditingQuoteStatus(quote.status);
       setClientInfo({
@@ -235,14 +316,14 @@ export default function QuotesPage() {
       setProjectType(quote.project_type ?? '');
       setProjectDescription(quote.project_description ?? '');
       setValidityDays(String(quote.validity_days ?? 30));
-      setItems(Array.isArray(quote.items) && quote.items.length > 0 ? quote.items : [{ id: '1', description: '', quantity: 1, unitPrice: 0, total: 0 }]);
+      setItems(Array.isArray(quote.items) && quote.items.length > 0 ? backfillUnitOnItems(quote.items) : [{ id: '1', description: '', quantity: 1, unitPrice: 0, total: 0, unit: '' }]);
       setSelectedChantierId(quote.chantier_id ?? null);
       const chantier = quote.chantier_id ? chantiers.find((c) => c.id === quote.chantier_id) : null;
       setSelectedClientId(chantier?.clientId ?? null);
       setStep(3);
       setQuoteLoadState('loaded');
     });
-  }, [user?.id, chantiers, toast, setLocation]);
+  }, [user?.id, chantiers, toast, setLocation, location, searchString, quoteIdToOpenFromList]);
 
   // Garder le chantier sélectionné cohérent avec le client : ne jamais afficher un chantier d'un autre client
   useEffect(() => {
@@ -261,19 +342,83 @@ export default function QuotesPage() {
     }
   }, [selectedClientId, selectedChantierId, chantiers]);
 
+  useEffect(() => {
+    if (step !== 3 || !user?.id) return;
+    fetchTariffs(user.id).then(setUserTariffs).catch(() => setUserTariffs([]));
+  }, [step, user?.id]);
+
+  const normalizeUnitFromTariff = (raw: string | undefined): string => {
+    const u = raw?.trim().toLowerCase();
+    if (u === 'u') return 'U';
+    if (u === 'forfait') return 'Forfait';
+    if (u === 'm²' || u === 'm2') return 'm²';
+    if (u === 'piece' || u === 'pièce') return 'Pièce';
+    if (u === 'jour') return 'jour';
+    if (u === 'lot') return 'lot';
+    return raw?.trim() || '';
+  };
+
+  const applyTariffToItem = (itemId: string, tariff: UserTariff) => {
+    setItems((prev) =>
+      prev.map((it) => {
+        if (it.id !== itemId) return it;
+        const quantity = it.quantity || 1;
+        const unitPrice = Number(tariff.price_ht) >= 0 ? Number(tariff.price_ht) : 0;
+        const unit = normalizeUnitFromTariff(tariff.unit) || (it.unit ?? '');
+        return {
+          ...it,
+          description: tariff.label,
+          unitPrice,
+          total: quantity * unitPrice,
+          unit,
+        };
+      })
+    );
+  };
+
   const addItem = () => {
     const newItem: QuoteItem = {
-      id: Date.now().toString(),
+      id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       description: '',
       quantity: 1,
       unitPrice: 0,
-      total: 0
+      total: 0,
+      unit: '',
     };
-    setItems([...items, newItem]);
+    setItems((prev) => [newItem, ...prev]);
   };
 
   const removeItem = (id: string) => {
     setItems(items.filter(item => item.id !== id));
+  };
+
+  const reorderItems = (draggedId: string, targetId: string, position: 'before' | 'after') => {
+    if (draggedId === targetId) return;
+    const fromIndex = items.findIndex((i) => i.id === draggedId);
+    const toIndex = items.findIndex((i) => i.id === targetId);
+    if (fromIndex === -1 || toIndex === -1) return;
+    let insertIndex = position === 'after' ? toIndex + 1 : toIndex;
+    if (fromIndex < insertIndex) insertIndex -= 1;
+    const next = [...items];
+    const [removed] = next.splice(fromIndex, 1);
+    next.splice(insertIndex, 0, removed);
+    setItems(next);
+  };
+
+  const moveItemUp = (itemId: string) => {
+    const idx = items.findIndex((i) => i.id === itemId);
+    if (idx <= 0) return;
+    const next = [...items];
+    [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+    setItems(next);
+  };
+
+  const moveItemDown = (itemId: string) => {
+    const idx = items.findIndex((i) => i.id === itemId);
+    if (idx === -1 || idx >= items.length - 1) return;
+    const next = [...items];
+    [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+    setItems(next);
   };
 
   const updateItem = (id: string, field: keyof QuoteItem, value: string | number) => {
@@ -303,6 +448,7 @@ export default function QuotesPage() {
       quantity: 1,
       unitPrice: 0,
       total: 0,
+      unit: '',
     };
     setItems(items.map(item => {
       if (item.id !== itemId) return item;
@@ -390,6 +536,7 @@ export default function QuotesPage() {
                     quantity: sQty,
                     unitPrice: sPrice,
                     total: sQty * sPrice,
+                    unit: '',
                   };
                 })
                 .filter((s) => s.description.length > 0);
@@ -400,6 +547,7 @@ export default function QuotesPage() {
                 quantity: hasSubItems ? 0 : qty,
                 unitPrice: hasSubItems ? 0 : price,
                 total: hasSubItems ? 0 : qty * price,
+                unit: '',
                 ...(hasSubItems ? { subItems: subItemsMapped } : {}),
               };
             }
@@ -412,7 +560,7 @@ export default function QuotesPage() {
               description: `${valid.length} ligne(s) générée(s) à partir de la description (analyse spécialiste).`,
             });
           } else {
-            setItems([{ id: '1', description: '', quantity: 1, unitPrice: 0, total: 0 }]);
+            setItems([{ id: '1', description: '', quantity: 1, unitPrice: 0, total: 0, unit: '' }]);
             toast({ title: 'Devis', description: 'Aucune ligne générée. Saisissez le détail manuellement.' });
           }
         } else {
@@ -423,10 +571,10 @@ export default function QuotesPage() {
               description: msg,
               variant: 'destructive',
             });
-            setItems([{ id: '1', description: '', quantity: 1, unitPrice: 0, total: 0 }]);
+            setItems([{ id: '1', description: '', quantity: 1, unitPrice: 0, total: 0, unit: '' }]);
           } else {
             toast({ title: 'Erreur', description: msg, variant: 'destructive' });
-            setItems([{ id: '1', description: '', quantity: 1, unitPrice: 0, total: 0 }]);
+            setItems([{ id: '1', description: '', quantity: 1, unitPrice: 0, total: 0, unit: '' }]);
           }
         }
       } catch {
@@ -435,7 +583,7 @@ export default function QuotesPage() {
           description: 'Impossible de contacter le serveur. Décochez "Utiliser l\'analyse IA" pour saisir le devis manuellement.',
           variant: 'destructive',
         });
-        setItems([{ id: '1', description: '', quantity: 1, unitPrice: 0, total: 0 }]);
+        setItems([{ id: '1', description: '', quantity: 1, unitPrice: 0, total: 0, unit: '' }]);
       } finally {
         setIsAiParsing(false);
       }
@@ -452,6 +600,7 @@ export default function QuotesPage() {
   const handleNewQuote = () => {
     lastAppliedQuoteIdRef.current = null;
     hasAppliedChantierIdRef.current = null;
+    setShowNewFormFromClick(true);
     setStep(1);
     setHighlightMissing({});
     setSelectedClientId(null);
@@ -463,10 +612,68 @@ export default function QuotesPage() {
     setProjectDescription('');
     setQuestionnaireAnswers({});
     setValidityDays('30');
-    setItems([{ id: '1', description: '', quantity: 1, unitPrice: 0, total: 0 }]);
+    setItems([{ id: '1', description: '', quantity: 1, unitPrice: 0, total: 0, unit: '' }]);
     setQuoteLoadState('idle');
-    setLocation('/dashboard/quotes');
+    setLocation('/dashboard/quotes/new');
   };
+
+  const handleDownloadPdfFromList = async (quote: SupabaseQuote) => {
+    try {
+      const pdfItems = (quote.items ?? []).map((i) => ({
+        description: i.description,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+        total: i.total ?? i.quantity * i.unitPrice,
+        unit: i.unit ?? undefined,
+        subItems: i.subItems?.map((s) => ({
+          description: s.description,
+          quantity: s.quantity,
+          unitPrice: s.unitPrice,
+          total: s.total,
+          unit: s.unit ?? undefined,
+        })),
+      }));
+      const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : undefined;
+      const quoteNum = getQuoteDisplayNumber(listQuotes, quote.id);
+      downloadQuotePdf({
+        clientInfo: {
+          name: quote.client_name ?? '',
+          email: quote.client_email ?? '',
+          phone: quote.client_phone ?? '',
+          address: quote.client_address ?? '',
+        },
+        projectType: quote.project_type ?? '',
+        projectDescription: quote.project_description ?? '',
+        validityDays: String(quote.validity_days ?? 30),
+        items: pdfItems,
+        subtotal: quote.total_ht,
+        tva: quote.total_ttc - quote.total_ht,
+        total: quote.total_ttc,
+        themeColor: accentColor,
+        quoteNumber: quoteNum || undefined,
+        companyName: profile?.full_name ?? undefined,
+        companyAddress: profile?.company_address ?? undefined,
+        companyCityPostal: profile?.company_city_postal ?? undefined,
+        companyPhone: profile?.company_phone ?? undefined,
+        companyEmail: profile?.company_email ?? undefined,
+        companySiret: profile?.company_siret ?? undefined,
+        ...(logoDataUrl && { logoDataUrl }),
+      });
+      toast({ title: 'Devis téléchargé', description: 'Le PDF a été téléchargé.' });
+    } catch (e) {
+      console.error(e);
+      toast({ title: 'Erreur', description: 'Impossible de télécharger le PDF.', variant: 'destructive' });
+    }
+  };
+
+  const filteredListQuotes = listSearchQuery.trim()
+    ? listQuotes.filter((q) => {
+        const qn = getQuoteDisplayNumber(listQuotes, q.id);
+        const client = (q.client_name ?? '').toLowerCase();
+        const query = listSearchQuery.toLowerCase();
+        return qn.toLowerCase().includes(query) || client.includes(query);
+      })
+    : listQuotes;
 
   // Fonction helper pour vérifier si le devis peut être sauvegardé
   const canSaveQuote = (): boolean => {
@@ -746,11 +953,13 @@ export default function QuotesPage() {
           quantity: i.quantity,
           unitPrice: i.unitPrice,
           total: getItemTotal(i),
+          unit: i.unit ?? undefined,
           subItems: i.subItems?.map((s) => ({
             description: s.description,
             quantity: s.quantity,
             unitPrice: s.unitPrice,
             total: s.total,
+            unit: s.unit ?? undefined,
           })),
         }));
         let quoteNum: string | undefined;
@@ -860,11 +1069,13 @@ export default function QuotesPage() {
           quantity: i.quantity,
           unitPrice: i.unitPrice,
           total: getItemTotal(i),
+          unit: i.unit ?? undefined,
           subItems: i.subItems?.map((s) => ({
             description: s.description,
             quantity: s.quantity,
             unitPrice: s.unitPrice,
             total: s.total,
+            unit: s.unit ?? undefined,
           })),
         }));
         const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : null;
@@ -914,8 +1125,36 @@ export default function QuotesPage() {
     }
   };
 
+  const handleEditQuoteFromList = (quoteId: string) => {
+    setForceListView(false);
+    setQuoteIdToOpenFromList(quoteId);
+    const url = `/dashboard/quotes?quoteId=${quoteId}`;
+    if (typeof window !== 'undefined') window.history.pushState({}, '', url);
+    setLocation(url);
+  };
+
   return (
     <PageWrapper>
+      {!showForm ? (
+        <QuoteList
+          quotes={listQuotes}
+          loading={listLoading}
+          statusFilter={listStatusFilter}
+          searchQuery={listSearchQuery}
+          onStatusFilterChange={setListStatusFilter}
+          onSearchQueryChange={setListSearchQuery}
+          filteredQuotes={filteredListQuotes}
+          getQuoteDisplayNumber={getQuoteDisplayNumber}
+          onNewQuote={() => {
+            setForceListView(false);
+            setLocation('/dashboard/quotes/new');
+          }}
+          onEditQuote={handleEditQuoteFromList}
+          onDownloadPdf={handleDownloadPdfFromList}
+          onGoToProjects={() => setLocation('/dashboard/projects')}
+        />
+      ) : (
+        <>
       <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
           <div className="min-w-0 w-full sm:flex-1 pl-20">
@@ -931,8 +1170,26 @@ export default function QuotesPage() {
               variant="outline"
               size="sm"
               className="rounded-xl bg-white/20 text-white border-white/40 hover:bg-white/30 hover:border-white/50 max-md:min-h-[44px]"
+              onClick={() => {
+                setForceListView(true);
+                keepFormVisibleRef.current = false;
+                setShowNewFormFromClick(false);
+                setQuoteIdToOpenFromList(null);
+                if (typeof window !== 'undefined') {
+                  window.history.replaceState({}, '', '/dashboard/quotes');
+                }
+                setLocation('/dashboard/quotes');
+              }}
+              title="Voir tous les devis"
+            >
+              <List className="h-4 w-4 mr-2" />
+              Voir tous les devis
+            </Button>
+            <Button
+              size="sm"
+              className="rounded-xl bg-violet-500 hover:bg-violet-600 text-white max-md:min-h-[44px]"
               onClick={handleNewQuote}
-              data-testid="button-new-quote"
+              data-testid="button-new-quote-form"
             >
               <Plus className="h-4 w-4 mr-2" />
               Nouveau devis
@@ -1402,7 +1659,29 @@ export default function QuotesPage() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="project-description" className="text-gray-700 dark:text-gray-300">Description du projet</Label>
+                      <div className="flex items-center gap-1.5">
+                        <Label htmlFor="project-description" className="text-gray-700 dark:text-gray-300">Description du projet</Label>
+                        <TooltipProvider delayDuration={0}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button type="button" className="inline-flex text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none rounded focus-visible:ring-2 focus-visible:ring-violet-500" aria-label="Conseils pour une bonne description du projet">
+                                <HelpCircle className="h-4 w-4" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="right" sideOffset={8} className="max-w-[300px] p-3 text-left space-y-2 z-[100] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 shadow-lg">
+                              <p className="font-medium">Comment bien décrire le projet pour que l’IA génère un bon devis</p>
+                              <ul className="text-xs text-gray-600 dark:text-gray-300 space-y-1.5 list-disc list-inside">
+                                <li>Indiquez les <strong>pièces</strong> concernées (ex. cuisine, salle de bain, façade).</li>
+                                <li>Donnez les <strong>surfaces</strong> en m² ou les <strong>longueurs</strong> en m quand vous les connaissez (ex. 25 m², 12 ml).</li>
+                                <li>Précisez les <strong>travaux</strong> à faire (ex. peinture, carrelage, ouverture de porte, ravalement).</li>
+                                <li>Mentionnez les <strong>matériaux</strong> souhaités si c’est important (ex. carrelage 30×30, fenêtre bois).</li>
+                                <li>Vous pouvez indiquer un <strong>prix total souhaité</strong> ou une fourchette (ex. « budget 15 000 € HT ») pour aider au chiffrage.</li>
+                                <li>Ajoutez les <strong>détails utiles</strong> : étage, accès difficile, humidité, état du support — l’IA en tient compte pour les lignes.</li>
+                              </ul>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
                       <div className="flex gap-2">
                         <Textarea
                           id="project-description"
@@ -1501,7 +1780,7 @@ export default function QuotesPage() {
                       Détail du Devis
                     </CardTitle>
                     <div className="flex items-center gap-2">
-                      <Button size="sm" onClick={addItem} className="bg-violet-500 hover:bg-violet-600 text-white rounded-xl" data-testid="button-add-item">
+                      <Button type="button" size="sm" onClick={addItem} className="bg-violet-500 hover:bg-violet-600 text-white rounded-xl" data-testid="button-add-item">
                         <Plus className="h-4 w-4 mr-2" />
                         Ajouter ligne
                       </Button>
@@ -1512,19 +1791,142 @@ export default function QuotesPage() {
                       const hasSubItems = Boolean(item.subItems?.length);
                       return (
                         <div key={item.id} className="space-y-3">
-                          <div className={`grid grid-cols-1 md:grid-cols-12 gap-4 p-4 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl ${highlightMissing.itemIds?.includes(item.id) ? 'border-amber-400/80 dark:border-amber-500/60 bg-amber-50/30 dark:bg-amber-950/15' : ''}`}>
-                            <div className="md:col-span-5 space-y-2">
+                          <div
+                            data-item-id={item.id}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              e.dataTransfer.dropEffect = 'move';
+                              if (e.dataTransfer.types.includes('application/x-quote-item-id')) {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const position = e.clientY - rect.top < rect.height / 2 ? 'before' : 'after';
+                                setDragOverItemId(item.id);
+                                setDragOverPosition(position);
+                              }
+                            }}
+                            onDragLeave={(e) => {
+                              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                                setDragOverItemId(null);
+                                setDragOverPosition(null);
+                              }
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              const draggedId = e.dataTransfer.getData('application/x-quote-item-id');
+                              const targetId = item.id;
+                              const position = dragOverPosition || 'after';
+                              setDraggedItemId(null);
+                              setDragOverItemId(null);
+                              setDragOverPosition(null);
+                              if (draggedId && targetId && draggedId !== targetId) reorderItems(draggedId, targetId, position);
+                            }}
+                            onDragEnd={() => {
+                              setDraggedItemId(null);
+                              setDragOverItemId(null);
+                              setDragOverPosition(null);
+                            }}
+                            className={`grid grid-cols-1 md:grid-cols-12 gap-4 p-4 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl transition-all ${highlightMissing.itemIds?.includes(item.id) ? 'border-amber-400/80 dark:border-amber-500/60 bg-amber-50/30 dark:bg-amber-950/15' : ''} ${draggedItemId === item.id ? 'opacity-50 scale-[0.98]' : ''} ${dragOverItemId === item.id ? (dragOverPosition === 'before' ? 'border-t-4 border-t-violet-500 bg-violet-50/50 dark:bg-violet-950/30' : 'border-b-4 border-b-violet-500 bg-violet-50/50 dark:bg-violet-950/30') : ''}`}
+                          >
+                            <div className="md:col-span-1 flex flex-col items-center justify-center gap-0.5">
+                              <div
+                                draggable
+                                onDragStart={(e) => {
+                                  e.dataTransfer.setData('application/x-quote-item-id', item.id);
+                                  e.dataTransfer.effectAllowed = 'move';
+                                  setDraggedItemId(item.id);
+                                  const label = item.description || 'Ligne';
+                                  const total = getItemTotal(item).toFixed(2);
+                                  const dragEl = document.createElement('div');
+                                  dragEl.setAttribute('data-drag-preview', '');
+                                  dragEl.style.cssText = 'position:absolute;top:-9999px;left:0;padding:8px 12px;background:rgb(139 92 246);color:white;border-radius:8px;font-size:13px;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,0.2);pointer-events:none;';
+                                  dragEl.textContent = `${label} — ${total} €`;
+                                  document.body.appendChild(dragEl);
+                                  e.dataTransfer.setDragImage(dragEl, 0, 0);
+                                  requestAnimationFrame(() => dragEl.remove());
+                                }}
+                                className="cursor-move p-1.5 rounded bg-gray-200/80 dark:bg-gray-700/80 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 touch-none"
+                                title="Glisser pour réordonner (les sous-lignes suivent)"
+                              >
+                                <GripVertical className="h-5 w-5" />
+                              </div>
+                              {items.length > 1 && (
+                                <div className="flex flex-col gap-0">
+                                  <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-gray-400 hover:text-violet-600" onClick={() => moveItemUp(item.id)} disabled={index === 0} title="Monter">
+                                    <ChevronUp className="h-4 w-4" />
+                                  </Button>
+                                  <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-gray-400 hover:text-violet-600" onClick={() => moveItemDown(item.id)} disabled={index === items.length - 1} title="Descendre">
+                                    <ChevronDown className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                            <div className="md:col-span-3 space-y-2">
                               <Label className="text-gray-700 dark:text-gray-300">Description</Label>
-                              <Input
-                                data-testid={`input-item-description-${index}`}
-                                value={item.description}
-                                onChange={(e) => {
-                                updateItem(item.id, 'description', e.target.value);
-                                setHighlightMissing(prev => ({ ...prev, itemsSection: false, itemIds: undefined }));
-                              }}
-                                placeholder="Description de la prestation"
-                                className="cursor-text rounded-xl border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
-                              />
+                              <div className="flex gap-1">
+                                <Input
+                                  data-testid={`input-item-description-${index}`}
+                                  value={item.description}
+                                  onChange={(e) => {
+                                    updateItem(item.id, 'description', e.target.value);
+                                    setHighlightMissing(prev => ({ ...prev, itemsSection: false, itemIds: undefined }));
+                                  }}
+                                  placeholder="Saisir ou choisir un tarif ci‑droite"
+                                  className="flex-1 cursor-text rounded-xl border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 rounded-r-none"
+                                />
+                                <Popover open={openTariffPopoverId === item.id} onOpenChange={(open) => setOpenTariffPopoverId(open ? item.id : null)}>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="rounded-xl rounded-l-none border-l-0 px-2 text-gray-500 hover:text-gray-900 dark:hover:text-gray-100"
+                                      title="Choisir parmi mes tarifs enregistrés"
+                                    >
+                                      <ChevronDown className="h-4 w-4" />
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent align="end" className="w-80 max-h-[280px] overflow-y-auto p-0">
+                                    {userTariffs.length === 0 ? (
+                                      <p className="p-3 text-sm text-gray-500 dark:text-gray-400">Aucun tarif enregistré. Ajoutez-en dans la page Tarifs.</p>
+                                    ) : (
+                                      <ul className="py-1">
+                                        {userTariffs.map((t) => (
+                                          <li key={t.id}>
+                                            <button
+                                              type="button"
+                                              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex justify-between items-center gap-2"
+                                              onClick={() => {
+                                                applyTariffToItem(item.id, t);
+                                                setOpenTariffPopoverId(null);
+                                              }}
+                                            >
+                                              <span className="truncate">{t.label}</span>
+                                              <span className="text-gray-500 dark:text-gray-400 shrink-0">{Number(t.price_ht).toFixed(2)} € / {t.unit}</span>
+                                            </button>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    )}
+                                  </PopoverContent>
+                                </Popover>
+                              </div>
+                            </div>
+                            <div className="md:col-span-1 space-y-2">
+                              <Label className="text-gray-700 dark:text-gray-300">Unité</Label>
+                              <Select
+                                value={item.unit?.trim() ? item.unit : QUOTE_UNIT_NONE}
+                                onValueChange={(v) => updateItem(item.id, 'unit', v === QUOTE_UNIT_NONE ? '' : v)}
+                              >
+                                <SelectTrigger className="rounded-xl border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm">
+                                  <SelectValue placeholder="—" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {QUOTE_UNIT_OPTIONS.map((opt) => (
+                                    <SelectItem key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
                             {!hasSubItems && (
                               <>
@@ -1541,7 +1943,7 @@ export default function QuotesPage() {
                                   />
                                 </div>
                                 <div className="md:col-span-2 space-y-2">
-                                  <Label className="text-gray-700 dark:text-gray-300">Prix unitaire</Label>
+                                  <Label className="text-gray-700 dark:text-gray-300">Prix unitaire HT</Label>
                                   <Input
                                     type="number"
                                     data-testid={`input-item-price-${index}`}
@@ -1559,11 +1961,11 @@ export default function QuotesPage() {
                             )}
                             {hasSubItems && (
                               <div className="md:col-span-4 space-y-2 flex items-end">
-                                <span className="text-sm text-gray-500 dark:text-gray-400">Total = somme des sous-lignes</span>
+                                <span className="text-sm text-gray-500 dark:text-gray-400">Total HT = somme des sous-lignes</span>
                               </div>
                             )}
                             <div className="md:col-span-2 space-y-2">
-                              <Label className="text-gray-700 dark:text-gray-300">Total</Label>
+                              <Label className="text-gray-700 dark:text-gray-300">Total HT</Label>
                               <div className="cursor-default h-10 px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl flex items-center text-sm font-medium text-gray-900 dark:text-white">
                                 {getItemTotal(item).toFixed(2)} €
                               </div>
@@ -1594,7 +1996,7 @@ export default function QuotesPage() {
                           </div>
                           {item.subItems?.map((sub, subIndex) => (
                             <div key={sub.id} className="grid grid-cols-1 md:grid-cols-12 gap-4 p-4 pl-6 md:pl-8 bg-gray-100/50 dark:bg-gray-900/30 border border-gray-200 dark:border-gray-700 rounded-xl border-l-4 border-l-violet-300 dark:border-l-violet-600">
-                              <div className="md:col-span-5 space-y-2">
+                              <div className="md:col-span-4 space-y-2">
                                 <Label className="text-gray-600 dark:text-gray-400 text-xs">Sous-ligne – Description</Label>
                                 <Input
                                   value={sub.description}
@@ -1605,6 +2007,24 @@ export default function QuotesPage() {
                                   placeholder="Description"
                                   className="cursor-text rounded-xl border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm"
                                 />
+                              </div>
+                              <div className="md:col-span-1 space-y-2">
+                                <Label className="text-gray-600 dark:text-gray-400 text-xs">Unité</Label>
+                                <Select
+                                  value={sub.unit?.trim() ? sub.unit : QUOTE_UNIT_NONE}
+                                  onValueChange={(v) => updateSubItem(item.id, sub.id, 'unit', v === QUOTE_UNIT_NONE ? '' : v)}
+                                >
+                                  <SelectTrigger className="rounded-xl border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm h-9">
+                                    <SelectValue placeholder="—" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {QUOTE_UNIT_OPTIONS.map((opt) => (
+                                      <SelectItem key={opt.value} value={opt.value}>
+                                        {opt.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </div>
                               <div className="md:col-span-2 space-y-2">
                                 <Label className="text-gray-600 dark:text-gray-400 text-xs">Qté</Label>
@@ -1621,7 +2041,7 @@ export default function QuotesPage() {
                                 />
                               </div>
                               <div className="md:col-span-2 space-y-2">
-                                <Label className="text-gray-600 dark:text-gray-400 text-xs">Prix unit.</Label>
+                                <Label className="text-gray-600 dark:text-gray-400 text-xs">Prix unit. HT</Label>
                                 <Input
                                   type="number"
                                   value={sub.unitPrice}
@@ -1635,7 +2055,7 @@ export default function QuotesPage() {
                                 />
                               </div>
                               <div className="md:col-span-2 space-y-2">
-                                <Label className="text-gray-600 dark:text-gray-400 text-xs">Total</Label>
+                                <Label className="text-gray-600 dark:text-gray-400 text-xs">Total HT</Label>
                                 <div className="cursor-default h-9 px-3 py-2 bg-gray-200 dark:bg-gray-700 border border-gray-200 dark:border-gray-700 rounded-xl flex items-center text-sm text-gray-900 dark:text-white">
                                   {sub.total.toFixed(2)} €
                                 </div>
@@ -1763,6 +2183,8 @@ export default function QuotesPage() {
           )}
         </main>
       </div>
+        </>
+      )}
     </PageWrapper>
   );
 }

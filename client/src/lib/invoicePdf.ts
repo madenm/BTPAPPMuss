@@ -7,14 +7,15 @@ function formatCurrency(value: number): string {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value);
 }
 
-const MARGIN = 15;
+const MARGIN = 18;
 const PAGE_W = 210;
-const LOGO_MAX_HEIGHT_MM = 20;
-const COL_RIGHT_X = PAGE_W - 80;
-const LINE_HEIGHT = 5;
-const HEAD_FILL_DEFAULT = [100, 116, 139];
+const LOGO_MAX_HEIGHT_MM = 22;
+const COL_RIGHT_X = PAGE_W - 82;
+const LINE_HEIGHT = 5.5;
+const HEAD_FILL_DEFAULT = [51, 65, 85];
 const ROW_FILL = [248, 250, 252];
 const BORDER_GRAY = [226, 232, 240];
+const ACCENT_LINE_HEIGHT = 1.2;
 
 export interface InvoicePdfParams {
   invoice: SupabaseInvoice;
@@ -67,84 +68,112 @@ function buildInvoiceDoc(params: InvoicePdfParams): jsPDF {
   const headText = rgb && luminance(rgb) < 0.5 ? [255, 255, 255] : [0, 0, 0];
   let y = MARGIN;
 
-  // ----- Header: Logo (left) | FACTURE N° + Ville, le date (right) -----
+  // ----- Header: Logo (left) | FACTURE N° + date (right) -----
   const dateStr = formatDateFR(invoice.invoice_date);
-  const cityLabel = companyCityPostal ? `${companyCityPostal}, le ${dateStr}` : `Le ${dateStr}`;
 
   if (logoDataUrl) {
     try {
       const imgFormat = logoDataUrl.indexOf("image/png") !== -1 ? "PNG" : "JPEG";
       const imgProps = doc.getImageProperties(logoDataUrl) as { width: number; height: number };
       const logoH = LOGO_MAX_HEIGHT_MM;
-      const logoW = Math.min((imgProps.width / imgProps.height) * logoH, 45);
+      const logoW = Math.min((imgProps.width / imgProps.height) * logoH, 48);
       doc.addImage(logoDataUrl, imgFormat, MARGIN, y, logoW, logoH);
     } catch {
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      doc.text("Logo", MARGIN, y + 5);
+      // Pas de texte "Logo" si échec : on laisse l’espace
     }
-  } else {
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text("Logo", MARGIN, y + 5);
   }
 
-  doc.setFontSize(14);
+  const companyDisplayName = companyName?.trim() || "";
   doc.setFont("helvetica", "bold");
-  doc.text("FACTURE", COL_RIGHT_X, y + 4);
-  doc.setFontSize(11);
-  doc.text("N°", COL_RIGHT_X, y + 10);
+  doc.setFontSize(16);
+  doc.text("FACTURE", COL_RIGHT_X, y + 6);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.text(invoice.invoice_number || "À renseigner", COL_RIGHT_X + 8, y + 10);
+  doc.text(`N° ${invoice.invoice_number || "—"}`, COL_RIGHT_X, y + 12);
   doc.setFontSize(9);
   doc.setTextColor(100, 116, 139);
-  doc.text(cityLabel, COL_RIGHT_X, y + 16);
+  doc.text(companyCityPostal ? `${companyCityPostal}, le ${dateStr}` : `Le ${dateStr}`, COL_RIGHT_X, y + 18);
   doc.setTextColor(0, 0, 0);
-  y += LOGO_MAX_HEIGHT_MM + 6;
+  y += LOGO_MAX_HEIGHT_MM + 8;
 
-  // ----- Two columns: Company (left) | Client box (right) -----
-  const colLeftW = COL_RIGHT_X - MARGIN - 8;
+  // Ligne d’accent (couleur thème ou gris)
+  doc.setFillColor(...(rgb ?? HEAD_FILL_DEFAULT));
+  doc.rect(0, y - 2, PAGE_W, ACCENT_LINE_HEIGHT, "F");
+  y += 6;
+
+  const blockStartY = y;
+
+  // ----- Colonne gauche : Coordonnées entreprise (uniquement les champs renseignés) -----
+  const companyLines: string[] = [];
+  if (companyDisplayName) companyLines.push(companyDisplayName);
+  if (companyAddress?.trim()) companyLines.push(companyAddress.trim());
+  if (companyCityPostal?.trim()) companyLines.push(companyCityPostal.trim());
+  if (companyPhone?.trim()) companyLines.push(companyPhone.trim());
+  if (companyEmail?.trim()) companyLines.push(companyEmail.trim());
+  if (companyLines.length === 0) companyLines.push("");
+
   doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text(companyLines[0] || "Votre entreprise", MARGIN, y);
+  y += LINE_HEIGHT;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  for (let i = 1; i < companyLines.length; i++) {
+    doc.text(companyLines[i], MARGIN, y);
+    y += LINE_HEIGHT;
+  }
+  if (companyLines.length === 1 && !companyDisplayName) {
+    doc.setFontSize(8);
+    doc.setTextColor(120, 120, 120);
+    doc.text("Renseignez vos coordonnées dans Paramètres", MARGIN, y);
+    doc.setTextColor(0, 0, 0);
+    y += LINE_HEIGHT;
+  }
+
+  // ----- Bloc « Facturé à » (même hauteur que bloc entreprise) -----
+  const clientBoxX = COL_RIGHT_X;
+  const clientBoxW = PAGE_W - COL_RIGHT_X - MARGIN;
+  const clientBoxH = Math.max(28, (companyLines.length + 1) * LINE_HEIGHT + 4);
+  const clientBoxY = blockStartY;
+  doc.setDrawColor(BORDER_GRAY[0], BORDER_GRAY[1], BORDER_GRAY[2]);
+  doc.setLineWidth(0.3);
+  doc.rect(clientBoxX, clientBoxY, clientBoxW, clientBoxH);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(71, 85, 105);
+  doc.text("Facturé à", clientBoxX + 4, clientBoxY + 6);
+  doc.setTextColor(0, 0, 0);
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.text(companyName || "Nom de l'entreprise", MARGIN, y);
-  y += LINE_HEIGHT;
-  doc.setFont("helvetica", "normal");
-  doc.text(companyAddress?.trim() || "Adresse", MARGIN, y);
-  y += LINE_HEIGHT;
-  doc.text(companyCityPostal?.trim() || "Ville et Code Postal", MARGIN, y);
-  y += LINE_HEIGHT;
-  doc.text(companyPhone?.trim() || "Numéro de téléphone", MARGIN, y);
-  y += LINE_HEIGHT;
-  doc.text(companyEmail?.trim() || "Email", MARGIN, y);
-  y += LINE_HEIGHT + 2;
+  doc.text(invoice.client_name?.trim() || "—", clientBoxX + 4, clientBoxY + 12);
+  doc.setFontSize(9);
+  let clientLineY = clientBoxY + 17;
+  if (invoice.client_address?.trim()) {
+    doc.text(invoice.client_address.trim(), clientBoxX + 4, clientLineY);
+    clientLineY += LINE_HEIGHT;
+  }
+  if (invoice.client_phone?.trim()) {
+    doc.text(invoice.client_phone.trim(), clientBoxX + 4, clientLineY);
+    clientLineY += LINE_HEIGHT;
+  }
+  if (invoice.client_email?.trim()) {
+    doc.text(invoice.client_email.trim(), clientBoxX + 4, clientLineY);
+  }
 
-  const clientBoxY = y - (5 * LINE_HEIGHT + 2);
-  const clientBoxH = 5 * LINE_HEIGHT + 6;
-  doc.setDrawColor(0, 0, 0);
-  doc.rect(COL_RIGHT_X, clientBoxY, PAGE_W - COL_RIGHT_X - MARGIN, clientBoxH);
-  doc.setFont("helvetica", "bold");
-  doc.text("Facturé à", COL_RIGHT_X + 3, clientBoxY + 5);
-  doc.setFont("helvetica", "normal");
-  doc.text(invoice.client_name || "—", COL_RIGHT_X + 3, clientBoxY + 10);
-  doc.text(invoice.client_address || "—", COL_RIGHT_X + 3, clientBoxY + 15);
-  doc.text(invoice.client_phone || "—", COL_RIGHT_X + 3, clientBoxY + 20);
-  doc.text(invoice.client_email || "—", COL_RIGHT_X + 3, clientBoxY + 25);
+  y = Math.max(y, clientBoxY + clientBoxH) + 6;
 
-  y += 4;
-
-  // ----- Dates: Date d'émission et Date d'échéance -----
+  // ----- Dates -----
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(71, 85, 105);
-  doc.text("Date d'émission:", MARGIN, y);
+  doc.text("Date d'émission", MARGIN, y);
+  doc.text("Date d'échéance", MARGIN + 75, y);
   doc.setTextColor(0, 0, 0);
-  doc.text(formatDateFR(invoice.invoice_date), MARGIN + 35, y);
-  doc.setTextColor(71, 85, 105);
-  doc.text("Date d'échéance:", MARGIN + 80, y);
-  doc.setTextColor(0, 0, 0);
-  doc.text(formatDateFR(invoice.due_date), MARGIN + 115, y);
-  y += LINE_HEIGHT + 4;
+  doc.setFont("helvetica", "bold");
+  doc.text(formatDateFR(invoice.invoice_date), MARGIN + 38, y);
+  doc.text(formatDateFR(invoice.due_date), MARGIN + 113, y);
+  doc.setFont("helvetica", "normal");
+  y += LINE_HEIGHT + 6;
 
   // ----- Table: Description | Prix unitaire HT | Unité | Quantité | Montant HT -----
   const tableBody: string[][] = [];
@@ -209,37 +238,43 @@ function buildInvoiceDoc(params: InvoicePdfParams): jsPDF {
   let finalY = lastTable?.finalY ?? y + 20;
   y = finalY + 10;
 
-  // ----- Bottom: Left = Conditions de paiement / Right = Totals -----
-  const totalsX = PAGE_W - MARGIN - 52;
+  // ----- Bottom: Conditions de paiement (gauche) | Totaux (droite) -----
+  const totalsX = PAGE_W - MARGIN - 55;
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
+  doc.setFontSize(9);
+  doc.setTextColor(71, 85, 105);
   doc.text("Conditions de paiement", MARGIN, y);
+  doc.setTextColor(0, 0, 0);
   y += LINE_HEIGHT;
   doc.setDrawColor(BORDER_GRAY[0], BORDER_GRAY[1], BORDER_GRAY[2]);
-  doc.rect(MARGIN, y - 2, 88, 24);
+  doc.setLineWidth(0.2);
+  doc.rect(MARGIN, y - 2, 90, 22);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  const paymentTermsText = invoice.payment_terms || "Paiement à 30 jours par chèque ou virement. En cas de retard, pénalités de retard et indemnité forfaitaire selon art. L441-6 du code de commerce.";
-  const paymentTermsLines = doc.splitTextToSize(paymentTermsText, 84);
-  doc.text(paymentTermsLines.slice(0, 4), MARGIN + 2, y + 3);
+  doc.setFontSize(9);
+  const paymentTermsRaw = (invoice.payment_terms || "").trim();
+  const paymentTermsText = paymentTermsRaw || "Paiement à 30 jours (net)";
+  const paymentTermsLines = doc.splitTextToSize(paymentTermsText, 86);
+  doc.text(paymentTermsLines.slice(0, 3), MARGIN + 3, y + 4);
 
-  // Bloc totaux (encadré)
-  const totalsBoxX = totalsX - 3;
+  // Bloc totaux (fond léger + bordure)
+  const totalsBoxX = totalsX - 4;
   const totalsBoxW = PAGE_W - MARGIN - totalsBoxX;
-  const totalsBoxHeight = 30;
+  const totalsBoxHeight = 32;
+  doc.setFillColor(248, 250, 252);
+  doc.rect(totalsBoxX, finalY + 6, totalsBoxW, totalsBoxHeight, "F");
   doc.setDrawColor(BORDER_GRAY[0], BORDER_GRAY[1], BORDER_GRAY[2]);
   doc.rect(totalsBoxX, finalY + 6, totalsBoxW, totalsBoxHeight);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.text("Total HT", totalsX, finalY + 14);
-  doc.text(`${invoice.subtotal_ht.toFixed(2)} €`, PAGE_W - MARGIN - 3, finalY + 14, { align: "right" });
-  doc.text("TVA 20 %", totalsX, finalY + 23);
-  doc.text(`${invoice.tva_amount.toFixed(2)} €`, PAGE_W - MARGIN - 3, finalY + 23, { align: "right" });
+  doc.text("Total HT", totalsX, finalY + 15);
+  doc.text(formatCurrency(invoice.subtotal_ht), PAGE_W - MARGIN - 4, finalY + 15, { align: "right" });
+  doc.text("TVA 20 %", totalsX, finalY + 24);
+  doc.text(formatCurrency(invoice.tva_amount), PAGE_W - MARGIN - 4, finalY + 24, { align: "right" });
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.text("Total TTC", totalsX, finalY + 32);
-  doc.text(`${invoice.total_ttc.toFixed(2)} €`, PAGE_W - MARGIN - 3, finalY + 32, { align: "right" });
+  doc.setFontSize(12);
+  doc.text("Total TTC", totalsX, finalY + 34);
+  doc.text(formatCurrency(invoice.total_ttc), PAGE_W - MARGIN - 4, finalY + 34, { align: "right" });
 
   // Notes si présentes
   if (invoice.notes) {
@@ -253,13 +288,15 @@ function buildInvoiceDoc(params: InvoicePdfParams): jsPDF {
     doc.text(notesLines.slice(0, 3), MARGIN, notesY + 5);
   }
 
-  // ----- Footer -----
+  // ----- Footer (infos légales uniquement si renseignées) -----
   const footerY = doc.getPageHeight() - 10;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.setTextColor(100, 116, 139);
-  const siretStr = companySiret?.trim() ? `N° Siret : ${companySiret.trim()}` : "N° Siret : …";
-  const footerStr = companyLegal?.trim() || `Société au capital de … € — ${siretStr} — RCS — N° TVA : …`;
+  const footerParts: string[] = [];
+  if (companyLegal?.trim()) footerParts.push(companyLegal.trim());
+  if (companySiret?.trim()) footerParts.push(`SIRET ${companySiret.trim()}`);
+  const footerStr = footerParts.length > 0 ? footerParts.join(" — ") : (companyDisplayName || "Facture générée par TitanBtp");
   doc.text(footerStr, PAGE_W / 2, footerY, { align: "center" });
   doc.setTextColor(0, 0, 0);
 

@@ -6,11 +6,13 @@ export interface QuotePdfItem {
   quantity: number;
   unitPrice: number;
   total: number;
+  unit?: string;
   subItems?: Array<{
     description: string;
     quantity: number;
     unitPrice: number;
     total: number;
+    unit?: string;
   }>;
 }
 
@@ -77,6 +79,20 @@ function formatDateFR(isoOrDays: string): string {
     return `${d}/${m}/${y}`;
   }
   return new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+/** Retourne l'unité à afficher : d'abord item.unit, sinon déduite de la description (ex. "(U)" → "U", "(forfait)" → "Forfait"). */
+function unitForDisplay(unit: string | undefined, description: string): string {
+  const u = unit?.trim();
+  if (u) return u;
+  const m = description.match(/\s*\(([^)]+)\)\s*$/);
+  if (m) {
+    const inferred = m[1].trim();
+    if (inferred.toLowerCase() === "u") return "U";
+    if (inferred.toLowerCase() === "forfait") return "Forfait";
+    return inferred;
+  }
+  return "—";
 }
 
 function buildQuoteDoc(params: QuotePdfParams): jsPDF {
@@ -195,7 +211,7 @@ function buildQuoteDoc(params: QuotePdfParams): jsPDF {
       tableBody.push([
         item.description || "—",
         "—",
-        "—",
+        unitForDisplay(item.unit, item.description || ""),
         "—",
         `${mainTotal.toFixed(2)} €`,
       ]);
@@ -203,7 +219,7 @@ function buildQuoteDoc(params: QuotePdfParams): jsPDF {
         tableBody.push([
           "  " + (sub.description || "—"),
           `${sub.unitPrice.toFixed(2)} €`,
-          "—",
+          unitForDisplay(sub.unit, sub.description || ""),
           String(sub.quantity),
           `${sub.total.toFixed(2)} €`,
         ]);
@@ -212,7 +228,7 @@ function buildQuoteDoc(params: QuotePdfParams): jsPDF {
       tableBody.push([
         item.description || "—",
         `${item.unitPrice.toFixed(2)} €`,
-        "—",
+        unitForDisplay(item.unit, item.description || ""),
         String(item.quantity),
         `${item.total.toFixed(2)} €`,
       ]);

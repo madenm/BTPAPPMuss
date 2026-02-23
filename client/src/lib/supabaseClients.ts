@@ -143,9 +143,6 @@ export async function softDeleteClient(userId: string, clientId: string): Promis
 
 /** Crée un lien partageable pour le formulaire client public. Retourne le token et l’URL complète. */
 export async function createClientFormLink(userId: string): Promise<{ token: string; link: string }> {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'66eecc'},body:JSON.stringify({sessionId:'66eecc',location:'supabaseClients.ts:createClientFormLink:entry',message:'createClientFormLink called',data:{hasUserId:!!userId},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
-  // #endregion
   const token = crypto.randomUUID();
   const { data, error } = await supabase
     .from("client_form_links")
@@ -153,9 +150,6 @@ export async function createClientFormLink(userId: string): Promise<{ token: str
     .select("token")
     .single();
 
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/7368fd83-5944-4f0a-b197-039e814236a5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'66eecc'},body:JSON.stringify({sessionId:'66eecc',location:'supabaseClients.ts:createClientFormLink:afterInsert',message:'Supabase insert+select result',data:{errorCode:(error as {code?:string})?.code,errorMessage:(error as {message?:string})?.message,hasData:!!data,dataToken:data?.token},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
-  // #endregion
   if (error || !data) {
     console.error("Error creating client form link:", error);
     throw error;

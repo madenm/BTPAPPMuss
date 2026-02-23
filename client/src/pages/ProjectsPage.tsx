@@ -25,6 +25,7 @@ import { QuotePreview } from '@/components/QuotePreview';
 import { useUserSettings } from '@/context/UserSettingsContext';
 import { VoiceInputButton } from '@/components/VoiceInputButton';
 import { fetchInvoicesForUser, createInvoiceFromQuote, type InvoiceWithPayments } from '@/lib/supabaseInvoices';
+import { formatDurationFromDates } from '@/lib/planningUtils';
 import { InvoiceDialog } from '@/components/InvoiceDialog';
 import { Receipt, Check, Trash2, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -875,7 +876,13 @@ export default function ProjectsPage() {
                         <Calendar
                           mode="single"
                           selected={isoToDate(dateInputToISO(newChantier.dateFin)) ?? undefined}
-                          onSelect={(d) => d && setNewChantier({ ...newChantier, dateFin: dateToISO(d) })}
+                          onSelect={(d) => {
+                            if (!d) return;
+                            const finIso = dateToISO(d);
+                            const debutIso = dateInputToISO(newChantier.dateDebut);
+                            const duree = debutIso ? formatDurationFromDates(debutIso, finIso) : '';
+                            setNewChantier({ ...newChantier, dateFin: finIso, ...(debutIso && duree ? { duree } : {}) });
+                          }}
                           classNames={{
                             day: 'text-white hover:bg-white/20',
                             caption_label: 'text-white',
@@ -1223,7 +1230,13 @@ export default function ProjectsPage() {
                   <Calendar
                     mode="single"
                     selected={isoToDate(dateInputToISO(editChantier.dateFin || '')) ?? undefined}
-                    onSelect={(d) => d && setEditChantier({ ...editChantier, dateFin: dateToISO(d) })}
+                    onSelect={(d) => {
+                      if (!d) return;
+                      const finIso = dateToISO(d);
+                      const debutIso = dateInputToISO(editChantier.dateDebut || '');
+                      const duree = debutIso ? formatDurationFromDates(debutIso, finIso) : '';
+                      setEditChantier({ ...editChantier, dateFin: finIso, ...(debutIso && duree ? { duree } : {}) });
+                    }}
                     classNames={{
                       day: 'text-white hover:bg-white/20',
                       caption_label: 'text-white',

@@ -41,7 +41,9 @@ export function isSupabaseTableMissing(error: { code?: string; message?: string;
     status === 404 ||
     code === "42P01" ||
     code === "PGRST116" ||
+    msg.includes("404") ||
     msg.includes("does not exist") ||
-    msg.includes("relation")
+    msg.includes("relation") ||
+    msg.includes("not found")
   )
 }

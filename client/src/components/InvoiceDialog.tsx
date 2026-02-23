@@ -11,7 +11,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTeamEffectiveUserId } from '@/context/TeamEffectiveUserIdContext';
 import { useChantiers } from '@/context/ChantiersContext';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Trash2, X, Calendar as CalendarIcon } from 'lucide-react';
+import { Plus, Trash2, X, Calendar as CalendarIcon, FileDown } from 'lucide-react';
 import {
   insertInvoice,
   updateInvoice,
@@ -20,6 +20,9 @@ import {
   type NewInvoicePayload,
 } from '@/lib/supabaseInvoices';
 import { fetchQuoteById } from '@/lib/supabaseQuotes';
+import { downloadInvoicePdf, fetchLogoDataUrl } from '@/lib/invoicePdf';
+import { useUserSettings } from '@/context/UserSettingsContext';
+import type { SupabaseInvoice } from '@/lib/supabaseInvoices';
 
 interface InvoiceDialogProps {
   open: boolean;
@@ -51,7 +54,9 @@ function isoToDate(iso: string): Date | undefined {
 
 function calculateDueDate(invoiceDate: string, paymentTerms: string): string {
   const date = new Date(invoiceDate);
-  if (paymentTerms.includes('30')) {
+  if (paymentTerms.includes('réception') || paymentTerms.includes('Réception')) {
+    date.setDate(date.getDate() + 0);
+  } else if (paymentTerms.includes('30')) {
     date.setDate(date.getDate() + 30);
   } else if (paymentTerms.includes('45')) {
     date.setDate(date.getDate() + 45);
@@ -76,14 +81,16 @@ export function InvoiceDialog({
   const effectiveUserId = useTeamEffectiveUserId();
   const userId = effectiveUserId ?? user?.id ?? null;
   const { clients, chantiers } = useChantiers();
+  const { logoUrl, profile, themeColor } = useUserSettings();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [selectedChantierId, setSelectedChantierId] = useState<string>('');
   const [invoiceDate, setInvoiceDate] = useState(dateToISO(new Date()));
   const [dueDate, setDueDate] = useState('');
-  const [paymentTerms, setPaymentTerms] = useState('30 jours net');
+  const [paymentTerms, setPaymentTerms] = useState('Paiement à 30 jours (net)');
   const [items, setItems] = useState<InvoiceItem[]>([
     { id: '1', description: '', quantity: 1, unitPrice: 0, total: 0 },
   ]);
@@ -94,12 +101,20 @@ export function InvoiceDialog({
   useEffect(() => {
     if (open) {
       if (invoice) {
-        // Mode édition
+        // Mode édition (normaliser les anciennes conditions de paiement)
+        const termsMap: Record<string, string> = {
+          '30 jours net': 'Paiement à 30 jours (net)',
+          '45 jours net': 'Paiement à 45 jours (net)',
+          '60 jours net': 'Paiement à 60 jours (net)',
+          'Acompte 30%': 'Acompte 30 % à la commande',
+          'Acompte 50%': 'Acompte 50 % à la commande',
+        };
+        const paymentTermsValue = termsMap[invoice.payment_terms] ?? invoice.payment_terms;
         setSelectedClientId(invoice.client_id || '');
         setSelectedChantierId(invoice.chantier_id || '');
         setInvoiceDate(invoice.invoice_date);
         setDueDate(invoice.due_date);
-        setPaymentTerms(invoice.payment_terms);
+        setPaymentTerms(paymentTermsValue);
         setItems(invoice.items || [{ id: '1', description: '', quantity: 1, unitPrice: 0, total: 0 }]);
         setNotes(invoice.notes || '');
       } else if (quoteId) {
@@ -112,9 +127,9 @@ export function InvoiceDialog({
               setSelectedClientId(quote.chantier_id ? chantiers.find((c) => c.id === quote.chantier_id)?.clientId || '' : '');
               setSelectedChantierId(quote.chantier_id || '');
               setItems((quote.items || []) as InvoiceItem[]);
-              setPaymentTerms('30 jours net');
+              setPaymentTerms('Paiement à 30 jours (net)');
               setInvoiceDate(dateToISO(new Date()));
-              setDueDate(calculateDueDate(dateToISO(new Date()), '30 jours net'));
+              setDueDate(calculateDueDate(dateToISO(new Date()), 'Paiement à 30 jours (net)'));
             }
           } catch (error) {
             console.error('Error loading quote:', error);
@@ -126,8 +141,8 @@ export function InvoiceDialog({
         setSelectedClientId(clientId || '');
         setSelectedChantierId(chantierId || '');
         setInvoiceDate(dateToISO(new Date()));
-        setDueDate(calculateDueDate(dateToISO(new Date()), '30 jours net'));
-        setPaymentTerms('30 jours net');
+        setDueDate(calculateDueDate(dateToISO(new Date()), 'Paiement à 30 jours (net)'));
+        setPaymentTerms('Paiement à 30 jours (net)');
         setItems([{ id: '1', description: '', quantity: 1, unitPrice: 0, total: 0 }]);
         setNotes('');
       }
@@ -183,6 +198,63 @@ export function InvoiceDialog({
   const subtotal = items.reduce((sum, item) => sum + getItemTotal(item), 0);
   const tva = subtotal * 0.2;
   const total = subtotal + tva;
+
+  const handleDownloadPdf = async () => {
+    if (!userId) return;
+    const clientAddress = selectedClient
+      ? [selectedClient.street_address, selectedClient.postal_code, selectedClient.city].filter(Boolean).join(', ')
+      : null;
+    const draftInvoice: SupabaseInvoice = {
+      id: invoice?.id ?? 'draft',
+      user_id: userId,
+      invoice_number: invoice?.invoice_number ?? 'Brouillon',
+      quote_id: quoteId ?? null,
+      chantier_id: selectedChantierId || null,
+      client_id: selectedClientId || null,
+      client_name: selectedClient?.name ?? 'Client non renseigné',
+      client_email: selectedClient?.email ?? null,
+      client_phone: selectedClient?.phone ?? null,
+      client_address: clientAddress ?? null,
+      invoice_date: invoiceDate,
+      due_date: dueDate,
+      payment_terms: paymentTerms,
+      items,
+      subtotal_ht: subtotal,
+      tva_amount: tva,
+      total_ttc: total,
+      status: 'brouillon',
+      notes: notes || null,
+      deleted_at: null,
+      created_at: invoice?.created_at ?? new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    setDownloadingPdf(true);
+    try {
+      const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : null;
+      downloadInvoicePdf({
+        invoice: draftInvoice,
+        companyName: profile?.full_name || '',
+        companyAddress: profile?.company_address || '',
+        companyCityPostal: profile?.company_city_postal || '',
+        companyPhone: profile?.company_phone || '',
+        companyEmail: profile?.company_email || '',
+        companySiret: profile?.company_siret || '',
+        companyLegal: profile?.company_legal || undefined,
+        themeColor: themeColor || undefined,
+        logoDataUrl,
+      });
+      toast({ title: 'PDF téléchargé' });
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de générer le PDF',
+        variant: 'destructive',
+      });
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!userId) return;
@@ -350,11 +422,12 @@ export function InvoiceDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="30 jours net">30 jours net</SelectItem>
-                  <SelectItem value="45 jours net">45 jours net</SelectItem>
-                  <SelectItem value="60 jours net">60 jours net</SelectItem>
-                  <SelectItem value="Acompte 30%">Acompte 30%</SelectItem>
-                  <SelectItem value="Acompte 50%">Acompte 50%</SelectItem>
+                  <SelectItem value="Paiement à 30 jours (net)">Paiement à 30 jours (net)</SelectItem>
+                  <SelectItem value="Paiement à 45 jours (net)">Paiement à 45 jours (net)</SelectItem>
+                  <SelectItem value="Paiement à 60 jours (net)">Paiement à 60 jours (net)</SelectItem>
+                  <SelectItem value="Paiement à réception">Paiement à réception</SelectItem>
+                  <SelectItem value="Acompte 30 % à la commande">Acompte 30 % à la commande</SelectItem>
+                  <SelectItem value="Acompte 50 % à la commande">Acompte 50 % à la commande</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -490,13 +563,22 @@ export function InvoiceDialog({
           </div>
 
           {/* Actions */}
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 flex-wrap">
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
               className="text-white border-white/20 hover:bg-white/10"
             >
               Annuler
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleDownloadPdf}
+              disabled={downloadingPdf}
+              className="text-white border-white/20 hover:bg-white/10"
+            >
+              <FileDown className="h-4 w-4 mr-2" />
+              {downloadingPdf ? 'Génération...' : 'Télécharger PDF'}
             </Button>
             <Button
               onClick={handleSave}
