@@ -33,9 +33,9 @@ export function DeleteChantierConfirmDialog({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="bg-black/20 backdrop-blur-xl border border-white/10 text-white">
         <AlertDialogHeader>
-          <AlertDialogTitle className="text-white">Supprimer ce projet ?</AlertDialogTitle>
+          <AlertDialogTitle className="text-white">Archiver ce projet ?</AlertDialogTitle>
           <AlertDialogDescription className="text-white/70">
-            Êtes-vous sûr de supprimer « {chantierName} » ? Cette action masquera le projet (suppression douce). Vous pourrez le restaurer plus tard depuis les archivés si besoin.
+            « {chantierName} » sera archivé et n'apparaîtra plus dans la liste. Vous pourrez le restaurer plus tard si besoin.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -48,9 +48,9 @@ export function DeleteChantierConfirmDialog({
               handleConfirm();
             }}
             disabled={loading}
-            className="bg-red-600 hover:bg-red-700 text-white"
+            className="bg-amber-600 hover:bg-amber-700 text-white"
           >
-            {loading ? 'Suppression...' : 'Supprimer'}
+            {loading ? 'Archivage...' : 'Archiver'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

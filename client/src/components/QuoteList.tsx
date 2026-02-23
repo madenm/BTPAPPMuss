@@ -1,19 +1,51 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { UserAccountButton } from "@/components/UserAccountButton";
 import { QUOTE_STATUS_LABELS } from "@/lib/quoteConstants";
 import type { SupabaseQuote } from "@/lib/supabaseQuotes";
-import { FileText, Plus, Loader2, Download, Pencil, ExternalLink, Search } from "lucide-react";
+import {
+  FileText, Plus, Loader2, Download, Pencil, ExternalLink, Search,
+  MoreVertical, Copy, Building, Trash2, RefreshCw, Clock,
+} from "lucide-react";
+
+export interface QuoteListChantier {
+  id: string;
+  nom: string;
+}
+
+type QuoteStatus = SupabaseQuote["status"];
 
 export interface QuoteListProps {
   quotes: SupabaseQuote[];
   loading: boolean;
   statusFilter: string;
   searchQuery: string;
+  chantiers: QuoteListChantier[];
   onStatusFilterChange: (value: string) => void;
   onSearchQueryChange: (value: string) => void;
   filteredQuotes: SupabaseQuote[];
@@ -21,8 +53,31 @@ export interface QuoteListProps {
   onNewQuote: () => void;
   onEditQuote: (quoteId: string) => void;
   onDownloadPdf: (quote: SupabaseQuote) => void;
+  onDuplicateQuote: (quote: SupabaseQuote) => void;
+  onDeleteQuote: (quoteId: string) => void;
+  onChangeStatus: (quoteId: string, status: QuoteStatus) => void;
   onGoToProjects: () => void;
 }
+
+function getExpirationDate(quote: SupabaseQuote): Date {
+  const created = new Date(quote.created_at);
+  const days = quote.validity_days ?? 30;
+  return new Date(created.getTime() + days * 86400000);
+}
+
+function isExpired(quote: SupabaseQuote): boolean {
+  if (quote.status === "accepté" || quote.status === "validé" || quote.status === "refusé" || quote.status === "expiré") return false;
+  return getExpirationDate(quote) < new Date();
+}
+
+const STATUS_TRANSITIONS: Record<string, QuoteStatus[]> = {
+  brouillon: ["envoyé"],
+  envoyé: ["accepté", "refusé"],
+  accepté: ["validé"],
+  refusé: ["brouillon"],
+  expiré: ["brouillon"],
+  validé: [],
+};
 
 export function QuoteList({
   quotes,
@@ -33,11 +88,18 @@ export function QuoteList({
   onSearchQueryChange,
   filteredQuotes,
   getQuoteDisplayNumber,
+  chantiers,
   onNewQuote,
   onEditQuote,
   onDownloadPdf,
+  onDuplicateQuote,
+  onDeleteQuote,
+  onChangeStatus,
   onGoToProjects,
 }: QuoteListProps) {
+  const chantierMap = new Map(chantiers.map((c) => [c.id, c.nom]));
+  const [deleteTarget, setDeleteTarget] = useState<SupabaseQuote | null>(null);
+
   return (
     <>
       <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
@@ -123,86 +185,145 @@ export function QuoteList({
                       <TableRow className="bg-gray-50 dark:bg-gray-900/50">
                         <TableHead className="rounded-tl-xl">N°</TableHead>
                         <TableHead>Client</TableHead>
+                        <TableHead>Projet</TableHead>
                         <TableHead className="text-right">Montant TTC</TableHead>
                         <TableHead>Statut</TableHead>
                         <TableHead>Date</TableHead>
+                        <TableHead>Expiration</TableHead>
                         <TableHead className="text-right rounded-tr-xl">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredQuotes.map((q) => (
-                        <TableRow
-                          key={q.id}
-                          className="hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer"
-                          onClick={() => onEditQuote(q.id)}
-                        >
-                          <TableCell className="font-mono text-sm">
-                            {getQuoteDisplayNumber(quotes, q.id) || "—"}
-                          </TableCell>
-                          <TableCell className="font-medium text-gray-900 dark:text-white">
-                            {q.client_name || "—"}
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
-                            {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(q.total_ttc)}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant="secondary"
-                              className={
-                                q.status === "validé" || q.status === "accepté"
-                                  ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
-                                  : q.status === "refusé" || q.status === "expiré"
-                                    ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
-                                    : q.status === "envoyé"
-                                      ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-                                      : "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
+                      {filteredQuotes.map((q) => {
+                        const expDate = getExpirationDate(q);
+                        const expired = isExpired(q);
+                        const transitions = STATUS_TRANSITIONS[q.status] ?? [];
+                        return (
+                          <TableRow
+                            key={q.id}
+                            className="hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer"
+                            onClick={() => {
+                              if (q.status !== "validé" && q.status !== "accepté") {
+                                onEditQuote(q.id);
                               }
-                            >
-                              {QUOTE_STATUS_LABELS[q.status] ?? q.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-gray-500 dark:text-gray-400 text-sm">
-                            {new Date(q.created_at).toLocaleDateString("fr-FR", {
-                              day: "2-digit",
-                              month: "2-digit",
-                              year: "numeric",
-                            })}
-                          </TableCell>
-                          <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-end gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                onClick={() => onEditQuote(q.id)}
-                                title="Modifier"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                onClick={() => onDownloadPdf(q)}
-                                title="Télécharger le PDF"
-                              >
-                                <Download className="h-4 w-4" />
-                              </Button>
-                              {q.chantier_id && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0"
-                                  onClick={onGoToProjects}
-                                  title="Voir le projet"
-                                >
-                                  <ExternalLink className="h-4 w-4" />
-                                </Button>
+                            }}
+                          >
+                            <TableCell className="font-mono text-sm">
+                              {getQuoteDisplayNumber(quotes, q.id) || "—"}
+                            </TableCell>
+                            <TableCell className="font-medium text-gray-900 dark:text-white">
+                              {q.client_name || "—"}
+                            </TableCell>
+                            <TableCell className="text-sm text-gray-600 dark:text-gray-400">
+                              {q.chantier_id ? (
+                                <span className="inline-flex items-center gap-1">
+                                  <Building className="h-3.5 w-3.5 text-violet-400 flex-shrink-0" />
+                                  <span className="truncate max-w-[150px]">{chantierMap.get(q.chantier_id) || "—"}</span>
+                                </span>
+                              ) : (
+                                <span className="text-gray-400 dark:text-gray-500">—</span>
                               )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(q.total_ttc)}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="secondary"
+                                className={
+                                  q.status === "validé" || q.status === "accepté"
+                                    ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                                    : q.status === "refusé" || q.status === "expiré"
+                                      ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+                                      : q.status === "envoyé"
+                                        ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                                        : "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
+                                }
+                              >
+                                {QUOTE_STATUS_LABELS[q.status] ?? q.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-gray-500 dark:text-gray-400 text-sm">
+                              {new Date(q.created_at).toLocaleDateString("fr-FR", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                year: "numeric",
+                              })}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {q.status === "accepté" || q.status === "validé" ? (
+                                <span className="text-green-600 dark:text-green-400">—</span>
+                              ) : expired ? (
+                                <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                                  <Clock className="h-3 w-3 mr-1" />
+                                  Expiré
+                                </Badge>
+                              ) : (
+                                <span className="text-gray-500 dark:text-gray-400">
+                                  {expDate.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-52">
+                                  {q.status !== "validé" && q.status !== "accepté" && (
+                                    <DropdownMenuItem onClick={() => onEditQuote(q.id)}>
+                                      <Pencil className="h-4 w-4 mr-2" />
+                                      Modifier
+                                    </DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuItem onClick={() => onDuplicateQuote(q)}>
+                                    <Copy className="h-4 w-4 mr-2" />
+                                    Dupliquer
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => onDownloadPdf(q)}>
+                                    <Download className="h-4 w-4 mr-2" />
+                                    Télécharger le PDF
+                                  </DropdownMenuItem>
+                                  {q.chantier_id && (
+                                    <DropdownMenuItem onClick={onGoToProjects}>
+                                      <ExternalLink className="h-4 w-4 mr-2" />
+                                      Voir le projet
+                                    </DropdownMenuItem>
+                                  )}
+                                  {transitions.length > 0 && (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuSub>
+                                        <DropdownMenuSubTrigger>
+                                          <RefreshCw className="h-4 w-4 mr-2" />
+                                          Changer le statut
+                                        </DropdownMenuSubTrigger>
+                                        <DropdownMenuSubContent>
+                                          {transitions.map((s) => (
+                                            <DropdownMenuItem key={s} onClick={() => onChangeStatus(q.id, s)}>
+                                              {QUOTE_STATUS_LABELS[s] ?? s}
+                                            </DropdownMenuItem>
+                                          ))}
+                                        </DropdownMenuSubContent>
+                                      </DropdownMenuSub>
+                                    </>
+                                  )}
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-red-600 focus:text-red-600"
+                                    onClick={() => setDeleteTarget(q)}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Supprimer
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
@@ -211,6 +332,31 @@ export function QuoteList({
           </Card>
         </main>
       </div>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer ce devis ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Le devis {deleteTarget ? getQuoteDisplayNumber(quotes, deleteTarget.id) || "" : ""} pour {deleteTarget?.client_name || "ce client"} sera définitivement supprimé.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => {
+                if (deleteTarget) {
+                  onDeleteQuote(deleteTarget.id);
+                  setDeleteTarget(null);
+                }
+              }}
+            >
+              Supprimer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

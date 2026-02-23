@@ -25,7 +25,7 @@ import { useUserSettings } from '@/context/UserSettingsContext';
 import { useToast } from '@/hooks/use-toast';
 import { UserAccountButton } from '@/components/UserAccountButton';
 import { VoiceInputButton } from '@/components/VoiceInputButton';
-import { insertQuote, updateQuote, fetchQuoteById, fetchQuotesForUser, getQuoteDisplayNumber, type QuoteItem, type QuoteSubItem, type SupabaseQuote } from '@/lib/supabaseQuotes';
+import { insertQuote, updateQuote, deleteQuote, updateQuoteStatus, fetchQuoteById, fetchQuotesForUser, getQuoteDisplayNumber, type QuoteItem, type QuoteSubItem, type SupabaseQuote } from '@/lib/supabaseQuotes';
 import { DEFAULT_THEME_COLOR, QUOTE_STATUS_LABELS, QUOTE_UNIT_NONE, QUOTE_UNIT_OPTIONS, inferUnitFromDescription, backfillUnitOnItems } from '@/lib/quoteConstants';
 import { downloadQuotePdf, fetchLogoDataUrl } from '@/lib/quotePdf';
 import { QuotePreview } from '@/components/QuotePreview';
@@ -61,7 +61,8 @@ import {
   GripVertical,
   List,
   Pencil,
-  ExternalLink
+  ExternalLink,
+  Columns2
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 
@@ -102,6 +103,7 @@ export default function QuotesPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAiParsing, setIsAiParsing] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [splitPreview, setSplitPreview] = useState(false);
   const [selectClientOpen, setSelectClientOpen] = useState(false);
   const [clientSearchQuery, setClientSearchQuery] = useState('');
   const [selectChantierOpen, setSelectChantierOpen] = useState(false);
@@ -122,11 +124,17 @@ export default function QuotesPage() {
   const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<string, string>>({});
   const [useAiForPrefill, setUseAiForPrefill] = useState(true);
   const [validityDays, setValidityDays] = useState('30');
+  const [tvaRate, setTvaRate] = useState('20');
+  const [discountType, setDiscountType] = useState<'none' | 'percent' | 'fixed'>('none');
+  const [discountValue, setDiscountValue] = useState('');
+  const [generalConditions, setGeneralConditions] = useState('');
   const [items, setItems] = useState<QuoteItem[]>([
     { id: '1', description: '', quantity: 1, unitPrice: 0, total: 0, unit: '' }
   ]);
   const [userTariffs, setUserTariffs] = useState<UserTariff[]>([]);
   const [openTariffPopoverId, setOpenTariffPopoverId] = useState<string | null>(null);
+  const [tariffSearchQuery, setTariffSearchQuery] = useState('');
+  const [tariffCategoryFilter, setTariffCategoryFilter] = useState<string>('all');
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [dragOverItemId, setDragOverItemId] = useState<string | null>(null);
   const [dragOverPosition, setDragOverPosition] = useState<'before' | 'after' | null>(null);
@@ -178,6 +186,10 @@ export default function QuotesPage() {
     setProjectDescription('');
     setQuestionnaireAnswers({});
     setValidityDays('30');
+    setTvaRate('20');
+    setDiscountType('none');
+    setDiscountValue('');
+    setGeneralConditions('');
     setItems([{ id: '1', description: '', quantity: 1, unitPrice: 0, total: 0, unit: '' }]);
     setSelectedClientId(null);
     setSelectedChantierId(null);
@@ -481,8 +493,15 @@ export default function QuotesPage() {
   };
 
   const subtotal = items.reduce((sum, item) => sum + getItemTotal(item), 0);
-  const tva = subtotal * 0.2;
-  const total = subtotal + tva;
+  const discountAmount = discountType === 'percent'
+    ? subtotal * (parseFloat(discountValue) || 0) / 100
+    : discountType === 'fixed'
+      ? parseFloat(discountValue) || 0
+      : 0;
+  const subtotalAfterDiscount = Math.max(0, subtotal - discountAmount);
+  const parsedTvaRate = parseFloat(tvaRate) || 0;
+  const tva = subtotalAfterDiscount * (parsedTvaRate / 100);
+  const total = subtotalAfterDiscount + tva;
 
   const handleNext = async () => {
     const nextStep = Math.min(3, step + 1);
@@ -612,9 +631,38 @@ export default function QuotesPage() {
     setProjectDescription('');
     setQuestionnaireAnswers({});
     setValidityDays('30');
+    setTvaRate('20');
+    setDiscountType('none');
+    setDiscountValue('');
+    setGeneralConditions('');
     setItems([{ id: '1', description: '', quantity: 1, unitPrice: 0, total: 0, unit: '' }]);
     setQuoteLoadState('idle');
     setLocation('/dashboard/quotes/new');
+  };
+
+  const handleDuplicateQuote = async (quote: SupabaseQuote) => {
+    if (!user) return;
+    try {
+      const duplicated = await insertQuote(user.id, {
+        chantier_id: quote.chantier_id ?? undefined,
+        client_name: quote.client_name ?? '',
+        client_email: quote.client_email ?? '',
+        client_phone: quote.client_phone ?? '',
+        client_address: quote.client_address ?? '',
+        project_type: quote.project_type ?? '',
+        project_description: quote.project_description ?? '',
+        total_ht: quote.total_ht,
+        total_ttc: quote.total_ttc,
+        validity_days: quote.validity_days ?? 30,
+        items: quote.items ?? [],
+        status: 'brouillon',
+      });
+      setListQuotes((prev) => [duplicated, ...prev]);
+      toast({ title: 'Devis dupliqué', description: 'Le devis a été dupliqué en brouillon.' });
+    } catch (e) {
+      console.error(e);
+      toast({ title: 'Erreur', description: 'Impossible de dupliquer le devis.', variant: 'destructive' });
+    }
   };
 
   const handleDownloadPdfFromList = async (quote: SupabaseQuote) => {
@@ -697,6 +745,12 @@ export default function QuotesPage() {
     const missingEmail = !clientInfo.email?.trim();
     const invalidItemIds = items.filter((i) => !i.description?.trim() || getItemTotal(i) === 0).map((i) => i.id);
     const currentSubtotal = items.reduce((sum, item) => sum + getItemTotal(item), 0);
+    const currentDiscountAmt = discountType === 'percent'
+      ? currentSubtotal * (parseFloat(discountValue) || 0) / 100
+      : discountType === 'fixed'
+        ? parseFloat(discountValue) || 0
+        : 0;
+    const currentSubtotalAfterDiscount = Math.max(0, currentSubtotal - currentDiscountAmt);
     const missingItems = items.length === 0 || currentSubtotal === 0;
     
     if (missingName || missingEmail || missingItems) {
@@ -732,7 +786,7 @@ export default function QuotesPage() {
     setIsSaving(true);
     
     try {
-      const currentTotal = currentSubtotal * 1.2; // TTC avec TVA 20%
+      const currentTotal = currentSubtotalAfterDiscount * (1 + parsedTvaRate / 100);
       
       // Si c'est un nouveau devis, créer avec le statut "brouillon"
       if (!editingQuoteId) {
@@ -744,7 +798,7 @@ export default function QuotesPage() {
           client_address: clientInfo.address,
           project_type: projectType,
           project_description: projectDescription,
-          total_ht: currentSubtotal,
+          total_ht: currentSubtotalAfterDiscount,
           total_ttc: currentTotal,
           validity_days: parseInt(validityDays) || 30,
           items: items,
@@ -774,7 +828,7 @@ export default function QuotesPage() {
           client_address: clientInfo.address,
           project_type: projectType,
           project_description: projectDescription,
-          total_ht: currentSubtotal,
+          total_ht: currentSubtotalAfterDiscount,
           total_ttc: currentTotal,
           validity_days: parseInt(validityDays) || 30,
           items: items,
@@ -875,7 +929,11 @@ export default function QuotesPage() {
       const createdChantier = await addChantier(chantierPayload);
       refreshChantiers();
       const currentSubtotal = items.reduce((sum, item) => sum + getItemTotal(item), 0);
-      const currentTotal = currentSubtotal * 1.2;
+      const currentDiscAmt = discountType === 'percent'
+        ? currentSubtotal * (parseFloat(discountValue) || 0) / 100
+        : discountType === 'fixed' ? parseFloat(discountValue) || 0 : 0;
+      const currentSubAfterDisc = Math.max(0, currentSubtotal - currentDiscAmt);
+      const currentTotal = currentSubAfterDisc * (1 + parsedTvaRate / 100);
       const quotePayload = {
         chantier_id: createdChantier.id,
         client_name: clientInfo.name,
@@ -884,7 +942,7 @@ export default function QuotesPage() {
         client_address: clientInfo.address,
         project_type: projectType,
         project_description: projectDescription,
-        total_ht: currentSubtotal,
+        total_ht: currentSubAfterDisc,
         total_ttc: currentTotal,
         validity_days: parseInt(validityDays) || 30,
         items,
@@ -1017,7 +1075,7 @@ export default function QuotesPage() {
           client_address: clientInfo.address,
           project_type: projectType,
           project_description: projectDescription,
-          total_ht: subtotal,
+          total_ht: subtotalAfterDiscount,
           total_ttc: total,
           validity_days: parseInt(validityDays) || 30,
           items: items,
@@ -1044,7 +1102,7 @@ export default function QuotesPage() {
           client_address: clientInfo.address,
           project_type: projectType,
           project_description: projectDescription,
-          total_ht: subtotal,
+          total_ht: subtotalAfterDiscount,
           total_ttc: total,
           validity_days: parseInt(validityDays) || 30,
           items: items,
@@ -1125,6 +1183,30 @@ export default function QuotesPage() {
     }
   };
 
+  const handleDeleteQuoteFromList = async (quoteId: string) => {
+    if (!user) return;
+    try {
+      await deleteQuote(user.id, quoteId);
+      setListQuotes((prev) => prev.filter((q) => q.id !== quoteId));
+      toast({ title: 'Devis supprimé' });
+    } catch (e) {
+      console.error(e);
+      toast({ title: 'Erreur', description: 'Impossible de supprimer le devis.', variant: 'destructive' });
+    }
+  };
+
+  const handleChangeStatusFromList = async (quoteId: string, status: SupabaseQuote["status"]) => {
+    if (!user) return;
+    try {
+      const updated = await updateQuoteStatus(quoteId, user.id, status);
+      setListQuotes((prev) => prev.map((q) => (q.id === quoteId ? updated : q)));
+      toast({ title: `Statut mis à jour : ${status}` });
+    } catch (e) {
+      console.error(e);
+      toast({ title: 'Erreur', description: e instanceof Error ? e.message : 'Impossible de changer le statut.', variant: 'destructive' });
+    }
+  };
+
   const handleEditQuoteFromList = (quoteId: string) => {
     setForceListView(false);
     setQuoteIdToOpenFromList(quoteId);
@@ -1141,6 +1223,7 @@ export default function QuotesPage() {
           loading={listLoading}
           statusFilter={listStatusFilter}
           searchQuery={listSearchQuery}
+          chantiers={chantiers}
           onStatusFilterChange={setListStatusFilter}
           onSearchQueryChange={setListSearchQuery}
           filteredQuotes={filteredListQuotes}
@@ -1151,6 +1234,9 @@ export default function QuotesPage() {
           }}
           onEditQuote={handleEditQuoteFromList}
           onDownloadPdf={handleDownloadPdfFromList}
+          onDuplicateQuote={handleDuplicateQuote}
+          onDeleteQuote={handleDeleteQuoteFromList}
+          onChangeStatus={handleChangeStatusFromList}
           onGoToProjects={() => setLocation('/dashboard/projects')}
         />
       ) : (
@@ -1159,7 +1245,7 @@ export default function QuotesPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
           <div className="min-w-0 w-full sm:flex-1 pl-20">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
-              Générateur de Devis
+              {editingQuoteId ? `Devis ${getQuoteDisplayNumber(listQuotes, editingQuoteId) || ''}` : 'Nouveau Devis'}
             </h1>
             <p className="text-xs sm:text-sm text-white/70 sm:truncate">
               Étape {step}/3 – {step === 1 ? 'Informations client' : step === 2 ? 'Détails du projet' : 'Détail du devis'}
@@ -1196,6 +1282,15 @@ export default function QuotesPage() {
             </Button>
             {step === 3 && (
               <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`rounded-xl border-white/40 hover:bg-white/30 hover:border-white/50 ${splitPreview ? 'bg-white/40 text-white' : 'bg-white/20 text-white'}`}
+                  onClick={() => setSplitPreview((p) => !p)}
+                >
+                  <Columns2 className="h-4 w-4 mr-2" />
+                  Split
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
@@ -1240,7 +1335,7 @@ export default function QuotesPage() {
               project_description: projectDescription || null,
               validity_days: parseInt(validityDays, 10) || 30,
               items,
-              total_ht: subtotal,
+              total_ht: subtotalAfterDiscount,
               total_ttc: total,
             }}
             accentColor={accentColor}
@@ -1771,8 +1866,9 @@ export default function QuotesPage() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.2 }}
-                className="space-y-4"
+                className={splitPreview ? "grid grid-cols-1 xl:grid-cols-2 gap-4" : "space-y-4"}
               >
+              <div className="space-y-4">
                 <Card ref={itemsCardRef} className={`bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl rounded-2xl ${highlightMissing.itemsSection ? 'border-amber-400/80 dark:border-amber-500/60' : ''}`}>
                   <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-white font-light">
@@ -1872,7 +1968,10 @@ export default function QuotesPage() {
                                   placeholder="Saisir ou choisir un tarif ci‑droite"
                                   className="flex-1 cursor-text rounded-xl border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 rounded-r-none"
                                 />
-                                <Popover open={openTariffPopoverId === item.id} onOpenChange={(open) => setOpenTariffPopoverId(open ? item.id : null)}>
+                                <Popover open={openTariffPopoverId === item.id} onOpenChange={(open) => {
+                                  setOpenTariffPopoverId(open ? item.id : null);
+                                  if (!open) { setTariffSearchQuery(''); setTariffCategoryFilter('all'); }
+                                }}>
                                   <PopoverTrigger asChild>
                                     <Button
                                       type="button"
@@ -1884,27 +1983,66 @@ export default function QuotesPage() {
                                       <ChevronDown className="h-4 w-4" />
                                     </Button>
                                   </PopoverTrigger>
-                                  <PopoverContent align="end" className="w-80 max-h-[280px] overflow-y-auto p-0">
+                                  <PopoverContent align="end" className="w-96 p-0">
                                     {userTariffs.length === 0 ? (
                                       <p className="p-3 text-sm text-gray-500 dark:text-gray-400">Aucun tarif enregistré. Ajoutez-en dans la page Tarifs.</p>
                                     ) : (
-                                      <ul className="py-1">
-                                        {userTariffs.map((t) => (
-                                          <li key={t.id}>
-                                            <button
-                                              type="button"
-                                              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex justify-between items-center gap-2"
-                                              onClick={() => {
-                                                applyTariffToItem(item.id, t);
-                                                setOpenTariffPopoverId(null);
-                                              }}
-                                            >
-                                              <span className="truncate">{t.label}</span>
-                                              <span className="text-gray-500 dark:text-gray-400 shrink-0">{Number(t.price_ht).toFixed(2)} € / {t.unit}</span>
-                                            </button>
-                                          </li>
-                                        ))}
-                                      </ul>
+                                      <div>
+                                        <div className="p-2 border-b border-gray-200 dark:border-gray-700 space-y-2">
+                                          <div className="relative">
+                                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                                            <Input
+                                              placeholder="Rechercher un tarif..."
+                                              value={tariffSearchQuery}
+                                              onChange={(e) => setTariffSearchQuery(e.target.value)}
+                                              className="pl-8 h-8 text-sm rounded-lg"
+                                            />
+                                          </div>
+                                          <div className="flex gap-1 flex-wrap">
+                                            {['all', 'matériau', 'service', "main-d'œuvre", 'location', 'sous-traitance', 'transport', 'équipement', 'fourniture', 'autre'].map((cat) => (
+                                              <button
+                                                key={cat}
+                                                type="button"
+                                                onClick={() => setTariffCategoryFilter(cat)}
+                                                className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${tariffCategoryFilter === cat ? 'bg-violet-500 text-white border-violet-500' : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                                              >
+                                                {cat === 'all' ? 'Tous' : cat}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </div>
+                                        <ul className="max-h-[220px] overflow-y-auto py-1">
+                                          {(() => {
+                                            const q = tariffSearchQuery.trim().toLowerCase();
+                                            const filtered = userTariffs.filter((t) => {
+                                              if (tariffCategoryFilter !== 'all' && t.category !== tariffCategoryFilter) return false;
+                                              if (q && !t.label.toLowerCase().includes(q)) return false;
+                                              return true;
+                                            });
+                                            return filtered.length === 0 ? (
+                                              <li className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400 text-center">Aucun tarif trouvé</li>
+                                            ) : (
+                                              filtered.map((t) => (
+                                                <li key={t.id}>
+                                                  <button
+                                                    type="button"
+                                                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800 flex justify-between items-center gap-2"
+                                                    onClick={() => {
+                                                      applyTariffToItem(item.id, t);
+                                                      setOpenTariffPopoverId(null);
+                                                      setTariffSearchQuery('');
+                                                      setTariffCategoryFilter('all');
+                                                    }}
+                                                  >
+                                                    <span className="truncate">{t.label}</span>
+                                                    <span className="text-gray-500 dark:text-gray-400 shrink-0">{Number(t.price_ht).toFixed(2)} € / {t.unit}</span>
+                                                  </button>
+                                                </li>
+                                              ))
+                                            );
+                                          })()}
+                                        </ul>
+                                      </div>
                                     )}
                                   </PopoverContent>
                                 </Popover>
@@ -2091,22 +2229,90 @@ export default function QuotesPage() {
 
                     <Separator />
 
-                    <div className="space-y-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 p-4 rounded-xl">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">Sous-total HT</span>
-                        <span className="font-medium text-gray-900 dark:text-white">{subtotal.toFixed(2)} €</span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label className="text-gray-700 dark:text-gray-300">Taux de TVA (%)</Label>
+                          <Select value={tvaRate} onValueChange={setTvaRate}>
+                            <SelectTrigger className="rounded-xl border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="0">0% (Exonéré)</SelectItem>
+                              <SelectItem value="5.5">5,5% (Rénovation énergétique)</SelectItem>
+                              <SelectItem value="10">10% (Travaux de rénovation)</SelectItem>
+                              <SelectItem value="20">20% (Taux normal)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-gray-700 dark:text-gray-300">Remise</Label>
+                          <div className="flex gap-2">
+                            <Select value={discountType} onValueChange={(v) => setDiscountType(v as 'none' | 'percent' | 'fixed')}>
+                              <SelectTrigger className="w-[140px] rounded-xl border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Aucune</SelectItem>
+                                <SelectItem value="percent">Pourcentage</SelectItem>
+                                <SelectItem value="fixed">Montant fixe</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {discountType !== 'none' && (
+                              <Input
+                                type="number"
+                                value={discountValue}
+                                onChange={(e) => setDiscountValue(e.target.value)}
+                                placeholder={discountType === 'percent' ? 'Ex: 10' : 'Ex: 500'}
+                                min="0"
+                                step="0.01"
+                                className="flex-1 cursor-text rounded-xl border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
+                              />
+                            )}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-gray-700 dark:text-gray-300">Conditions générales / Notes</Label>
+                          <Textarea
+                            value={generalConditions}
+                            onChange={(e) => setGeneralConditions(e.target.value)}
+                            placeholder="Ex: Acompte de 30% à la commande. Garantie décennale incluse..."
+                            rows={3}
+                            className="cursor-text rounded-xl border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm"
+                          />
+                        </div>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">TVA (20%)</span>
-                        <span className="font-medium text-gray-900 dark:text-white">{tva.toFixed(2)} €</span>
-                      </div>
-                      <Separator />
-                      <div className="flex justify-between items-center">
-                        <span className="font-semibold text-gray-900 dark:text-white">Total TTC</span>
-                        <Badge className="bg-violet-500 text-white px-4 py-2 rounded-xl">
-                          <Euro className="h-3 w-3 mr-1" />
-                          {total.toFixed(2)} €
-                        </Badge>
+                      <div className="space-y-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 p-4 rounded-xl h-fit">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">Sous-total HT</span>
+                          <span className="font-medium text-gray-900 dark:text-white">{subtotal.toFixed(2)} €</span>
+                        </div>
+                        {discountAmount > 0 && (
+                          <>
+                            <div className="flex justify-between items-center text-red-600 dark:text-red-400">
+                              <span className="text-sm">
+                                Remise {discountType === 'percent' ? `(${discountValue}%)` : ''}
+                              </span>
+                              <span className="font-medium">-{discountAmount.toFixed(2)} €</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-600 dark:text-gray-400">Sous-total après remise</span>
+                              <span className="font-medium text-gray-900 dark:text-white">{subtotalAfterDiscount.toFixed(2)} €</span>
+                            </div>
+                          </>
+                        )}
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">TVA ({tvaRate}%)</span>
+                          <span className="font-medium text-gray-900 dark:text-white">{tva.toFixed(2)} €</span>
+                        </div>
+                        <Separator />
+                        <div className="flex justify-between items-center">
+                          <span className="font-semibold text-gray-900 dark:text-white">Total TTC</span>
+                          <Badge className="bg-violet-500 text-white px-4 py-2 rounded-xl">
+                            <Euro className="h-3 w-3 mr-1" />
+                            {total.toFixed(2)} €
+                          </Badge>
+                        </div>
                       </div>
                     </div>
                   </CardContent>
@@ -2177,6 +2383,37 @@ export default function QuotesPage() {
                     </Button>
                   </div>
                 </div>
+              </div>
+              {splitPreview && (
+                <div className="hidden xl:block sticky top-4 h-fit">
+                  <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl rounded-2xl overflow-hidden">
+                    <CardHeader className="py-3 px-4">
+                      <CardTitle className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-violet-500" />
+                        Aperçu en direct
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0 max-h-[75vh] overflow-y-auto">
+                      <QuotePreview
+                        quote={{
+                          client_name: clientInfo.name || null,
+                          client_email: clientInfo.email || null,
+                          client_phone: clientInfo.phone || null,
+                          client_address: clientInfo.address || null,
+                          project_type: projectType || null,
+                          project_description: projectDescription || null,
+                          validity_days: parseInt(validityDays, 10) || 30,
+                          items,
+                          total_ht: subtotalAfterDiscount,
+                          total_ttc: total,
+                        }}
+                        accentColor={accentColor}
+                        logoUrl={logoUrl}
+                      />
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
               </motion.div>
             )}
           </AnimatePresence>

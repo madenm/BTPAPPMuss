@@ -30,6 +30,8 @@ import { InvoiceDialog } from '@/components/InvoiceDialog';
 import { Receipt, Check, Trash2, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { DeleteChantierConfirmDialog } from '@/components/DeleteChantierConfirmDialog';
+import { ProjectKpiBar } from '@/components/ProjectKpiBar';
+import { ProjectCard, type QuoteCountInfo } from '@/components/ProjectCard';
 
 // Format montant en euros (FR)
 function formatMontantEuro(value?: number | null): string {
@@ -156,7 +158,7 @@ function quoteToPdfParams(quote: SupabaseQuote): QuotePdfParams {
 }
 
 const PAGE_SIZE = 12;
-type SortOption = 'date_desc' | 'date_asc' | 'montant_desc' | 'montant_asc' | 'statut' | 'nom';
+type SortOption = 'date_desc' | 'date_asc' | 'montant_desc' | 'montant_asc' | 'statut' | 'nom' | 'retard';
 
 export default function ProjectsPage() {
   const { user } = useAuth();
@@ -230,6 +232,8 @@ export default function ProjectsPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const scrollToDevisRef = useRef(false);
   const devisSectionRef = useRef<HTMLDivElement>(null);
+  const [quoteCounts, setQuoteCounts] = useState<Record<string, { total: number; pending: number; validated: number }>>({});
+  const [invoiceCounts, setInvoiceCounts] = useState<Record<string, number>>({});
 
   // Debounce search 300ms
   useEffect(() => {
@@ -255,6 +259,12 @@ export default function ProjectsPage() {
       if (sortBy === 'montant_asc') return (a.montantDevis ?? 0) - (b.montantDevis ?? 0);
       if (sortBy === 'statut') return (statutOrder[a.statut] ?? 0) - (statutOrder[b.statut] ?? 0);
       if (sortBy === 'nom') return a.nom.localeCompare(b.nom);
+      if (sortBy === 'retard') {
+        const aRetard = isChantierEnRetard(a) ? 0 : 1;
+        const bRetard = isChantierEnRetard(b) ? 0 : 1;
+        if (aRetard !== bRetard) return aRetard - bRetard;
+        return new Date(b.dateDebut).getTime() - new Date(a.dateDebut).getTime();
+      }
       return 0;
     });
     return list;
@@ -289,6 +299,33 @@ export default function ProjectsPage() {
       setAssigneesByChantierId(map);
     };
     load();
+  }, [paginatedChantiers.map((c) => c.id).join(','), user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || paginatedChantiers.length === 0) return;
+    const loadCounts = async () => {
+      const qMap: Record<string, { total: number; pending: number; validated: number }> = {};
+      const iMap: Record<string, number> = {};
+      await Promise.all(
+        paginatedChantiers.map(async (c) => {
+          try {
+            const quotes = await fetchQuotesByChantierId(c.id);
+            qMap[c.id] = {
+              total: quotes.length,
+              pending: quotes.filter((q) => q.status === 'brouillon' || q.status === 'envoyé').length,
+              validated: quotes.filter((q) => q.status === 'validé' || q.status === 'accepté').length,
+            };
+          } catch { qMap[c.id] = { total: 0, pending: 0, validated: 0 }; }
+          try {
+            const invoices = await fetchInvoicesForUser(user!.id, { chantierId: c.id });
+            iMap[c.id] = invoices.length;
+          } catch { iMap[c.id] = 0; }
+        })
+      );
+      setQuoteCounts(qMap);
+      setInvoiceCounts(iMap);
+    };
+    loadCounts();
   }, [paginatedChantiers.map((c) => c.id).join(','), user?.id]);
 
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -435,6 +472,51 @@ export default function ProjectsPage() {
       phone: ''
     });
     setNewChantier(prev => ({ ...prev, clientId: created.id }));
+  };
+
+  const handleDuplicateChantier = async (chantier: Chantier) => {
+    if (!user?.id) return;
+    try {
+      const client = clients.find((c) => c.id === chantier.clientId);
+      await addChantier({
+        nom: `${chantier.nom} (copie)`,
+        clientId: chantier.clientId,
+        clientName: client?.name || chantier.clientName,
+        dateDebut: new Date().toISOString().slice(0, 10),
+        dateFin: undefined,
+        duree: chantier.duree,
+        images: [],
+        statut: 'planifié',
+        notes: chantier.notes || undefined,
+        notesAvancement: undefined,
+        typeChantier: chantier.typeChantier || undefined,
+        montantDevis: chantier.montantDevis,
+      });
+      toast({ title: 'Projet dupliqué', description: `"${chantier.nom} (copie)" a été créé.` });
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Erreur', description: 'Impossible de dupliquer le projet.', variant: 'destructive' });
+    }
+  };
+
+  const handleQuickStatusChange = async (chantier: Chantier, newStatus: Chantier['statut']) => {
+    try {
+      await updateChantier(chantier.id, { statut: newStatus });
+      toast({ title: 'Statut mis à jour', description: `${chantier.nom} → ${newStatus}` });
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Erreur', description: 'Impossible de changer le statut.', variant: 'destructive' });
+    }
+  };
+
+  const handleArchiveChantier = async (chantier: Chantier) => {
+    try {
+      await deleteChantier(chantier.id);
+      toast({ title: 'Projet archivé', description: `"${chantier.nom}" a été archivé.` });
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Erreur', description: 'Impossible d\'archiver le projet.', variant: 'destructive' });
+    }
   };
 
   const handleEditChantier = async (chantier: Chantier, scrollToDevis = false) => {
@@ -1107,6 +1189,7 @@ export default function ProjectsPage() {
                 <SelectItem value="montant_asc" className="text-white">Montant ↑</SelectItem>
                 <SelectItem value="statut" className="text-white">Statut</SelectItem>
                 <SelectItem value="nom" className="text-white">Nom A-Z</SelectItem>
+                <SelectItem value="retard" className="text-white">En retard d'abord</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1782,150 +1865,25 @@ export default function ProjectsPage() {
           </div>
         ) : (
           <>
+            <ProjectKpiBar chantiers={chantiers} filteredCount={filteredSortedChantiers.length} />
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {paginatedChantiers.map((chantier) => {
-                const imageIndex = currentImageIndex[chantier.id] || 0;
-                const hasMultipleImages = chantier.images.length > 1;
-                const canGoLeft = hasMultipleImages && imageIndex > 0;
-                const canGoRight = hasMultipleImages && imageIndex < chantier.images.length - 1;
-                const assignees = assigneesByChantierId[chantier.id] ?? [];
-                const enRetard = isChantierEnRetard(chantier);
-
-                return (
-                  <Card
-                    key={chantier.id}
-                    className="bg-black/20 backdrop-blur-xl border border-white/10 text-white hover:shadow-lg hover:scale-[1.01] transition-all duration-200 cursor-pointer rounded-lg overflow-hidden"
-                  >
-                    <div onClick={() => handleEditChantier(chantier)}>
-                      {chantier.images.length > 0 && (
-                        <div className="relative h-48 overflow-hidden rounded-t-lg group">
-                          <img
-                            src={chantier.images[imageIndex]}
-                            alt={chantier.nom}
-                            className="w-full h-full object-cover"
-                          />
-                          {hasMultipleImages && (
-                            <>
-                              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
-                                {chantier.images.slice(0, 5).map((_, i) => (
-                                  <span
-                                    key={i}
-                                    className={`w-1.5 h-1.5 rounded-full ${i === imageIndex ? 'bg-white' : 'bg-white/40'}`}
-                                  />
-                                ))}
-                              </div>
-                              <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm text-white px-2 py-1 rounded text-xs flex items-center gap-1">
-                                {imageIndex + 1} / {chantier.images.length}
-                              </div>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setCurrentImageIndex(prev => ({ ...prev, [chantier.id]: Math.max(0, imageIndex - 1) }));
-                                }}
-                                className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full p-2 transition-opacity"
-                                aria-label="Photo précédente"
-                              >
-                                <ChevronLeft className="h-5 w-5" />
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setCurrentImageIndex(prev => ({ ...prev, [chantier.id]: Math.min(chantier.images.length - 1, imageIndex + 1) }));
-                                }}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full p-2 transition-opacity"
-                                aria-label="Photo suivante"
-                              >
-                                <ChevronRight className="h-5 w-5" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      )}
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-lg font-semibold">{chantier.nom}</CardTitle>
-                        <div className="flex items-center gap-2 text-sm text-white/70">
-                          <User className="h-4 w-4 shrink-0" />
-                          {chantier.clientName}
-                        </div>
-                        {chantier.typeChantier && (
-                          <div className="text-xs text-white/50 mt-0.5">
-                            {TYPE_CHANTIER_LABELS[chantier.typeChantier] ?? chantier.typeChantier}
-                          </div>
-                        )}
-                      </CardHeader>
-                      <CardContent className="space-y-2 pt-0">
-                        <div className="flex items-center gap-2 text-sm text-white/70">
-                          <CalendarIcon className="h-4 w-4 shrink-0" />
-                          {formatDateToDDMMYYYY(chantier.dateDebut)}
-                          {chantier.dateFin && (
-                            <span className="text-white/50"> → {formatDateToDDMMYYYY(chantier.dateFin)}</span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-white/70">
-                          <Clock className="h-4 w-4 shrink-0" />
-                          {chantier.duree}
-                        </div>
-                        {chantier.montantDevis != null && chantier.montantDevis > 0 && (
-                          <div className="flex items-center gap-2 text-sm text-white/80">
-                            <FileText className="h-4 w-4 shrink-0" />
-                            {formatMontantEuro(chantier.montantDevis)}
-                          </div>
-                        )}
-                        <div className="flex flex-wrap gap-1.5 mt-2">
-                          <span className={`px-2 py-1 rounded text-xs ${
-                            chantier.statut === 'planifié' ? 'bg-blue-500/20 text-blue-300' :
-                            chantier.statut === 'en cours' ? 'bg-yellow-500/20 text-yellow-300' :
-                            'bg-green-500/20 text-green-300'
-                          }`}>
-                            {chantier.statut}
-                          </span>
-                          {enRetard && (
-                            <span className="px-2 py-1 rounded text-xs bg-red-500/20 text-red-300">
-                              En retard
-                            </span>
-                          )}
-                        </div>
-                        {assignees.length > 0 && (
-                          <div className="flex items-center gap-1.5 text-xs text-white/60 mt-2">
-                            <User className="h-3.5 w-3.5 shrink-0" />
-                            {assignees.slice(0, 2).map((m) => m.name).join(', ')}
-                            {assignees.length > 2 && ` +${assignees.length - 2}`}
-                          </div>
-                        )}
-                        <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-white/10" onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 text-white border-white/20 hover:bg-white/10"
-                            onClick={() => handleEditChantier(chantier, true)}
-                          >
-                            <FileText className="h-3.5 w-3.5 mr-1" />
-                            Devis
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="flex-1 h-8 text-white border-white/20 hover:bg-white/10"
-                            onClick={() => handleEditChantier(chantier)}
-                          >
-                            <Pencil className="h-3.5 w-3.5 mr-1" />
-                            Modifier
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 text-red-300 border-red-500/50 hover:bg-red-500/20"
-                            onClick={() => setChantierToDelete(chantier)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5 mr-1" />
-                            Supprimer
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </div>
-                  </Card>
-                );
-              })}
+              {paginatedChantiers.map((chantier) => (
+                <ProjectCard
+                  key={chantier.id}
+                  chantier={chantier}
+                  enRetard={isChantierEnRetard(chantier)}
+                  assignees={assigneesByChantierId[chantier.id] ?? []}
+                  imageIndex={currentImageIndex[chantier.id] || 0}
+                  quoteCounts={quoteCounts[chantier.id] ?? { total: 0, pending: 0, validated: 0 }}
+                  invoiceCount={invoiceCounts[chantier.id] ?? 0}
+                  onImageIndexChange={(id, idx) => setCurrentImageIndex((prev) => ({ ...prev, [id]: idx }))}
+                  onEdit={(c) => handleEditChantier(c)}
+                  onEditDevis={(c) => handleEditChantier(c, true)}
+                  onDuplicate={handleDuplicateChantier}
+                  onQuickStatusChange={handleQuickStatusChange}
+                  onArchive={handleArchiveChantier}
+                />
+              ))}
             </div>
             {totalFiltered > PAGE_SIZE && (
               <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 px-2">
@@ -1971,10 +1929,10 @@ export default function ProjectsPage() {
           setDeleteLoading(true);
           try {
             await deleteChantier(chantierToDelete.id);
-            toast({ title: 'Projet supprimé', description: 'Le projet a été masqué.' });
+            toast({ title: 'Projet archivé', description: 'Le projet a été archivé.' });
             setChantierToDelete(null);
           } catch (err) {
-            const errMsg = err instanceof Error ? err.message : (err && typeof err === 'object' && 'message' in err) ? String((err as { message: unknown }).message) : 'Impossible de supprimer.';
+            const errMsg = err instanceof Error ? err.message : (err && typeof err === 'object' && 'message' in err) ? String((err as { message: unknown }).message) : 'Impossible d\'archiver.';
             toast({ title: 'Erreur', description: errMsg || 'Impossible de supprimer.', variant: 'destructive' });
           } finally {
             setDeleteLoading(false);

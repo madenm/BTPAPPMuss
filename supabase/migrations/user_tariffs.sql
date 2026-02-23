@@ -5,7 +5,7 @@ create table if not exists public.user_tariffs (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   label text not null,
-  category text not null default 'autre' check (category in ('matériau', 'service', 'autre')),
+  category text not null default 'autre' check (category in ('matériau', 'service', 'main-d''œuvre', 'location', 'sous-traitance', 'transport', 'équipement', 'fourniture', 'autre')),
   unit text not null default 'u',
   price_ht numeric not null check (price_ht >= 0),
   created_at timestamptz not null default now(),

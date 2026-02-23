@@ -5,15 +5,38 @@ import { fetchQuotesForUser } from "@/lib/supabaseQuotes";
 import { fetchRevenuesByPeriod } from "@/lib/supabaseRevenues";
 import { fetchInvoicesForUser } from "@/lib/supabaseInvoices";
 
+export interface DashboardAlert {
+  id: string;
+  type: 'warning' | 'danger' | 'info';
+  icon: 'quote' | 'invoice' | 'project' | 'note';
+  title: string;
+  detail: string;
+  link?: string;
+}
+
+export interface RecentActivity {
+  id: string;
+  type: 'quote' | 'invoice' | 'project';
+  action: string;
+  label: string;
+  date: Date;
+  amount?: number;
+}
+
 export interface DashboardMetrics {
   totalRevenue: number;
+  previousMonthRevenue: number;
   activeChantiers: number;
   pendingQuotes: number;
   conversionRate: number;
-  /** Montant restant à encaisser (somme des factures non soldées) pour compléter les factures */
   remainingToCollect: number;
   revenueEvolution: Array<{ name: string; revenus: number }>;
   conversionEvolution: Array<{ name: string; taux: number }>;
+  alerts: DashboardAlert[];
+  recentActivity: RecentActivity[];
+  overdueInvoicesCount: number;
+  expiringQuotesCount: number;
+  lateProjectsCount: number;
   loading: boolean;
   error: string | null;
 }
@@ -23,12 +46,18 @@ export function useDashboardMetrics(): DashboardMetrics {
   const { chantiers } = useChantiers();
   const [metrics, setMetrics] = useState<DashboardMetrics>({
     totalRevenue: 0,
+    previousMonthRevenue: 0,
     activeChantiers: 0,
     pendingQuotes: 0,
     conversionRate: 0,
     remainingToCollect: 0,
     revenueEvolution: [],
     conversionEvolution: [],
+    alerts: [],
+    recentActivity: [],
+    overdueInvoicesCount: 0,
+    expiringQuotesCount: 0,
+    lateProjectsCount: 0,
     loading: true,
     error: null,
   });
@@ -77,19 +106,20 @@ export function useDashboardMetrics(): DashboardMetrics {
         const pendingQuotes =
           chantierIdsWithPending.size + pendingWithoutChantier;
 
-        // Taux de conversion = (factures envoyées / devis envoyés) * 100
-        const devisEnvoyes = allQuotes.filter((q) => q.status === "envoyé").length;
+        // Taux de conversion = devis signés / total devis ayant reçu une réponse
+        // Numérateur : devis acceptés ou validés (= signés)
+        // Dénominateur : tous les devis qui ont dépassé le stade brouillon (envoyé + accepté + validé + refusé + expiré)
+        const resolvedStatuses = ["envoyé", "accepté", "validé", "refusé", "expiré"];
+        const devisResolved = allQuotes.filter((q) => resolvedStatuses.includes(q.status)).length;
+        const devisConverted = allQuotes.filter((q) => q.status === "accepté" || q.status === "validé").length;
         let invoices: Awaited<ReturnType<typeof fetchInvoicesForUser>> = [];
         try {
           invoices = await fetchInvoicesForUser(user.id);
         } catch (e) {
           console.warn("fetchInvoicesForUser failed, using empty list:", e);
         }
-        const facturesEnvoyees = invoices.filter((inv) =>
-          ["envoyée", "payée", "partiellement_payée"].includes(inv.status),
-        ).length;
         const conversionRate =
-          devisEnvoyes > 0 ? Math.round((facturesEnvoyees / devisEnvoyes) * 100) : 0;
+          devisResolved > 0 ? Math.round((devisConverted / devisResolved) * 100) : 0;
 
         // Montant restant à encaisser = somme (total_ttc - payé) pour les factures non annulées
         const remainingToCollect = invoices
@@ -170,31 +200,147 @@ export function useDashboardMetrics(): DashboardMetrics {
           });
         }
 
-        // Évolution du taux de conversion par semaine (factures envoyées / devis envoyés)
+        // Évolution du taux de conversion par semaine
+        // Pour chaque semaine : devis signés (accepté/validé) créés cette semaine / devis résolus créés cette semaine
         const conversionEvolution: Array<{ name: string; taux: number }> = [];
         for (let i = 3; i >= 0; i--) {
           const weekStart = new Date(now);
           weekStart.setDate(weekStart.getDate() - (i * 7 + 7));
           const weekEnd = new Date(now);
           weekEnd.setDate(weekEnd.getDate() - (i * 7));
-          const weekDevisEnvoyes = allQuotes.filter((q) => {
-            if (q.status !== "envoyé") return false;
+          const weekResolved = allQuotes.filter((q) => {
+            if (!resolvedStatuses.includes(q.status)) return false;
             const d = new Date(q.created_at);
             return d >= weekStart && d <= weekEnd;
           }).length;
-          const weekFacturesEnvoyees = invoices.filter((inv) => {
-            if (!["envoyée", "payée", "partiellement_payée"].includes(inv.status)) return false;
-            const d = new Date(inv.invoice_date || inv.created_at);
+          const weekConverted = allQuotes.filter((q) => {
+            if (q.status !== "accepté" && q.status !== "validé") return false;
+            const d = new Date(q.created_at);
             return d >= weekStart && d <= weekEnd;
           }).length;
           conversionEvolution.push({
             name: `Sem ${4 - i}`,
-            taux: weekDevisEnvoyes > 0 ? Math.round((weekFacturesEnvoyees / weekDevisEnvoyes) * 100) : 0,
+            taux: weekResolved > 0 ? Math.round((weekConverted / weekResolved) * 100) : 0,
           });
         }
 
+        // Previous month revenue for trend
+        const prevMonth = currentMonth1Based - 1 <= 0 ? 12 : currentMonth1Based - 1;
+        const prevYear = currentMonth1Based - 1 <= 0 ? currentYear - 1 : currentYear;
+        const previousMonthRevenue = revenueMap.get(`${prevYear}-${prevMonth}`) || 0;
+
+        // --- ALERTS ---
+        const alerts: DashboardAlert[] = [];
+        const sevenDaysFromNow = new Date(now.getTime() + 7 * 86400000);
+
+        // Devis qui expirent dans les 7 jours
+        const expiringQuotes = allQuotes.filter((q) => {
+          if (q.status !== "envoyé" && q.status !== "brouillon") return false;
+          const created = new Date(q.created_at);
+          const expiry = new Date(created.getTime() + (q.validity_days ?? 30) * 86400000);
+          return expiry > now && expiry <= sevenDaysFromNow;
+        });
+        if (expiringQuotes.length > 0) {
+          alerts.push({
+            id: "expiring-quotes",
+            type: "warning",
+            icon: "quote",
+            title: `${expiringQuotes.length} devis expire${expiringQuotes.length > 1 ? "nt" : ""} bientôt`,
+            detail: `Dans les 7 prochains jours`,
+            link: "/dashboard/quotes",
+          });
+        }
+
+        // Factures impayées > 30 jours
+        const overdueInvoices = invoices.filter((inv) => {
+          if (inv.status === "payée" || inv.status === "annulée") return false;
+          const due = new Date(inv.due_date);
+          return due < now;
+        });
+        if (overdueInvoices.length > 0) {
+          const totalOverdue = overdueInvoices.reduce((s, inv) => s + Math.max(0, (inv.total_ttc ?? 0) - (inv.paidAmount ?? 0)), 0);
+          alerts.push({
+            id: "overdue-invoices",
+            type: "danger",
+            icon: "invoice",
+            title: `${overdueInvoices.length} facture${overdueInvoices.length > 1 ? "s" : ""} en retard de paiement`,
+            detail: new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 0 }).format(totalOverdue) + " à encaisser",
+            link: "/dashboard/invoices",
+          });
+        }
+
+        // Chantiers en retard
+        const lateProjects = chantiers.filter((c) => {
+          if (!c.dateFin || c.statut === "terminé") return false;
+          return c.dateFin.slice(0, 10) < now.toISOString().slice(0, 10);
+        });
+        if (lateProjects.length > 0) {
+          alerts.push({
+            id: "late-projects",
+            type: "danger",
+            icon: "project",
+            title: `${lateProjects.length} projet${lateProjects.length > 1 ? "s" : ""} en retard`,
+            detail: lateProjects.slice(0, 2).map((c) => c.nom).join(", ") + (lateProjects.length > 2 ? "..." : ""),
+            link: "/dashboard/projects",
+          });
+        }
+
+        // --- RECENT ACTIVITY (from quotes + invoices, sorted by date) ---
+        const recentActivity: RecentActivity[] = [];
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000);
+
+        for (const q of allQuotes) {
+          const d = new Date(q.updated_at || q.created_at);
+          if (d < thirtyDaysAgo) continue;
+          if (q.status === "accepté" || q.status === "validé") {
+            recentActivity.push({
+              id: `q-${q.id}`,
+              type: "quote",
+              action: q.status === "validé" ? "Devis validé" : "Devis accepté",
+              label: q.client_name || "Client",
+              date: d,
+              amount: q.total_ttc,
+            });
+          } else if (q.status === "envoyé") {
+            recentActivity.push({
+              id: `q-${q.id}`,
+              type: "quote",
+              action: "Devis envoyé",
+              label: q.client_name || "Client",
+              date: d,
+            });
+          }
+        }
+
+        for (const inv of invoices) {
+          const d = new Date(inv.updated_at || inv.created_at);
+          if (d < thirtyDaysAgo) continue;
+          if (inv.status === "payée") {
+            recentActivity.push({
+              id: `i-${inv.id}`,
+              type: "invoice",
+              action: "Facture payée",
+              label: inv.client_name || "Client",
+              date: d,
+              amount: inv.total_ttc,
+            });
+          } else if (inv.status === "envoyée") {
+            recentActivity.push({
+              id: `i-${inv.id}`,
+              type: "invoice",
+              action: "Facture envoyée",
+              label: inv.client_name || "Client",
+              date: d,
+              amount: inv.total_ttc,
+            });
+          }
+        }
+
+        recentActivity.sort((a, b) => b.date.getTime() - a.date.getTime());
+
         setMetrics({
           totalRevenue,
+          previousMonthRevenue,
           activeChantiers,
           pendingQuotes,
           conversionRate,
@@ -213,6 +359,11 @@ export function useDashboardMetrics(): DashboardMetrics {
             { name: "Sem 3", taux: 0 },
             { name: "Sem 4", taux: 0 },
           ],
+          alerts,
+          recentActivity: recentActivity.slice(0, 10),
+          overdueInvoicesCount: overdueInvoices.length,
+          expiringQuotesCount: expiringQuotes.length,
+          lateProjectsCount: lateProjects.length,
           loading: false,
           error: null,
         });

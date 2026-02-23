@@ -1,4 +1,4 @@
-# Schéma Supabase (TitanBtp / Aos-Renov)
+# Schéma Supabase (TitanBtp)
 
 ## Erreurs 404 (table n'existe pas)
 

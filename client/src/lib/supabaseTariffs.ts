@@ -1,6 +1,6 @@
 import { supabase, isSupabaseTableMissing } from "./supabaseClient";
 
-export type TariffCategory = "matériau" | "service" | "autre";
+export type TariffCategory = "matériau" | "service" | "main-d'œuvre" | "location" | "sous-traitance" | "transport" | "équipement" | "fourniture" | "autre";
 
 export interface UserTariff {
   id: string;
@@ -61,6 +61,39 @@ export async function insertTariff(
   }
 
   return data as UserTariff;
+}
+
+export async function insertTariffsBatch(
+  userId: string,
+  payloads: NewUserTariffPayload[]
+): Promise<{ inserted: number; errors: number }> {
+  if (payloads.length === 0) return { inserted: 0, errors: 0 };
+  const now = new Date().toISOString();
+  const rows = payloads.map((p) => ({
+    user_id: userId,
+    label: p.label.trim(),
+    category: p.category,
+    unit: p.unit.trim() || "u",
+    price_ht: Number(p.price_ht) >= 0 ? Number(p.price_ht) : 0,
+    updated_at: now,
+  }));
+  const BATCH_SIZE = 500;
+  let inserted = 0;
+  let errors = 0;
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const chunk = rows.slice(i, i + BATCH_SIZE);
+    const { data, error } = await supabase
+      .from("user_tariffs")
+      .insert(chunk)
+      .select();
+    if (error) {
+      console.error("Batch insert error:", error);
+      errors += chunk.length;
+    } else {
+      inserted += data?.length ?? 0;
+    }
+  }
+  return { inserted, errors };
 }
 
 export async function updateTariff(

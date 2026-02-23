@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { PageWrapper } from "@/components/PageWrapper";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,6 +20,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -35,16 +43,17 @@ import { useToast } from "@/hooks/use-toast";
 import {
   fetchTariffs,
   insertTariff,
+  insertTariffsBatch,
   updateTariff,
   deleteTariff,
   type UserTariff,
   type NewUserTariffPayload,
   type TariffCategory,
 } from "@/lib/supabaseTariffs";
-import { Plus, Pencil, Trash2, Upload, Download, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Upload, Download, Loader2, Search, MoreVertical, Copy, Tag } from "lucide-react";
 import * as XLSX from "xlsx";
 
-const CATEGORIES: TariffCategory[] = ["matériau", "service", "autre"];
+const CATEGORIES: TariffCategory[] = ["matériau", "service", "main-d'œuvre", "location", "sous-traitance", "transport", "équipement", "fourniture", "autre"];
 const UNITS = ["u", "m²", "m", "m³", "jour", "forfait", "L", "kg", "ml"];
 
 function normalizeHeader(h: string): string {
@@ -85,7 +94,7 @@ function parseCsv(text: string): ParsedTariffRow[] {
     const priceVal = parseFloat((cells[priceIdx] ?? "0").replace(",", "."));
     if (!label || isNaN(priceVal) || priceVal < 0) continue;
     const category = (categoryIdx >= 0 && cells[categoryIdx])
-      ? (["matériau", "service", "autre"].includes(cells[categoryIdx].toLowerCase())
+      ? ((CATEGORIES as string[]).includes(cells[categoryIdx].toLowerCase())
         ? (cells[categoryIdx].toLowerCase() as TariffCategory)
         : "autre")
       : "autre";
@@ -134,7 +143,7 @@ function parseExcel(file: File): Promise<ParsedTariffRow[]> {
           if (!label || isNaN(priceVal) || priceVal < 0) continue;
           const category =
             categoryIdx >= 0 && row[categoryIdx]
-              ? (["matériau", "service", "autre"].includes(String(row[categoryIdx]).toLowerCase())
+              ? ((CATEGORIES as string[]).includes(String(row[categoryIdx]).toLowerCase())
                 ? (String(row[categoryIdx]).toLowerCase() as TariffCategory)
                 : "autre")
               : "autre";
@@ -298,6 +307,18 @@ function TariffFormModal({ open, onOpenChange, tariff, onSave, isSaving }: Tarif
   );
 }
 
+const CATEGORY_BADGE: Record<TariffCategory, { label: string; className: string }> = {
+  "matériau": { label: "Matériau", className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" },
+  "service": { label: "Service", className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300" },
+  "main-d'œuvre": { label: "Main-d'œuvre", className: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" },
+  "location": { label: "Location", className: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300" },
+  "sous-traitance": { label: "Sous-traitance", className: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300" },
+  "transport": { label: "Transport", className: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300" },
+  "équipement": { label: "Équipement", className: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300" },
+  "fourniture": { label: "Fourniture", className: "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300" },
+  "autre": { label: "Autre", className: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300" },
+};
+
 export default function TarifsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -312,6 +333,20 @@ export default function TarifsPage() {
   const [importing, setImporting] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+
+  const filteredTariffs = useMemo(() => {
+    let result = tariffs;
+    if (categoryFilter !== "all") {
+      result = result.filter((t) => t.category === categoryFilter);
+    }
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      result = result.filter((t) => t.label.toLowerCase().includes(q));
+    }
+    return result;
+  }, [tariffs, categoryFilter, searchQuery]);
 
   const loadTariffs = useCallback(async () => {
     if (!user?.id) return;
@@ -392,6 +427,29 @@ export default function TarifsPage() {
     toast({ title: "Modèle téléchargé (tarifs_template.csv)" });
   }, [toast]);
 
+  const handleDuplicate = useCallback(
+    async (tariff: UserTariff) => {
+      if (!user?.id) return;
+      try {
+        const duplicated = await insertTariff(user.id, {
+          label: `${tariff.label} (copie)`,
+          category: tariff.category,
+          unit: tariff.unit,
+          price_ht: tariff.price_ht,
+        });
+        setTariffs((prev) => [...prev, duplicated].sort((a, b) => a.label.localeCompare(b.label)));
+        toast({ title: "Tarif dupliqué" });
+      } catch (e) {
+        toast({
+          title: "Erreur",
+          description: e instanceof Error ? e.message : "Duplication impossible",
+          variant: "destructive",
+        });
+      }
+    },
+    [user?.id, toast]
+  );
+
   const handleImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     setImportFile(file || null);
@@ -427,26 +485,12 @@ export default function TarifsPage() {
         setImporting(false);
         return;
       }
-      let ok = 0;
-      let err = 0;
-      for (const row of rows) {
-        try {
-          await insertTariff(user.id, {
-            label: row.label,
-            category: row.category,
-            unit: row.unit,
-            price_ht: row.price_ht,
-          });
-          ok++;
-        } catch {
-          err++;
-        }
-      }
+      const { inserted, errors: errCount } = await insertTariffsBatch(user.id, rows);
       setImportOpen(false);
       setImportFile(null);
       toast({
         title: "Import terminé",
-        description: `${ok} ligne(s) importée(s)${err > 0 ? `, ${err} erreur(s)` : ""}.`,
+        description: `${inserted} ligne(s) importée(s)${errCount > 0 ? `, ${errCount} erreur(s)` : ""}.`,
       });
       await loadTariffs();
     } catch (e) {
@@ -476,112 +520,173 @@ export default function TarifsPage() {
         </div>
       </header>
 
-      <main className="flex-1 p-4 sm:p-6 overflow-x-auto">
-        <div className="flex flex-wrap items-center gap-3 mb-6">
-          <Button
-            onClick={() => {
-              setEditingTariff(null);
-              setModalOpen(true);
-            }}
-            className="h-9 bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Ajouter un tarif
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setImportOpen(true)}
-            className="h-9 bg-white/10 backdrop-blur-md text-white border border-white/20 hover:bg-white/20"
-          >
-            <Upload className="h-4 w-4 mr-2" />
-            Importer (CSV / Excel)
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleDownloadTemplate}
-            className="h-9 bg-white/10 backdrop-blur-md text-white border border-white/20 hover:bg-white/20"
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Télécharger le modèle CSV
-          </Button>
-        </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-white/70" />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 overflow-x-hidden">
+        <main className="space-y-6 py-4 sm:py-6">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              size="sm"
+              onClick={() => {
+                setEditingTariff(null);
+                setModalOpen(true);
+              }}
+              className="rounded-xl bg-violet-500 hover:bg-violet-600 text-white"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Ajouter un tarif
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setImportOpen(true)}
+              className="rounded-xl bg-white/10 backdrop-blur-md text-white border border-white/20 hover:bg-white/20"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Importer
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadTemplate}
+              className="rounded-xl bg-white/10 backdrop-blur-md text-white border border-white/20 hover:bg-white/20"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Modèle CSV
+            </Button>
           </div>
-        ) : tariffs.length === 0 ? (
-          <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white p-12 text-center">
-            <p className="text-white/70">Aucun tarif. Ajoutez des lignes ou importez un fichier CSV/Excel.</p>
-            <div className="flex flex-wrap justify-center gap-3 mt-4">
-              <Button
-                className="min-h-[44px] bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30"
-                onClick={() => setModalOpen(true)}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Ajouter un tarif
-              </Button>
-              <Button
-                variant="outline"
-                className="min-h-[44px] bg-white/10 text-white border border-white/20 hover:bg-white/20"
-                onClick={() => setImportOpen(true)}
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                Importer
-              </Button>
-            </div>
+
+          <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl rounded-2xl">
+            <CardHeader className="space-y-0">
+              <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+                <CardTitle className="text-gray-900 dark:text-white font-light flex items-center gap-2">
+                  <Tag className="h-5 w-5 text-violet-500" />
+                  Tous les tarifs
+                  {!loading && (
+                    <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
+                      ({filteredTariffs.length}{filteredTariffs.length !== tariffs.length ? ` / ${tariffs.length}` : ""})
+                    </span>
+                  )}
+                </CardTitle>
+                <div className="flex flex-wrap gap-2">
+                  <div className="relative flex-1 sm:flex-initial min-w-[180px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="Rechercher un tarif..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-9 rounded-xl border-gray-200 dark:border-gray-700"
+                    />
+                  </div>
+                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                    <SelectTrigger className="w-[160px] rounded-xl border-gray-200 dark:border-gray-700">
+                      <SelectValue placeholder="Catégorie" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Toutes</SelectItem>
+                      {CATEGORIES.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {CATEGORY_BADGE[c].label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="flex items-center justify-center py-16 text-gray-500 dark:text-gray-400">
+                  <Loader2 className="h-8 w-8 animate-spin mr-2" />
+                  Chargement des tarifs...
+                </div>
+              ) : tariffs.length === 0 ? (
+                <div className="text-center py-16 text-gray-500 dark:text-gray-400">
+                  <Tag className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p className="font-medium">Aucun tarif</p>
+                  <p className="text-sm mt-1">Ajoutez vos tarifs ou importez un fichier CSV/Excel.</p>
+                  <div className="flex flex-wrap justify-center gap-3 mt-4">
+                    <Button
+                      className="rounded-xl bg-violet-500 hover:bg-violet-600 text-white"
+                      onClick={() => setModalOpen(true)}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Ajouter un tarif
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="rounded-xl"
+                      onClick={() => setImportOpen(true)}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Importer
+                    </Button>
+                  </div>
+                </div>
+              ) : filteredTariffs.length === 0 ? (
+                <div className="text-center py-16 text-gray-500 dark:text-gray-400">
+                  <Search className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p className="font-medium">Aucun résultat</p>
+                  <p className="text-sm mt-1">Essayez un autre terme de recherche ou changez le filtre.</p>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50 dark:bg-gray-900/50">
+                        <TableHead className="rounded-tl-xl">Libellé</TableHead>
+                        <TableHead>Catégorie</TableHead>
+                        <TableHead>Unité</TableHead>
+                        <TableHead className="text-right">Prix HT (€)</TableHead>
+                        <TableHead className="text-right rounded-tr-xl w-[60px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredTariffs.map((t) => (
+                        <TableRow key={t.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                          <TableCell className="font-medium text-gray-900 dark:text-white">
+                            {t.label}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary" className={CATEGORY_BADGE[t.category]?.className ?? CATEGORY_BADGE.autre.className}>
+                              {CATEGORY_BADGE[t.category]?.label ?? t.category}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-gray-600 dark:text-gray-400">{t.unit}</TableCell>
+                          <TableCell className="text-right font-medium">
+                            {new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(t.price_ht))}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-44">
+                                <DropdownMenuItem onClick={() => { setEditingTariff(t); setModalOpen(true); }}>
+                                  <Pencil className="h-4 w-4 mr-2" />
+                                  Modifier
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleDuplicate(t)}>
+                                  <Copy className="h-4 w-4 mr-2" />
+                                  Dupliquer
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => setDeleteTarget(t)}>
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Supprimer
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
           </Card>
-        ) : (
-          <Card className="bg-black/20 backdrop-blur-xl border border-white/10 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-white/10">
-                    <th className="p-3 text-white font-medium">Libellé</th>
-                    <th className="p-3 text-white font-medium">Catégorie</th>
-                    <th className="p-3 text-white font-medium">Unité</th>
-                    <th className="p-3 text-white font-medium">Prix HT (€)</th>
-                    <th className="p-3 text-white font-medium w-[100px]">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tariffs.map((t) => (
-                    <tr key={t.id} className="border-b border-white/5 hover:bg-white/5">
-                      <td className="p-3 text-white">{t.label}</td>
-                      <td className="p-3 text-white/80">{t.category}</td>
-                      <td className="p-3 text-white/80">{t.unit}</td>
-                      <td className="p-3 text-white/80">{Number(t.price_ht).toFixed(2)}</td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-white/80 hover:bg-white/10 hover:text-white"
-                            onClick={() => {
-                              setEditingTariff(t);
-                              setModalOpen(true);
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-red-300 hover:bg-red-500/20 hover:text-red-200"
-                            onClick={() => setDeleteTarget(t)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        )}
-      </main>
+        </main>
+      </div>
 
       <TariffFormModal
         open={modalOpen}

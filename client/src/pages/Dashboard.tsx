@@ -4,61 +4,54 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import Sidebar from '@/components/Sidebar'
-import { 
-  Building, 
-  FileText, 
+import {
+  Building,
+  FileText,
   Euro,
   TrendingUp,
+  TrendingDown,
   Plus,
   Users,
-  User,
   Clock,
   Calendar,
   Wallet,
-  StickyNote
+  StickyNote,
+  AlertTriangle,
+  Bell,
+  Receipt,
+  ArrowRight,
+  Activity,
+  BarChart3,
+  ChevronRight,
 } from 'lucide-react'
 import { UserAccountButton } from '@/components/UserAccountButton'
-import { Link, useLocation } from 'wouter'
-import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { useDashboardMetrics } from '@/hooks/useDashboardMetrics'
+import { useLocation } from 'wouter'
+import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { useDashboardMetrics, type DashboardAlert, type RecentActivity } from '@/hooks/useDashboardMetrics'
 import { useChantiers } from '@/context/ChantiersContext'
-import { fetchChantierAssignmentsByChantier, type TeamMember } from '@/lib/supabase'
-import { fetchPlanningNoteForDate } from '@/lib/supabasePlanningNotes'
+import { useUserSettings } from '@/context/UserSettingsContext'
+import { fetchPlanningNotesForRange, type PlanningNote } from '@/lib/supabasePlanningNotes'
 import { toNoteDateKey } from '@/lib/planningUtils'
 
-// Parse "YYYY-MM-DD" (ou ISO avec time) en date locale pour éviter le décalage UTC
-function parseLocalDate(dateStr: string): Date {
-  const datePart = dateStr.slice(0, 10);
-  const [y, m, d] = datePart.split('-').map(Number);
-  return new Date(y, m - 1, d);
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Bonjour";
+  if (h < 18) return "Bon après-midi";
+  return "Bonsoir";
 }
 
-// Fonction pour parser la durée et calculer la date de fin
-function calculateEndDate(dateDebut: string, duree: string): Date {
-  const startDate = parseLocalDate(dateDebut);
-  const dureeLower = duree.toLowerCase().trim();
-  
-  // Parser différentes formats de durée
-  let daysToAdd = 0;
-  
-  if (dureeLower.includes('semaine') || dureeLower.includes('sem')) {
-    const weeks = parseInt(dureeLower.match(/\d+/)?.[0] || '1');
-    daysToAdd = weeks * 7;
-  } else if (dureeLower.includes('mois')) {
-    const months = parseInt(dureeLower.match(/\d+/)?.[0] || '1');
-    daysToAdd = months * 30; // Approximation
-  } else if (dureeLower.includes('jour') || dureeLower.includes('j')) {
-    const days = parseInt(dureeLower.match(/\d+/)?.[0] || '1');
-    daysToAdd = days;
-  } else {
-    // Si c'est juste un nombre, on assume des jours
-    const days = parseInt(dureeLower.match(/\d+/)?.[0] || '1');
-    daysToAdd = days;
-  }
-  
-  const endDate = new Date(startDate);
-  endDate.setDate(endDate.getDate() + daysToAdd);
-  return endDate;
+function formatRelativeDate(d: Date): string {
+  const now = new Date();
+  const diff = now.getTime() - d.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "à l'instant";
+  if (mins < 60) return `il y a ${mins} min`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `il y a ${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "hier";
+  if (days < 7) return `il y a ${days} jours`;
+  return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
 }
 
 export default function Dashboard() {
@@ -70,139 +63,94 @@ export default function Dashboard() {
       setLocation('/team-dashboard')
     }
   }, [setLocation])
-  
+
   return (
     <div className="min-h-screen relative overflow-hidden">
       <div className="relative z-10">
         <Sidebar />
-
-        {/* Main Content */}
         <main className="ml-0 lg:ml-0 p-4 sm:p-6 lg:p-8 overflow-x-hidden">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={location}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="max-w-7xl mx-auto min-w-0"
-          >
-            {/* Header */}
-            <div className="mb-6 sm:mb-8 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between min-w-0">
-              <div className="min-w-0 w-full sm:flex-1 pl-20">
-                <h1 className="text-2xl sm:text-4xl font-light tracking-tight text-white mb-2 drop-shadow-lg sm:truncate">
-                  Dashboard
-                </h1>
-                <p className="text-white/90 drop-shadow-md text-sm sm:text-base sm:truncate">Vue d'ensemble de votre activité</p>
-              </div>
-              <div className="flex-shrink-0 w-full sm:w-auto">
-                <UserAccountButton variant="inline" />
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="space-y-6">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              className="max-w-7xl mx-auto min-w-0"
+            >
               <OverviewTab />
-            </div>
-          </motion.div>
-        </AnimatePresence>
-      </main>
+            </motion.div>
+          </AnimatePresence>
+        </main>
       </div>
     </div>
   )
 }
 
-// Overview Tab Component
 function OverviewTab() {
   const [, setLocation] = useLocation();
   const { chantiers } = useChantiers();
-  const [assignmentsByChantierId, setAssignmentsByChantierId] = useState<Record<string, TeamMember[]>>({});
-  const [loadingAssignments, setLoadingAssignments] = useState(false);
-  const [noteToday, setNoteToday] = useState<string | null>(null);
+  const { profile } = useUserSettings();
+  const [planningNotes, setPlanningNotes] = useState<PlanningNote[]>([]);
 
   const todayKey = toNoteDateKey(new Date());
+  const weekEnd = new Date();
+  weekEnd.setDate(weekEnd.getDate() + 7);
+  const weekEndKey = toNoteDateKey(weekEnd);
 
   useEffect(() => {
     let cancelled = false;
-    fetchPlanningNoteForDate(todayKey).then((note) => {
-      if (!cancelled && note?.content?.trim()) setNoteToday(note.content.trim());
-      else if (!cancelled) setNoteToday(null);
+    fetchPlanningNotesForRange(todayKey, weekEndKey).then((notes) => {
+      if (!cancelled) setPlanningNotes(notes.filter((n) => n.content?.trim()));
     });
     return () => { cancelled = true; };
-  }, [todayKey]);
+  }, [todayKey, weekEndKey]);
 
   const {
     totalRevenue,
+    previousMonthRevenue,
     activeChantiers,
     pendingQuotes,
     conversionRate,
     remainingToCollect,
     revenueEvolution,
     conversionEvolution,
+    alerts,
+    recentActivity,
+    overdueInvoicesCount,
+    expiringQuotesCount,
+    lateProjectsCount,
     loading,
     error,
   } = useDashboardMetrics();
 
-  // Filtrer les chantiers actifs aujourd'hui
-  const chantiersToday = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return chantiers.filter(chantier => {
-      const startDate = parseLocalDate(chantier.dateDebut);
-      const endDate = calculateEndDate(chantier.dateDebut, chantier.duree);
-      const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      return today >= start && today <= end;
-    });
-  }, [chantiers]);
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 0 }).format(amount);
 
-  // Charger les affectations d'équipe pour les chantiers du jour
-  useEffect(() => {
-    if (chantiersToday.length === 0) {
-      setAssignmentsByChantierId({});
-      return;
+  const revenueTrend = previousMonthRevenue > 0
+    ? Math.round(((totalRevenue - previousMonthRevenue) / previousMonthRevenue) * 100)
+    : totalRevenue > 0 ? 100 : 0;
+
+  const userName = profile?.full_name?.split(" ")[0] || "";
+
+  // Merge planning notes into alerts
+  const allAlerts = useMemo(() => {
+    const merged: DashboardAlert[] = [...alerts];
+    for (const note of planningNotes) {
+      const dateLabel = note.note_date === todayKey
+        ? "Aujourd'hui"
+        : new Date(note.note_date + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "short" });
+      merged.push({
+        id: `note-${note.id}`,
+        type: "info",
+        icon: "note",
+        title: `Note : ${dateLabel}`,
+        detail: note.content.length > 80 ? note.content.slice(0, 80) + "…" : note.content,
+        link: "/dashboard/planning",
+      });
     }
-
-    let cancelled = false;
-    setLoadingAssignments(true);
-    
-    const loadAssignments = async () => {
-      try {
-        const results = await Promise.all(
-          chantiersToday.map(c => fetchChantierAssignmentsByChantier(c.id))
-        );
-        
-        if (cancelled) return;
-        
-        const map: Record<string, TeamMember[]> = {};
-        chantiersToday.forEach((c, i) => {
-          map[c.id] = results[i] ?? [];
-        });
-        setAssignmentsByChantierId(map);
-      } catch (error) {
-        console.error('Error loading assignments:', error);
-      } finally {
-        if (!cancelled) {
-          setLoadingAssignments(false);
-        }
-      }
-    };
-
-    loadAssignments();
-    return () => {
-      cancelled = true;
-    };
-  }, [chantiersToday]);
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("fr-FR", {
-      style: "currency",
-      currency: "EUR",
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
+    return merged;
+  }, [alerts, planningNotes, todayKey]);
 
   if (loading) {
     return (
@@ -228,232 +176,365 @@ function OverviewTab() {
 
   return (
     <div className="space-y-6">
-      {/* Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <MetricCard
-          title="Chiffre d'Affaires"
+      {/* Welcome Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between min-w-0">
+        <div className="min-w-0 w-full sm:flex-1 pl-20">
+          <h1 className="text-2xl sm:text-4xl font-light tracking-tight text-white mb-1 drop-shadow-lg sm:truncate">
+            {getGreeting()}{userName ? `, ${userName}` : ""}
+          </h1>
+          <p className="text-white/70 drop-shadow-md text-sm sm:text-base">
+            {new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+          </p>
+        </div>
+        <div className="flex-shrink-0 w-full sm:w-auto">
+          <UserAccountButton variant="inline" />
+        </div>
+      </div>
+
+      {/* Alerts Section */}
+      {allAlerts.length > 0 && (
+        <Card className="bg-black/20 backdrop-blur-xl border border-white/10 shadow-xl rounded-2xl text-white overflow-hidden">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-white font-light flex items-center gap-2 text-base">
+              <Bell className="h-4 w-4 text-amber-400" />
+              Alertes & rappels
+              <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/50 text-xs ml-1">{allAlerts.length}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {allAlerts.map((alert) => (
+              <div
+                key={alert.id}
+                className={`flex items-start gap-3 p-3 rounded-xl cursor-pointer transition-colors ${
+                  alert.type === "danger"
+                    ? "bg-red-500/10 border border-red-500/20 hover:bg-red-500/20"
+                    : alert.type === "warning"
+                      ? "bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20"
+                      : "bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20"
+                }`}
+                onClick={() => alert.link && setLocation(alert.link)}
+              >
+                <div className={`mt-0.5 shrink-0 ${
+                  alert.type === "danger" ? "text-red-400" : alert.type === "warning" ? "text-amber-400" : "text-blue-400"
+                }`}>
+                  {alert.icon === "quote" && <FileText className="h-4 w-4" />}
+                  {alert.icon === "invoice" && <Receipt className="h-4 w-4" />}
+                  {alert.icon === "project" && <Building className="h-4 w-4" />}
+                  {alert.icon === "note" && <StickyNote className="h-4 w-4" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white">{alert.title}</p>
+                  <p className="text-xs text-white/60 truncate">{alert.detail}</p>
+                </div>
+                {alert.link && <ChevronRight className="h-4 w-4 text-white/30 shrink-0 mt-0.5" />}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+        <KpiCard
+          title="CA du mois"
           value={formatCurrency(totalRevenue)}
-          change={totalRevenue > 0 ? "Devis acceptés ce mois-ci (HT)" : "Aucun devis accepté ce mois-ci"}
+          trend={revenueTrend}
           icon={Euro}
-          delay={0.1}
+          onClick={() => setLocation("/dashboard/invoices")}
         />
-        <MetricCard
-          title="Chantiers en cours"
+        <KpiCard
+          title="Chantiers actifs"
           value={activeChantiers.toString()}
-          change={activeChantiers > 0 ? "Projets en cours" : "Aucun projet en cours"}
+          subtitle={lateProjectsCount > 0 ? `${lateProjectsCount} en retard` : undefined}
+          subtitleColor={lateProjectsCount > 0 ? "text-red-400" : undefined}
           icon={Building}
-          delay={0.2}
+          onClick={() => setLocation("/dashboard/projects")}
         />
-        <MetricCard
-          title="Devis En Attente"
+        <KpiCard
+          title="Devis en attente"
           value={pendingQuotes.toString()}
-          change={pendingQuotes > 0 ? "Réponses attendues" : "Aucun devis en attente"}
+          subtitle={expiringQuotesCount > 0 ? `${expiringQuotesCount} expire${expiringQuotesCount > 1 ? "nt" : ""} bientôt` : undefined}
+          subtitleColor="text-amber-400"
           icon={FileText}
-          delay={0.3}
+          onClick={() => setLocation("/dashboard/quotes")}
         />
-        <MetricCard
+        <KpiCard
           title="À encaisser"
           value={formatCurrency(remainingToCollect)}
-          change={remainingToCollect > 0 ? "Montant restant sur les factures" : "Toutes les factures soldées"}
+          subtitle={overdueInvoicesCount > 0 ? `${overdueInvoicesCount} en retard` : undefined}
+          subtitleColor="text-red-400"
           icon={Wallet}
-          delay={0.4}
+          onClick={() => setLocation("/dashboard/invoices")}
+        />
+        <KpiCard
+          title="Taux conversion"
+          value={`${conversionRate}%`}
+          icon={BarChart3}
+          className="col-span-2 lg:col-span-1"
         />
       </div>
 
-      {/* Charts */}
+      {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Revenue Chart */}
         <Card className="bg-black/20 backdrop-blur-xl border border-white/10 shadow-xl rounded-2xl text-white">
-          <CardHeader>
-            <CardTitle className="text-white font-light">Évolution des Revenus</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-white font-light text-base">Évolution des Revenus</CardTitle>
           </CardHeader>
           <CardContent>
             {revenueEvolution.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer width="100%" height={250}>
                 <AreaChart data={revenueEvolution}>
                   <defs>
                     <linearGradient id="colorRevenus" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#a78bfa" stopOpacity={0.5}/>
-                      <stop offset="95%" stopColor="#a78bfa" stopOpacity={0.1}/>
+                      <stop offset="5%" stopColor="#a78bfa" stopOpacity={0.5} />
+                      <stop offset="95%" stopColor="#a78bfa" stopOpacity={0.05} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
-                  <XAxis dataKey="name" stroke="rgba(255, 255, 255, 0.7)" />
-                  <YAxis 
-                    stroke="rgba(255, 255, 255, 0.7)" 
-                    domain={[0, (dataMax) => {
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                  <XAxis dataKey="name" stroke="rgba(255,255,255,0.5)" tick={{ fontSize: 11 }} />
+                  <YAxis
+                    stroke="rgba(255,255,255,0.5)"
+                    tick={{ fontSize: 11 }}
+                    domain={[0, (dataMax: number) => {
                       if (!dataMax || dataMax === 0) return 1000;
                       const rounded = Math.ceil(dataMax * 1.2);
                       const magnitude = Math.pow(10, Math.floor(Math.log10(rounded)));
                       return Math.ceil(rounded / magnitude) * magnitude;
                     }]}
-                    tickFormatter={(value) => {
-                      if (value >= 1000) {
-                        const k = Math.round(value / 1000);
-                        return `${k}k`;
-                      }
-                      return Math.round(value).toString();
-                    }}
+                    tickFormatter={(v: number) => v >= 1000 ? `${Math.round(v / 1000)}k` : Math.round(v).toString()}
                   />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      borderRadius: '12px',
-                      color: '#fff'
-                    }}
+                  <Tooltip
+                    contentStyle={{ backgroundColor: "rgba(0,0,0,0.85)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "12px", color: "#fff", fontSize: 13 }}
+                    formatter={(value: number) => [new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 0 }).format(value), "Revenus"]}
                   />
-                  <Area type="monotone" dataKey="revenus" stroke="#a78bfa" fillOpacity={1} fill="url(#colorRevenus)" />
+                  <Area type="monotone" dataKey="revenus" stroke="#a78bfa" strokeWidth={2} fillOpacity={1} fill="url(#colorRevenus)" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex items-center justify-center h-64 text-white/60">
-                Aucune donnée de revenus disponible
+              <div className="flex items-center justify-center h-[250px] text-white/50 text-sm">
+                Aucune donnée de revenus
               </div>
             )}
           </CardContent>
         </Card>
 
+        {/* Conversion Chart */}
         <Card className="bg-black/20 backdrop-blur-xl border border-white/10 shadow-xl rounded-2xl text-white">
-          <CardHeader>
-            <CardTitle className="text-white font-light flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Chantiers du Jour
-            </CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-white font-light text-base">Taux de Conversion</CardTitle>
           </CardHeader>
-          <CardContent className="p-6 pt-0">
-            {noteToday !== null && (
-              <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
-                <div className="flex items-center gap-2 text-amber-200/90 text-sm font-medium mb-1">
-                  <StickyNote className="h-4 w-4 shrink-0" />
-                  Note du jour
-                </div>
-                <p className="text-white/90 text-sm whitespace-pre-wrap">{noteToday}</p>
-              </div>
-            )}
-            {loadingAssignments ? (
-              <div className="flex items-center justify-center h-64 text-white/60">
-                <div className="text-center">
-                  <div className="text-sm mb-2">Chargement des affectations...</div>
-                </div>
-              </div>
-            ) : chantiersToday.length === 0 ? (
-              <div className="flex items-center justify-center h-64 text-white/60">
-                <div className="text-center">
-                  <Building className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <div className="text-sm">Aucun projet aujourd'hui</div>
-                </div>
-              </div>
+          <CardContent>
+            {conversionEvolution.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={conversionEvolution}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                  <XAxis dataKey="name" stroke="rgba(255,255,255,0.5)" tick={{ fontSize: 11 }} />
+                  <YAxis stroke="rgba(255,255,255,0.5)" tick={{ fontSize: 11 }} domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: "rgba(0,0,0,0.85)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "12px", color: "#fff", fontSize: 13 }}
+                    formatter={(value: number) => [`${value}%`, "Taux"]}
+                  />
+                  <Line type="monotone" dataKey="taux" stroke="#34d399" strokeWidth={2} dot={{ r: 4, fill: "#34d399" }} />
+                </LineChart>
+              </ResponsiveContainer>
             ) : (
-              <div className="space-y-3">
-                {chantiersToday.map(chantier => {
-                  const startDate = parseLocalDate(chantier.dateDebut);
-                  const endDate = calculateEndDate(chantier.dateDebut, chantier.duree);
-                  const members = assignmentsByChantierId[chantier.id] ?? [];
-                  
-                  return (
-                    <div
-                      key={chantier.id}
-                      className="p-4 rounded-lg bg-black/20 border border-white/10 hover:bg-black/30 transition-colors"
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Building className="h-4 w-4 text-white/70" />
-                            <span className="font-semibold text-white">{chantier.nom}</span>
-                            <Badge className={
-                              chantier.statut === 'planifié'
-                                ? 'bg-blue-500/20 text-blue-300 border-blue-500/50'
-                                : chantier.statut === 'en cours'
-                                ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/50'
-                                : 'bg-green-500/20 text-green-300 border-green-500/50'
-                            }>
-                              {chantier.statut}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-4 text-sm text-white/70 mb-2">
-                            <div className="flex items-center gap-1">
-                              <User className="h-3 w-3" />
-                              {chantier.clientName}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {startDate.toLocaleDateString('fr-FR')} - {endDate.toLocaleDateString('fr-FR')}
-                            </div>
-                          </div>
-                          {members.length > 0 && (
-                            <div className="flex items-center gap-2 text-sm text-white/80 mt-2 pt-2 border-t border-white/10">
-                              <Users className="h-4 w-4 text-white/70 shrink-0" />
-                              <span className="text-white/70">Équipe :</span>
-                              <span className="text-white">{members.map(m => m.name).join(', ')}</span>
-                            </div>
-                          )}
-                          {members.length === 0 && (
-                            <div className="flex items-center gap-2 text-sm text-white/50 mt-2 pt-2 border-t border-white/10">
-                              <Users className="h-4 w-4 shrink-0" />
-                              <span>Aucun membre assigné</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="flex items-center justify-center h-[250px] text-white/50 text-sm">
+                Pas encore de données
               </div>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Quick Actions */}
-      <Card className="bg-black/20 backdrop-blur-xl border border-white/10 shadow-xl rounded-2xl text-white">
-        <CardHeader>
-          <CardTitle className="text-white font-light">Actions Rapides</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Button 
-            className="w-full justify-start h-auto p-4 rounded-xl bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/30 border border-violet-200 dark:border-violet-800"
-            onClick={() => setLocation('/dashboard/projects?openDialog=true')}
-          >
-            <Plus className="h-5 w-5 mr-3" />
-            <div className="text-left">
-              <div className="font-medium">Nouveau Chantier</div>
-              <div className="text-xs opacity-70">Créer un projet</div>
+      {/* Bottom Row: Activity + Contextual Actions */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recent Activity */}
+        <Card className="lg:col-span-2 bg-black/20 backdrop-blur-xl border border-white/10 shadow-xl rounded-2xl text-white">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-white font-light text-base flex items-center gap-2">
+              <Activity className="h-4 w-4 text-violet-400" />
+              Dernière activité
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {recentActivity.length === 0 ? (
+              <div className="flex items-center justify-center h-40 text-white/50 text-sm">
+                <div className="text-center">
+                  <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p>Aucune activité récente</p>
+                  <p className="text-xs mt-1">Les devis et factures apparaîtront ici</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {recentActivity.map((item) => (
+                  <div key={item.id} className="flex items-center gap-3 py-2.5 px-3 rounded-lg hover:bg-white/5 transition-colors">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                      item.type === "quote" ? "bg-violet-500/20 text-violet-400" :
+                      item.type === "invoice" ? "bg-green-500/20 text-green-400" :
+                      "bg-blue-500/20 text-blue-400"
+                    }`}>
+                      {item.type === "quote" && <FileText className="h-3.5 w-3.5" />}
+                      {item.type === "invoice" && <Receipt className="h-3.5 w-3.5" />}
+                      {item.type === "project" && <Building className="h-3.5 w-3.5" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white">
+                        <span className="font-medium">{item.action}</span>
+                        <span className="text-white/60"> — {item.label}</span>
+                      </p>
+                    </div>
+                    {item.amount != null && (
+                      <span className="text-sm font-medium text-white/80 shrink-0">
+                        {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 0 }).format(item.amount)}
+                      </span>
+                    )}
+                    <span className="text-xs text-white/40 shrink-0 hidden sm:block">
+                      {formatRelativeDate(item.date)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Contextual Actions */}
+        <Card className="bg-black/20 backdrop-blur-xl border border-white/10 shadow-xl rounded-2xl text-white">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-white font-light text-base">Actions</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {pendingQuotes > 0 && (
+              <ContextualAction
+                icon={FileText}
+                label={`${pendingQuotes} devis en attente`}
+                action="Voir"
+                color="violet"
+                onClick={() => setLocation("/dashboard/quotes")}
+              />
+            )}
+            {overdueInvoicesCount > 0 && (
+              <ContextualAction
+                icon={Receipt}
+                label={`${overdueInvoicesCount} facture${overdueInvoicesCount > 1 ? "s" : ""} impayée${overdueInvoicesCount > 1 ? "s" : ""}`}
+                action="Relancer"
+                color="red"
+                onClick={() => setLocation("/dashboard/invoices")}
+              />
+            )}
+            {lateProjectsCount > 0 && (
+              <ContextualAction
+                icon={AlertTriangle}
+                label={`${lateProjectsCount} projet${lateProjectsCount > 1 ? "s" : ""} en retard`}
+                action="Gérer"
+                color="amber"
+                onClick={() => setLocation("/dashboard/projects")}
+              />
+            )}
+
+            <div className="border-t border-white/10 pt-3 mt-3 space-y-2">
+              <p className="text-xs text-white/50 uppercase tracking-wider mb-2">Raccourcis</p>
+              <QuickAction icon={Plus} label="Nouveau projet" onClick={() => setLocation("/dashboard/projects?openDialog=true")} />
+              <QuickAction icon={FileText} label="Créer un devis" onClick={() => setLocation("/dashboard/quotes")} />
+              <QuickAction icon={Receipt} label="Créer une facture" onClick={() => setLocation("/dashboard/invoices")} />
+              <QuickAction icon={Calendar} label="Voir le planning" onClick={() => setLocation("/dashboard/planning")} />
+              <QuickAction icon={Users} label="Gérer l'équipe" onClick={() => setLocation("/dashboard/team")} />
             </div>
-          </Button>
-          <Button 
-            className="w-full justify-start h-auto p-4 rounded-xl bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/30 border border-violet-200 dark:border-violet-800"
-            onClick={() => setLocation('/dashboard/quotes')}
-          >
-            <FileText className="h-5 w-5 mr-3" />
-            <div className="text-left">
-              <div className="font-medium">Créer un Devis</div>
-              <div className="text-xs opacity-70">Générer un devis</div>
-            </div>
-          </Button>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }
 
-function MetricCard({ title, value, change, icon: Icon, delay }: { title: string, value: string, change: string, icon: any, delay: number }) {
+function KpiCard({
+  title,
+  value,
+  trend,
+  subtitle,
+  subtitleColor,
+  icon: Icon,
+  onClick,
+  className = "",
+}: {
+  title: string;
+  value: string;
+  trend?: number;
+  subtitle?: string;
+  subtitleColor?: string;
+  icon: any;
+  onClick?: () => void;
+  className?: string;
+}) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay, duration: 0.4 }}
+    <Card
+      className={`bg-black/20 backdrop-blur-xl border border-white/10 shadow-xl rounded-2xl text-white ${onClick ? "cursor-pointer hover:bg-white/5 active:scale-[0.98]" : ""} transition-all ${className}`}
+      onClick={onClick}
     >
-      <Card className="bg-black/20 backdrop-blur-xl border border-white/10 shadow-xl rounded-2xl hover:shadow-2xl transition-shadow text-white">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium text-white/70">{title}</CardTitle>
-          <Icon className="h-5 w-5 text-violet-400" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-light text-white mb-1">{value}</div>
-          <p className="text-xs text-white/60">{change}</p>
-        </CardContent>
-      </Card>
-    </motion.div>
+      <CardContent className="p-3 sm:p-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs sm:text-sm text-white/60 truncate">{title}</span>
+          <Icon className="h-4 w-4 text-violet-400 shrink-0" />
+        </div>
+        <div className="text-xl sm:text-2xl lg:text-3xl font-light text-white truncate">{value}</div>
+        {trend !== undefined && trend !== 0 && (
+          <div className={`flex items-center gap-1 mt-1 text-xs ${trend > 0 ? "text-green-400" : "text-red-400"}`}>
+            {trend > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+            {trend > 0 ? "+" : ""}{trend}% vs mois précédent
+          </div>
+        )}
+        {subtitle && (
+          <p className={`text-xs mt-1 ${subtitleColor || "text-white/50"}`}>{subtitle}</p>
+        )}
+        {!trend && !subtitle && <div className="h-4" />}
+      </CardContent>
+    </Card>
   )
 }
 
+function ContextualAction({
+  icon: Icon,
+  label,
+  action,
+  color,
+  onClick,
+}: {
+  icon: any;
+  label: string;
+  action: string;
+  color: "violet" | "red" | "amber" | "green";
+  onClick: () => void;
+}) {
+  const colors = {
+    violet: "bg-violet-500/10 border-violet-500/20 text-violet-300",
+    red: "bg-red-500/10 border-red-500/20 text-red-300",
+    amber: "bg-amber-500/10 border-amber-500/20 text-amber-300",
+    green: "bg-green-500/10 border-green-500/20 text-green-300",
+  };
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-colors hover:bg-white/5 ${colors[color]}`}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      <span className="flex-1 text-left text-sm text-white">{label}</span>
+      <span className="text-xs opacity-70">{action}</span>
+      <ArrowRight className="h-3.5 w-3.5 opacity-50" />
+    </button>
+  );
+}
+
+function QuickAction({ icon: Icon, label, onClick }: { icon: any; label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full flex items-center gap-3 p-2.5 rounded-lg text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      <span className="flex-1 text-left text-sm">{label}</span>
+      <ChevronRight className="h-3.5 w-3.5 opacity-30" />
+    </button>
+  );
+}
