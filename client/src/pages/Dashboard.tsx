@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import Sidebar from '@/components/Sidebar'
+import { OnboardingDialog, useOnboarding } from '@/components/OnboardingDialog'
 import {
   Building,
   FileText,
@@ -56,6 +57,8 @@ function formatRelativeDate(d: Date): string {
 
 export default function Dashboard() {
   const [location, setLocation] = useLocation();
+  const { profile } = useUserSettings();
+  const { showOnboarding, dismissOnboarding } = useOnboarding();
 
   useEffect(() => {
     const userType = localStorage.getItem('userType')
@@ -83,6 +86,7 @@ export default function Dashboard() {
           </AnimatePresence>
         </main>
       </div>
+      <OnboardingDialog open={showOnboarding} onDone={dismissOnboarding} userName={profile?.full_name?.split(' ')[0]} />
     </div>
   )
 }

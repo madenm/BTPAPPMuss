@@ -8,7 +8,7 @@ import { UserAccountButton } from '@/components/UserAccountButton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Upload, Wand2, Plus, Calculator, User, ArrowRight, ArrowLeft, CheckCircle2,
-  Search, Loader2, FileDown, Building, ChevronDown, ChevronUp, AlertTriangle,
+  Search, Loader2, Building, ChevronDown, ChevronUp, AlertTriangle,
   Clock, Users, DollarSign, Pencil, RefreshCw, FileText, Camera, SkipForward,
   TrendingUp, TrendingDown, Shield,
 } from 'lucide-react';
@@ -23,7 +23,7 @@ import { useUserSettings } from '@/context/UserSettingsContext';
 import { uploadFile } from '@/lib/supabaseStorage';
 import { fetchTariffs } from '@/lib/supabaseTariffs';
 import { getCatalogForMetier, ARTIPRIX_CHAPTERS, type ArtiprixChapter } from '@/lib/artiprixCatalog';
-import { downloadQuotePdf, fetchLogoDataUrl } from '@/lib/quotePdf';
+
 import { TYPE_CHANTIER_LABELS } from '@/lib/planningUtils';
 import { getQuestionsForType, hasQuestionsForType, validateAnswers } from '@/lib/estimationQuestionnaire';
 import { EstimationQuestionnaire } from '@/components/EstimationQuestionnaire';
@@ -333,46 +333,6 @@ export default function EstimationPage() {
     setNewClient({ name: '', email: '', phone: '' });
     setShowNewClientForm(false);
   };
-
-  const handleExportPdf = useCallback(async () => {
-    if (!analysisResults) return;
-    const materials = editingMaterials ? editableMaterials : (analysisResults.materiaux ?? []);
-    const subtotal = materials.reduce((s: number, m: any) => s + (m.prix ?? 0), 0);
-    const tvaRate = parseFloat(profile?.default_tva_rate || '20') || 20;
-    const tva = subtotal * (tvaRate / 100);
-    const total = subtotal + tva;
-    const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : null;
-
-    downloadQuotePdf({
-      clientInfo: {
-        name: selectedClient?.name ?? '',
-        email: selectedClient?.email ?? '',
-        phone: selectedClient?.phone ?? '',
-        address: '',
-      },
-      projectType: TYPE_CHANTIER_LABELS[chantierInfo.metier] ?? chantierInfo.metier,
-      projectDescription: `Estimation automatique — ${chantierInfo.surface} m²`,
-      validityDays: profile?.default_validity_days ?? '30',
-      items: materials.map((m: any) => ({
-        description: m.nom,
-        quantity: parseFloat(m.quantite) || 1,
-        unitPrice: m.prixUnitaire ?? m.prix,
-        total: m.prix,
-      })),
-      subtotal,
-      tva,
-      total,
-      themeColor: themeColor || undefined,
-      logoDataUrl: logoDataUrl ?? undefined,
-      companyName: profile?.company_name || profile?.full_name || undefined,
-      companyAddress: profile?.company_address ?? undefined,
-      companyCityPostal: profile?.company_city_postal ?? undefined,
-      companyPhone: profile?.company_phone ?? undefined,
-      companyEmail: profile?.company_email ?? undefined,
-      companySiret: profile?.company_siret ?? undefined,
-      companyLegal: [profile?.company_name, profile?.company_siret && `SIRET ${profile.company_siret}`, profile?.company_tva_number && `TVA ${profile.company_tva_number}`].filter(Boolean).join(' — ') || undefined,
-    });
-  }, [analysisResults, editableMaterials, editingMaterials, selectedClient, chantierInfo, profile, logoUrl, themeColor]);
 
   const handleCreateChantierFromEstimation = useCallback(() => {
     if (!analysisResults) return;
@@ -808,9 +768,6 @@ export default function EstimationPage() {
                 </Button>
                 <Button variant="outline" onClick={handleCreateChantierFromEstimation} className="text-white border-white/20 hover:bg-white/10">
                   <Building className="h-4 w-4 mr-2" />Créer un projet
-                </Button>
-                <Button variant="outline" onClick={handleExportPdf} className="text-white border-white/20 hover:bg-white/10">
-                  <FileDown className="h-4 w-4 mr-2" />Export PDF
                 </Button>
                 <Button variant="outline" onClick={handleRetryEstimation} className="text-white border-white/20 hover:bg-white/10">
                   <RefreshCw className="h-4 w-4 mr-2" />Refaire l&apos;estimation

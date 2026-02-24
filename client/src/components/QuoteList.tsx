@@ -45,9 +45,11 @@ export interface QuoteListProps {
   loading: boolean;
   statusFilter: string;
   searchQuery: string;
+  projectFilter?: string;
   chantiers: QuoteListChantier[];
   onStatusFilterChange: (value: string) => void;
   onSearchQueryChange: (value: string) => void;
+  onProjectFilterChange?: (value: string) => void;
   filteredQuotes: SupabaseQuote[];
   getQuoteDisplayNumber: (quotes: SupabaseQuote[], id: string) => string | undefined;
   onNewQuote: () => void;
@@ -84,8 +86,10 @@ export function QuoteList({
   loading,
   statusFilter,
   searchQuery,
+  projectFilter,
   onStatusFilterChange,
   onSearchQueryChange,
+  onProjectFilterChange,
   filteredQuotes,
   getQuoteDisplayNumber,
   chantiers,
@@ -156,6 +160,20 @@ export function QuoteList({
                       ))}
                     </SelectContent>
                   </Select>
+                  {onProjectFilterChange && chantiers.length > 0 && (
+                    <Select value={projectFilter || 'all'} onValueChange={onProjectFilterChange}>
+                      <SelectTrigger className="w-[180px] rounded-xl border-gray-200 dark:border-gray-700">
+                        <Building className="h-4 w-4 mr-1 text-violet-400 shrink-0" />
+                        <SelectValue placeholder="Projet" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tous les projets</SelectItem>
+                        {chantiers.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.nom}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               </div>
             </CardHeader>

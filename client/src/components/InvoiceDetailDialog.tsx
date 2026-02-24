@@ -165,6 +165,7 @@ export function InvoiceDetailDialog({
         },
       });
 
+      const replyTo = profile?.company_email || user?.email || null;
       const res = await fetch(`/api/invoices/${invoice.id}/send-email`, {
         method: 'POST',
         headers: getApiPostHeaders(session?.access_token),
@@ -173,6 +174,7 @@ export function InvoiceDetailDialog({
           to: invoice.client_email,
           subject: `Facture ${invoice.invoice_number}`,
           message: emailHtml,
+          replyTo,
         }),
       });
 

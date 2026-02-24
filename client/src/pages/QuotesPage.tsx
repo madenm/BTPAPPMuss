@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { AnimatePresence, motion } from 'framer-motion';
 import { PageWrapper } from '@/components/PageWrapper';
@@ -99,6 +99,13 @@ export default function QuotesPage() {
   const [listLoading, setListLoading] = useState(false);
   const [listStatusFilter, setListStatusFilter] = useState<string>('all');
   const [listSearchQuery, setListSearchQuery] = useState('');
+  const [listProjectFilter, setListProjectFilter] = useState<string>('all');
+
+  useEffect(() => {
+    const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+    const fp = params.get('filterProject');
+    if (fp) setListProjectFilter(fp);
+  }, []);
 
   const [step, setStep] = useState(1);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -768,14 +775,21 @@ export default function QuotesPage() {
     }
   };
 
-  const filteredListQuotes = listSearchQuery.trim()
-    ? listQuotes.filter((q) => {
+  const filteredListQuotes = useMemo(() => {
+    let result = listQuotes;
+    if (listProjectFilter && listProjectFilter !== 'all') {
+      result = result.filter((q) => q.chantier_id === listProjectFilter);
+    }
+    if (listSearchQuery.trim()) {
+      const query = listSearchQuery.toLowerCase();
+      result = result.filter((q) => {
         const qn = getQuoteDisplayNumber(listQuotes, q.id);
         const client = (q.client_name ?? '').toLowerCase();
-        const query = listSearchQuery.toLowerCase();
         return qn.toLowerCase().includes(query) || client.includes(query);
-      })
-    : listQuotes;
+      });
+    }
+    return result;
+  }, [listQuotes, listProjectFilter, listSearchQuery]);
 
   // Fonction helper pour vérifier si le devis peut être sauvegardé
   const canSaveQuote = (): boolean => {
@@ -1279,9 +1293,11 @@ export default function QuotesPage() {
           loading={listLoading}
           statusFilter={listStatusFilter}
           searchQuery={listSearchQuery}
+          projectFilter={listProjectFilter}
           chantiers={chantiers}
           onStatusFilterChange={setListStatusFilter}
           onSearchQueryChange={setListSearchQuery}
+          onProjectFilterChange={setListProjectFilter}
           filteredQuotes={filteredListQuotes}
           getQuoteDisplayNumber={getQuoteDisplayNumber}
           onNewQuote={() => {

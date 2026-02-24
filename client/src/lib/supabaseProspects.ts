@@ -1,4 +1,4 @@
-import { supabase } from "./supabaseClient";
+import { supabase, isSupabaseTableMissing } from "./supabaseClient";
 
 export interface Prospect {
   id: string;
@@ -9,6 +9,10 @@ export interface Prospect {
   notes?: string;
   stage: string;
   createdAt: string;
+  linkedQuoteId?: string;
+  linkedInvoiceId?: string;
+  lastActionAt?: string;
+  lastActionType?: string;
 }
 
 export interface SupabaseProspectRow {
@@ -21,6 +25,10 @@ export interface SupabaseProspectRow {
   notes: string | null;
   stage: string;
   created_at: string;
+  linked_quote_id: string | null;
+  linked_invoice_id: string | null;
+  last_action_at: string | null;
+  last_action_type: string | null;
 }
 
 export type NewProspectPayload = {
@@ -38,6 +46,33 @@ export type ProspectUpdatePayload = {
   phone?: string;
   company?: string;
   notes?: string;
+  linked_quote_id?: string | null;
+  linked_invoice_id?: string | null;
+  last_action_at?: string;
+  last_action_type?: string;
+};
+
+export type ProspectStage =
+  | 'all'
+  | 'quote'
+  | 'quote_followup1'
+  | 'quote_followup2'
+  | 'invoice'
+  | 'invoice_followup1'
+  | 'invoice_followup2'
+  | 'won'
+  | 'lost';
+
+export const STAGE_LABELS: Record<ProspectStage, string> = {
+  all: 'Nouveau prospect',
+  quote: 'Devis envoyé',
+  quote_followup1: 'Relance devis 1',
+  quote_followup2: 'Relance devis 2',
+  invoice: 'Facture envoyée',
+  invoice_followup1: 'Relance facture 1',
+  invoice_followup2: 'Relance facture 2',
+  won: 'Gagné',
+  lost: 'Perdu',
 };
 
 function mapFromSupabase(row: SupabaseProspectRow): Prospect {
@@ -50,6 +85,10 @@ function mapFromSupabase(row: SupabaseProspectRow): Prospect {
     notes: row.notes ?? undefined,
     stage: row.stage,
     createdAt: row.created_at,
+    linkedQuoteId: row.linked_quote_id ?? undefined,
+    linkedInvoiceId: row.linked_invoice_id ?? undefined,
+    lastActionAt: row.last_action_at ?? undefined,
+    lastActionType: row.last_action_type ?? undefined,
   };
 }
 
@@ -61,11 +100,12 @@ export async function fetchProspectsForUser(userId: string): Promise<Prospect[]>
     .order("created_at", { ascending: false });
 
   if (error) {
+    if (isSupabaseTableMissing(error)) return [];
     console.error("Error fetching prospects:", error);
     throw error;
   }
 
-  return (data ?? []).map(mapFromSupabase);
+  return (data ?? []).map((row) => mapFromSupabase(row as SupabaseProspectRow));
 }
 
 export async function insertProspect(
@@ -106,6 +146,10 @@ export async function updateProspect(
   if (updates.phone !== undefined) updateData.phone = updates.phone ?? null;
   if (updates.company !== undefined) updateData.company = updates.company ?? null;
   if (updates.notes !== undefined) updateData.notes = updates.notes ?? null;
+  if (updates.linked_quote_id !== undefined) updateData.linked_quote_id = updates.linked_quote_id;
+  if (updates.linked_invoice_id !== undefined) updateData.linked_invoice_id = updates.linked_invoice_id;
+  if (updates.last_action_at !== undefined) updateData.last_action_at = updates.last_action_at;
+  if (updates.last_action_type !== undefined) updateData.last_action_type = updates.last_action_type;
 
   const { data, error } = await supabase
     .from("prospects")

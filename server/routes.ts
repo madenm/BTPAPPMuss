@@ -851,9 +851,10 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
   });
 
   app.post("/api/send-quote-email", async (req: Request, res: Response) => {
-    const { to, fromEmail, pdfBase64, fileName, htmlContent } = req.body as {
+    const { to, fromEmail, replyTo, pdfBase64, fileName, htmlContent } = req.body as {
       to?: string;
       fromEmail?: string | null;
+      replyTo?: string | null;
       pdfBase64?: string;
       fileName?: string;
       htmlContent?: string | null;
@@ -891,9 +892,11 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
 
       try {
         const buffer = Buffer.from(pdfBase64, "base64");
+        const replyToAddr = replyTo && String(replyTo).trim() ? String(replyTo).trim() : undefined;
         const { data, error } = await resend.emails.send({
           from,
           to: toAddress,
+          ...(replyToAddr ? { replyTo: replyToAddr } : {}),
           subject: "Votre devis",
           html: (htmlContent && String(htmlContent).trim()) || "<p>Veuillez trouver ci-joint votre devis.</p>",
           attachments: [{ filename: attachmentFilename, content: buffer }],
@@ -931,11 +934,12 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
 
   // POST /api/send-followup-email - Envoyer un email de relance (sans pièce jointe)
   app.post("/api/send-followup-email", async (req: Request, res: Response) => {
-    const { to, subject, htmlContent, fromEmail } = req.body as {
+    const { to, subject, htmlContent, fromEmail, replyTo } = req.body as {
       to?: string;
       subject?: string;
       htmlContent?: string | null;
       fromEmail?: string | null;
+      replyTo?: string | null;
     };
 
     if (!to || typeof to !== "string" || !to.trim()) {
@@ -964,9 +968,11 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
 
       try {
         const resend = new Resend(resendApiKey);
+        const replyToAddr = replyTo && String(replyTo).trim() ? String(replyTo).trim() : undefined;
         const { data, error } = await resend.emails.send({
           from,
           to: toAddress,
+          ...(replyToAddr ? { replyTo: replyToAddr } : {}),
           subject: subjectText,
           html,
         });
@@ -1493,12 +1499,13 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
   });
   app.post("/api/invoices/:id/send-email", async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { userId, to, subject, message, pdfBase64 } = req.body as {
+    const { userId, to, subject, message, pdfBase64, replyTo } = req.body as {
       userId: string;
       to?: string;
       subject?: string;
       message?: string;
       pdfBase64?: string;
+      replyTo?: string | null;
     };
 
     const userIdVal = typeof userId === "string" ? userId.trim() : userId;
@@ -1546,9 +1553,11 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
       if (resendApiKey) {
         const resend = new Resend(resendApiKey);
         const fromInvoice = process.env.SENDER_EMAIL || process.env.RESEND_FROM || "onboarding@resend.dev";
+        const replyToAddr = replyTo && String(replyTo).trim() ? String(replyTo).trim() : undefined;
         const { data, error } = await resend.emails.send({
           from: fromInvoice,
           to: toAddress,
+          ...(replyToAddr ? { replyTo: replyToAddr } : {}),
           subject: subject || `Facture ${invoice.invoice_number}`,
           html: message || `<p>Veuillez trouver ci-joint votre facture ${invoice.invoice_number}.</p>`,
           attachments: [{ filename: attachmentFilename, content: pdfBuffer.toString("base64") }],
