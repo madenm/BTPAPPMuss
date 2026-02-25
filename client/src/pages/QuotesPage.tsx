@@ -178,6 +178,10 @@ export default function QuotesPage() {
   }, [showForm, user?.id, listStatusFilter]);
 
   const hasResetForNewRef = useRef(false);
+  const shouldSkipToStep3Ref = useRef(false);
+  const isFromEstimationRef = useRef(false);
+  const isFromDirectEstimationRef = useRef(false);
+
   useEffect(() => {
     if (!showForm) {
       hasResetForNewRef.current = false;
@@ -191,6 +195,11 @@ export default function QuotesPage() {
     }
     if (hasResetForNewRef.current) return;
     hasResetForNewRef.current = true;
+    
+    // Vérifier si on vient d'une estimation
+    const fromEstimation = searchParams.get('fromEstimation') === '1';
+    isFromEstimationRef.current = fromEstimation;
+    
     setStep(1);
     setEditingQuoteId(null);
     setEditingQuoteStatus(null);
@@ -209,35 +218,82 @@ export default function QuotesPage() {
     setQuoteLoadState('idle');
     lastAppliedQuoteIdRef.current = null;
 
-    if (searchParams.get('fromEstimation') === '1') {
+    if (fromEstimation) {
       try {
-        const raw = sessionStorage.getItem('estimationForDevis');
+        // Essayer d'abord le flux direct depuis estimation
+        let raw = sessionStorage.getItem('estimationForDevisDirect');
+        let isDirect = false;
+        
+        // Si pas de données directes, utiliser le flux normal
+        if (!raw) {
+          raw = sessionStorage.getItem('estimationForDevis');
+          isDirect = false;
+        } else {
+          isDirect = true;
+        }
+        
+        isFromDirectEstimationRef.current = isDirect;
+        
         if (raw) {
           const est = JSON.parse(raw) as {
             clientName?: string; clientEmail?: string; clientPhone?: string;
             projectType?: string; projectDescription?: string;
             items?: { description: string; quantity: number; unitPrice: number; unit: string }[];
             conditions?: string;
+            estimationData?: any;
           };
-          if (est.clientName) setClientInfo(prev => ({ ...prev, name: est.clientName!, email: est.clientEmail || '', phone: est.clientPhone || '' }));
+          if (est.clientName) {
+            setClientInfo(prev => ({ ...prev, name: est.clientName!, email: est.clientEmail || '', phone: est.clientPhone || '' }));
+          }
           if (est.projectType) setProjectType(est.projectType);
           if (est.projectDescription) setProjectDescription(est.projectDescription);
           if (est.conditions) setGeneralConditions(est.conditions);
           if (est.items?.length) {
-            setItems(est.items.map((it, i) => ({
+            const mappedItems = est.items.map((it, i) => ({
               id: String(i + 1),
               description: it.description,
               quantity: it.quantity || 1,
               unitPrice: it.unitPrice || 0,
               total: (it.quantity || 1) * (it.unitPrice || 0),
               unit: it.unit || '',
-            })));
+            }));
+            setItems(mappedItems);
+            // Marquer qu'on doit passer à l'étape 3
+            if (est.clientName && est.projectDescription && mappedItems.length > 0) {
+              shouldSkipToStep3Ref.current = true;
+              // Stocker les données d'estimation pour les afficher dans le devis
+              if (est.estimationData) {
+                sessionStorage.setItem('currentEstimationData', JSON.stringify(est.estimationData));
+              }
+            }
           }
-          sessionStorage.removeItem('estimationForDevis');
+          // Nettoyer le sessionStorage approprié
+          sessionStorage.removeItem(isDirect ? 'estimationForDevisDirect' : 'estimationForDevis');
         }
       } catch {}
     }
   }, [showForm, pathname, searchParams.get('new'), searchParams.get('quoteId')]);
+
+  // Passer directement à l'étape 3 si on vient d'une estimation et les données sont disponibles
+  useEffect(() => {
+    if (!isFromEstimationRef.current || !shouldSkipToStep3Ref.current) return;
+    
+    const hasClientName = clientInfo.name?.trim().length ?? 0 > 0;
+    const hasClientEmail = clientInfo.email?.trim().length ?? 0 > 0;
+    const hasProjectDescription = projectDescription?.trim().length ?? 0 > 0;
+    const hasItems = items.length > 0 && items.some(i => i.description?.trim());
+    
+    // On exige toujours au minimum: nom client + email + description + items
+    // car ces données sont nécessaires pour sauvegarder ou télécharger le devis
+    const canSkipToStep3 = hasClientName && hasClientEmail && hasProjectDescription && hasItems;
+    
+    if (canSkipToStep3) {
+      shouldSkipToStep3Ref.current = false;
+      isFromEstimationRef.current = false;
+      isFromDirectEstimationRef.current = false;
+      setStep(3);
+    }
+  }, [clientInfo, projectDescription, items]);
 
   useEffect(() => {
     if (step !== 2 && step !== 3) return;
