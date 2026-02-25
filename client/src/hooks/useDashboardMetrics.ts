@@ -3,7 +3,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useChantiers } from "@/context/ChantiersContext";
 import { fetchQuotesForUser } from "@/lib/supabaseQuotes";
 import { fetchRevenuesByPeriod } from "@/lib/supabaseRevenues";
-import { fetchInvoicesForUser } from "@/lib/supabaseInvoices";
+import { fetchInvoicesForUser, type InvoiceWithPayments } from "@/lib/supabaseInvoices";
 
 export interface DashboardAlert {
   id: string;
@@ -37,6 +37,7 @@ export interface DashboardMetrics {
   overdueInvoicesCount: number;
   expiringQuotesCount: number;
   lateProjectsCount: number;
+  pendingInvoices: InvoiceWithPayments[];
   loading: boolean;
   error: string | null;
 }
@@ -58,6 +59,7 @@ export function useDashboardMetrics(): DashboardMetrics {
     overdueInvoicesCount: 0,
     expiringQuotesCount: 0,
     lateProjectsCount: 0,
+    pendingInvoices: [],
     loading: true,
     error: null,
   });
@@ -120,6 +122,11 @@ export function useDashboardMetrics(): DashboardMetrics {
         }
         const conversionRate =
           devisResolved > 0 ? Math.round((devisConverted / devisResolved) * 100) : 0;
+
+        // Factures en attente de paiement (non payées, non annulées, non brouillon)
+        const pendingInvoices = invoices
+          .filter((inv) => inv.status !== "payée" && inv.status !== "annulée" && inv.status !== "brouillon")
+          .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
 
         // Montant restant à encaisser = somme (total_ttc - payé) pour les factures non annulées
         const remainingToCollect = invoices
@@ -364,6 +371,7 @@ export function useDashboardMetrics(): DashboardMetrics {
           overdueInvoicesCount: overdueInvoices.length,
           expiringQuotesCount: expiringQuotes.length,
           lateProjectsCount: lateProjects.length,
+          pendingInvoices,
           loading: false,
           error: null,
         });

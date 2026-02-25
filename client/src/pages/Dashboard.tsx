@@ -1,8 +1,15 @@
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useCallback } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import Sidebar from '@/components/Sidebar'
 import { OnboardingDialog, useOnboarding } from '@/components/OnboardingDialog'
 import {
@@ -24,13 +31,22 @@ import {
   Activity,
   BarChart3,
   ChevronRight,
+  Check,
+  Loader2,
+  Send,
+  CreditCard,
 } from 'lucide-react'
 import { UserAccountButton } from '@/components/UserAccountButton'
 import { useLocation } from 'wouter'
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useDashboardMetrics, type DashboardAlert, type RecentActivity } from '@/hooks/useDashboardMetrics'
 import { useChantiers } from '@/context/ChantiersContext'
+import { useAuth } from '@/context/AuthContext'
 import { useUserSettings } from '@/context/UserSettingsContext'
+import { useTeamEffectiveUserId } from '@/context/TeamEffectiveUserIdContext'
+import { insertPayment, type InvoiceWithPayments } from '@/lib/supabaseInvoices'
+import { getApiPostHeaders } from '@/lib/apiHeaders'
+import { useToast } from '@/hooks/use-toast'
 import { fetchPlanningNotesForRange, type PlanningNote } from '@/lib/supabasePlanningNotes'
 import { toNoteDateKey } from '@/lib/planningUtils'
 
@@ -93,9 +109,16 @@ export default function Dashboard() {
 
 function OverviewTab() {
   const [, setLocation] = useLocation();
+  const { user, session } = useAuth();
+  const effectiveUserId = useTeamEffectiveUserId();
+  const userId = effectiveUserId ?? user?.id ?? null;
   const { chantiers } = useChantiers();
   const { profile } = useUserSettings();
+  const { toast } = useToast();
   const [planningNotes, setPlanningNotes] = useState<PlanningNote[]>([]);
+  const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
+  const [paidIds, setPaidIds] = useState<Set<string>>(new Set());
+  const [sendingReminders, setSendingReminders] = useState(false);
 
   const todayKey = toNoteDateKey(new Date());
   const weekEnd = new Date();
@@ -124,12 +147,66 @@ function OverviewTab() {
     overdueInvoicesCount,
     expiringQuotesCount,
     lateProjectsCount,
+    pendingInvoices,
     loading,
     error,
   } = useDashboardMetrics();
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 0 }).format(amount);
+
+  const handleMarkAsPaid = useCallback(async (invoice: InvoiceWithPayments, method: string) => {
+    if (!userId) return;
+    setMarkingPaidId(invoice.id);
+    try {
+      const remaining = Math.max(0, (invoice.total_ttc ?? 0) - (invoice.paidAmount ?? 0));
+      await insertPayment(userId, invoice.id, {
+        amount: remaining,
+        payment_date: new Date().toISOString().slice(0, 10),
+        payment_method: method as "virement" | "cheque" | "especes" | "carte" | "autre",
+      });
+      setPaidIds((prev) => new Set(prev).add(invoice.id));
+      toast({ title: "Paiement enregistré", description: `${invoice.invoice_number} — ${formatCurrency(remaining)} marquée payée.` });
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Erreur", description: "Impossible d'enregistrer le paiement.", variant: "destructive" });
+    } finally {
+      setMarkingPaidId(null);
+    }
+  }, [userId, toast]);
+
+  const handleSendReminders = useCallback(async () => {
+    if (!userId || !session) return;
+    const overdueList = pendingInvoices.filter((inv) => {
+      if (paidIds.has(inv.id)) return false;
+      return new Date(inv.due_date) < new Date();
+    });
+    if (overdueList.length === 0) {
+      toast({ title: "Aucune facture en retard", description: "Toutes vos factures sont à jour." });
+      return;
+    }
+    setSendingReminders(true);
+    try {
+      const res = await fetch("/api/invoice-reminders", {
+        method: "POST",
+        headers: getApiPostHeaders(session.access_token),
+        body: JSON.stringify({ userId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast({ title: "Erreur", description: data.message || "Impossible d'envoyer les rappels.", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Rappels envoyés", description: `${data.sent ?? 0} rappel${(data.sent ?? 0) > 1 ? 's' : ''} envoyé${(data.sent ?? 0) > 1 ? 's' : ''} par email.` });
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Erreur", description: "Impossible d'envoyer les rappels.", variant: "destructive" });
+    } finally {
+      setSendingReminders(false);
+    }
+  }, [userId, session, pendingInvoices, paidIds, toast]);
+
+  const visiblePendingInvoices = pendingInvoices.filter((inv) => !paidIds.has(inv.id));
 
   const revenueTrend = previousMonthRevenue > 0
     ? Math.round(((totalRevenue - previousMonthRevenue) / previousMonthRevenue) * 100)
@@ -351,6 +428,84 @@ function OverviewTab() {
         </Card>
       </div>
 
+      {/* Pending Invoices - Quick Actions */}
+      {visiblePendingInvoices.length > 0 && (
+        <Card className="bg-black/20 backdrop-blur-xl border border-white/10 shadow-xl rounded-2xl text-white">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-white font-light text-base flex items-center gap-2">
+                <CreditCard className="h-4 w-4 text-emerald-400" />
+                Factures en attente de paiement
+                <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/50 text-xs ml-1">{visiblePendingInvoices.length}</Badge>
+              </CardTitle>
+              {visiblePendingInvoices.some((inv) => new Date(inv.due_date) < new Date()) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-white border-white/20 hover:bg-white/10 gap-1.5"
+                  onClick={handleSendReminders}
+                  disabled={sendingReminders}
+                >
+                  {sendingReminders ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                  Envoyer les rappels
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {visiblePendingInvoices.slice(0, 8).map((inv) => {
+                const remaining = Math.max(0, (inv.total_ttc ?? 0) - (inv.paidAmount ?? 0));
+                const isOverdue = new Date(inv.due_date) < new Date();
+                const daysOverdue = isOverdue ? Math.floor((Date.now() - new Date(inv.due_date).getTime()) / 86400000) : 0;
+                const isMarking = markingPaidId === inv.id;
+
+                return (
+                  <div
+                    key={inv.id}
+                    className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${
+                      isOverdue
+                        ? "bg-red-500/5 border-red-500/20"
+                        : "bg-white/5 border-white/10"
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                      isOverdue ? "bg-red-500/20 text-red-400" : "bg-emerald-500/20 text-emerald-400"
+                    }`}>
+                      <Receipt className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-white truncate">{inv.invoice_number}</p>
+                        {isOverdue && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-red-400/30 text-red-300 shrink-0">
+                            <AlertTriangle className="h-2.5 w-2.5 mr-0.5" />
+                            {daysOverdue}j de retard
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-white/60 truncate">
+                        {inv.client_name || "Client"} — Échéance : {new Date(inv.due_date).toLocaleDateString("fr-FR")}
+                      </p>
+                    </div>
+                    <span className="text-sm font-medium text-white shrink-0">{formatCurrency(remaining)}</span>
+                    <PaidQuickAction invoiceId={inv.id} isMarking={isMarking} onConfirm={(method) => handleMarkAsPaid(inv, method)} />
+                  </div>
+                );
+              })}
+              {visiblePendingInvoices.length > 8 && (
+                <button
+                  onClick={() => setLocation("/dashboard/invoices")}
+                  className="w-full text-center text-xs text-white/50 hover:text-white/70 py-2 transition-colors"
+                >
+                  + {visiblePendingInvoices.length - 8} autres factures → Voir tout
+                </button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Bottom Row: Activity + Contextual Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Activity */}
@@ -540,5 +695,43 @@ function QuickAction({ icon: Icon, label, onClick }: { icon: any; label: string;
       <span className="flex-1 text-left text-sm">{label}</span>
       <ChevronRight className="h-3.5 w-3.5 opacity-30" />
     </button>
+  );
+}
+
+function PaidQuickAction({
+  invoiceId,
+  isMarking,
+  onConfirm,
+}: {
+  invoiceId: string;
+  isMarking: boolean;
+  onConfirm: (method: string) => void;
+}) {
+  const [method, setMethod] = useState("virement");
+
+  return (
+    <div className="flex items-center gap-1.5 shrink-0">
+      <Select value={method} onValueChange={setMethod}>
+        <SelectTrigger className="h-8 w-[110px] bg-black/30 border-white/10 text-white text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="virement">Virement</SelectItem>
+          <SelectItem value="cheque">Chèque</SelectItem>
+          <SelectItem value="especes">Espèces</SelectItem>
+          <SelectItem value="carte">Carte</SelectItem>
+          <SelectItem value="autre">Autre</SelectItem>
+        </SelectContent>
+      </Select>
+      <Button
+        size="sm"
+        className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white gap-1 px-3"
+        disabled={isMarking}
+        onClick={() => onConfirm(method)}
+      >
+        {isMarking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+        Payée
+      </Button>
+    </div>
   );
 }

@@ -1,0 +1,40 @@
+{
+  "name": "chantier-pro",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "framer-motion": "^10.16.16",
+    "lucide-react": "^0.292.0",
+    "@hookform/resolvers": "^3.3.4",
+    "react-hook-form": "^7.48.0",
+    "zustand": "^4.4.1",
+    "axios": "^1.6.2",
+    "date-fns": "^2.30.0",
+    "@supabase/supabase-js": "^2.38.4",
+    "recharts": "^2.10.3",
+    "clsx": "^2.0.0",
+    "tailwind-merge": "^2.2.0",
+    "class-variance-authority": "^0.7.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.37",
+    "@types/react-dom": "^18.2.15",
+    "@vitejs/plugin-react": "^4.2.1",
+    "vite": "^5.0.8",
+    "typescript": "^5.3.3",
+    "tailwindcss": "^3.3.6",
+    "postcss": "^8.4.31",
+    "autoprefixer": "^10.4.16",
+    "drizzle-orm": "^0.29.1",
+    "drizzle-kit": "^0.20.13"
+  }
+}

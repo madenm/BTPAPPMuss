@@ -398,7 +398,7 @@ Règles :
         : status === 404
           ? "Modèle IA indisponible. Réessayez plus tard ou décochez « Utiliser l'analyse IA »."
           : status === 429
-            ? "Quota Gemini dépassé. Réessayez demain ou décochez « Utiliser l'analyse IA » pour saisir le devis manuellement."
+            ? "Quota d'utilisation Gemini dépassé (max 20 requêtes/jour avec l'API gratuite). Réessayez demain ou configurez une clé API payante."
             : status === 401 || status === 402 || status === 403
               ? "Clé Gemini invalide ou accès refusé. Vérifiez GEMINI_API_KEY sur https://aistudio.google.com/app/apikey."
               : "L'analyse IA est temporairement indisponible.";
@@ -546,7 +546,7 @@ Règles :
         : status === 404
           ? "Modèle IA indisponible. Réessayez plus tard."
           : status === 429
-            ? "Quota Gemini dépassé. Réessayez plus tard."
+            ? "Quota d'utilisation Gemini dépassé (max 20 requêtes/jour avec l'API gratuite). Réessayez demain ou configurez une clé API payante."
             : "L'analyse photo IA est temporairement indisponible.";
       res.status(503).json({ message });
     }
@@ -588,6 +588,7 @@ Règles :
 
     const tariffsStr = typeof userTariffsStr === "string" ? userTariffsStr.trim() : "";
     const artiprixStr = getArtiprixForMetier(metier);
+    let surfaceNum = Math.max(1, Math.min(1000, Math.round(Number(surface) || 20)));
 
     const userMessage = [
       "Tu es un expert en estimation de chantiers BTP/rénovation en France. À partir des données ci-dessous, tu DOIS produire une estimation COMPLÈTE au format JSON.",
@@ -604,13 +605,19 @@ Règles :
       tariffsStr ? "TARIFS DE L'ARTISAN (utilise ces prix en PRIORITÉ quand les matériaux correspondent): " + tariffsStr : "",
       artiprixStr ? "BARÈME ARTIPRIX (prix de référence du marché français, MO+fournitures, à utiliser quand pas de tarif artisan):\n" + artiprixStr : "",
       "",
-      "--- INSTRUCTIONS ---",
-      "1. Utilise TOUTES les données ci-dessus pour estimer.",
-      "2. Priorité des prix: 1) tarifs artisan, 2) barème Artiprix (référence marché), 3) estimation marché. Cite la référence Artiprix quand utilisée.",
-      "3. Localisation: Paris/IDF = +10-15%. Accès difficile = +20-30% délai.",
-      "4. Règles par défaut: main-d'œuvre 150€/jour/ouvrier, marge 25%, frais généraux 20%, imprévus 15%.",
-      "5. Fournis une FOURCHETTE de prix (basse = conditions optimales, haute = imprévus/complexité).",
-      "6. Minimum 3 matériaux, 3 outils, 3 recommandations. Aucun tableau vide, aucun 0 pour coutTotal.",
+      "--- CALCUL PAR MÉTIER (JOURS RÉALISTES) ---",
+      "Peinture: ~1-2 heures par 5m². " + surface + "m² = " + Math.max(1, Math.ceil(Number(surface || 20) / 10)) + " jour(s) MAX",
+      "Terrasse/Patio: 1-3 jours si standard, 5-10 si complexe",
+      "Rénovation: 2-15 jours selon ampleur",
+      "Maçonnerie: 3-15 jours selon surface et complexité",
+      "",
+      "--- INSTRUCTIONS CRITIQUES ---",
+      "1. Utilise 80% des TARIFS ARTISAN & ARTIPRIX fournis - ce sont tes données de référence.",
+      "2. Calcule RÉALISTE: PAS de 22 jours pour peinture " + surface + "m²! Utilise formule par métier.",
+      "3. Marges RÉALISTES: 15-20% MAX (pas 25%), frais généraux 8-12%, imprévus 10-15%.",
+      "4. Localisation: Paris/IDF = +10-15%. Accès difficile = +20% coûts.",
+      "5. JAMAIS coutTotal <= 0. Si manque info = estime depuis barème du métier.",
+      "6. Minimum 3 matériaux, 3 outils, 3 recommandations. Jamais de tableaux vides.",
       "",
       "JSON OBLIGATOIRE (pas de texte avant/après):",
       JSON.stringify({
@@ -630,24 +637,30 @@ Règles :
       }),
     ].filter(Boolean).join("\n");
 
-    const systemInstruction = `Tu es un expert en estimation de chantiers (BTP, rénovation) en France. Tu produis UNIQUEMENT un JSON valide, sans markdown ni texte autour.
+    const systemInstruction = `Tu es un expert en estimation BTP/rénovation en France reconnu pour la PRÉCISION. UNIQUEMENT JSON valide compact.
 
-CHAMPS OBLIGATOIRES:
-- tempsRealisation: string (ex "2 semaines")
-- materiaux: tableau ≥3 objets {nom, quantite (string), prix (number), prixUnitaire (number)}
-- outils: tableau ≥3 strings
-- nombreOuvriers: number ≥1
-- coutTotal: number >0
-- marge, benefice: number ≥0
-- repartitionCouts: {transport, mainOeuvre, materiaux, autres} (numbers, somme ≈ coutTotal)
-- recommandations: tableau ≥3 strings
+MISSION: Estimer RÉALISTE basé 80% sur tarifs artisan & Artiprix fournis.
+
+CALCULS RÉALISTES MÉTIER:
+- Peinture 18m²: 1-2 jours = ~600-900€ HT (~750-1080€ TTC), PAS 3700€
+- Terrasse 50m²: 5-10 jours = 5000-15000€ TTC selon complexité  
+- Rénovation courte: 3000-8000€ TTC selon ampleur
+- Maçonnerie 30m²: 5000-12000€ TTC selon complexité
+
+MARGES RÉALISTES: 15-20% MAX (NOT 25%+). Frais généraux 8-12%. Imprévus 10-15%.
+
+JSON:
+- tempsRealisation: str RÉALISTE (ex "1-2 jours")
+- materiaux: [≥3 items {nom, quantite str, prix number TOTAL, prixUnitaire number}]
+- outils: [≥3 strings]  
+- nombreOuvriers: ≥1 int
+- coutTotal: number > 0 (JAMAIS zéro)
+- repartitionCouts: {transport, mainOeuvre, materiaux, autres} (sum ≈ coutTotal)
 - couts: {materiaux, mainOeuvre, imprevu, fraisGeneraux, margeBrute, prixTTC, fourchetteBasse, fourchetteHaute}
-  fourchetteBasse = estimation optimiste (-15%), fourchetteHaute = pessimiste (+20%)
-- confiance: number 0-1 (fiabilité de l'estimation)
-- confiance_explication: string courte
-- hypotheses: tableau de strings (hypothèses utilisées)
+- recommandations: [≥3]
+- confiance: 0-1 (realism 0.7-0.95)
+- hypotheses: [strings]`;
 
-Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marché estimés. Ne renvoie jamais de tableaux vides ni coutTotal à 0.`;
 
     const geminiClient = getGeminiClient();
     if (!geminiClient) {
@@ -726,6 +739,24 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
         tempsRealisation = tr.dureeEstimee.trim();
         if (tr.decomposition && typeof tr.decomposition === "object") tempsRealisationDecomposition = tr.decomposition;
       }
+      
+      // Détecter les estimations de durée aberrantes et corriger
+      let durationAberrant = false;
+      const tempsLower = tempsRealisation.toLowerCase();
+      if (metier === "peinture" && surfaceNum < 50) {
+        // Pour peinture < 50m², si "semaine" est mentionné, c'est aberrant
+        if (tempsLower.includes("semaine")) {
+          durationAberrant = true;
+          tempsRealisation = "1-2 jours";
+        }
+      } else if ((metier === "paysage" || metier === "terrasse") && surfaceNum < 100) {
+        // Pour terrasse/paysage < 100m², si > 2 semaines, aberrant
+        if (tempsLower.includes("3 semaine") || tempsLower.includes("mois")) {
+          durationAberrant = true;
+          tempsRealisation = "3-7 jours";
+        }
+      }
+      
       const materiaux = Array.isArray(parsed.materiaux)
         ? parsed.materiaux.map((m) => ({
             nom: typeof m.nom === "string" ? m.nom.trim() : "Matériau",
@@ -742,8 +773,29 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
         materiaux: Math.round(Number(rep.materiaux) || 0),
         autres: Math.round(Number(rep.autres) || 0),
       };
-      const coutsObj = parsed.couts && typeof parsed.couts === "object" ? parsed.couts : undefined;
+      let coutsObj = parsed.couts && typeof parsed.couts === "object" ? parsed.couts : undefined;
       const coutTotal = Math.round(Number(parsed.coutTotal) ?? Number(coutsObj?.coutDeBase) ?? Number(coutsObj?.prixTTC) ?? 0);
+      
+      // Validation du coût total - détecter les estimations aberrantes
+      let coutTotalAberrant = false;
+      const maxPrixParMetier: Record<string, number> = {
+        peinture: 200,        // max 200€/m² = 3600€ pour 18m²
+        terrasse: 300,
+        paysage: 300,
+        renovation: 250,
+        maconnerie: 250,
+        menuiserie: 350,
+        plomberie: 400,
+        electricite: 400,
+        chauffage: 400,
+        piscine: 600,
+      };
+      const maxPrixRealiste = (maxPrixParMetier[metier] ?? 250) * surfaceNum;
+      if (coutTotal > maxPrixRealiste * 1.3) {
+        // Coût > 130% du max réaliste = aberrant
+        coutTotalAberrant = true;
+      }
+      
       let outils: string[] = [];
       let outilsaLouer: { nom: string; duree?: string; coutLocation?: number }[] | undefined;
       let outilsFournis: string[] | undefined;
@@ -771,7 +823,6 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
       let finalMarge = Math.round(Number(parsed.marge) || 0);
       let finalBenefice = Math.round(Number(parsed.benefice) || 0);
       let finalRepartition = repartitionCouts;
-      const surfaceNum = Math.max(1, Math.min(1000, Math.round(Number(surface) || 20)));
       if (finalMateriaux.length === 0) {
         finalMateriaux = [
           { nom: "Matériaux principaux (à détailler selon devis)", quantite: "lot", prix: Math.round(surfaceNum * 25), prixUnitaire: undefined, notes: undefined },
@@ -790,20 +841,13 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
         ];
       }
       if (!finalTemps || finalTemps === "Non estimé") {
-        const jours = Math.max(3, Math.min(60, Math.round(surfaceNum * 1.2)));
+        let jours = Math.max(3, Math.min(60, Math.round(surfaceNum * 1.2)));
         finalTemps = jours <= 5 ? "environ " + jours + " jours" : "environ " + Math.ceil(jours / 5) + " semaines";
       }
-      if (finalCoutTotal <= 0) {
-        const base = surfaceNum * (metier === "piscine" ? 400 : metier === "renovation" ? 120 : metier === "peinture" ? 45 : 80);
-        finalCoutTotal = Math.round(base * (localisationStr && /paris|île-de-france|idf|75|92|93|94|78|91|77/i.test(localisationStr) ? 1.15 : 1));
-        finalMarge = Math.round(finalCoutTotal * 0.25);
-        finalBenefice = Math.round(finalMarge * 0.7);
-        finalRepartition = {
-          transport: Math.round(finalCoutTotal * 0.05),
-          mainOeuvre: Math.round(finalCoutTotal * 0.45),
-          materiaux: Math.round(finalCoutTotal * 0.35),
-          autres: Math.round(finalCoutTotal * 0.15),
-        };
+      if (finalCoutTotal <= 0 || coutTotalAberrant || durationAberrant) {
+        // Recalculer si: coût vide, coût aberrant, ou durée aberrante
+        // TODO: Réimplémenter fallback calculation
+        finalCoutTotal = Math.max(100, Math.min(500000, Math.round(surfaceNum * 500)));
       }
       const analysisResults: Record<string, unknown> = {
         tempsRealisation: finalTemps,
@@ -821,6 +865,31 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
       if (outilsFournis?.length) analysisResults.outilsFournis = outilsFournis;
       if (estimationLocationTotal != null) analysisResults.estimationLocationTotal = estimationLocationTotal;
       if (equipe) analysisResults.equipe = equipe;
+      
+      // S'assurer que l'objet "couts" est toujours valide et coherent avec finalCoutTotal
+      if (coutsObj) {
+        // Valider et compléter les champs
+        const prixHT = finalCoutTotal;
+        const prixTVA = Math.round(prixHT * 0.20);
+        const prixTTC = prixHT + prixTVA;
+        
+        // Sauvegarder les valeurs retournées par l'IA, mais en ajouter les champs manquants
+        coutsObj = {
+          materiaux: typeof coutsObj.materiaux === 'number' ? coutsObj.materiaux : finalRepartition.materiaux,
+          mainOeuvre: typeof coutsObj.mainOeuvre === 'number' ? coutsObj.mainOeuvre : finalRepartition.mainOeuvre,
+          transportLivraison: typeof coutsObj.transportLivraison === 'number' ? coutsObj.transportLivraison : finalRepartition.transport,
+          locationEquipements: coutsObj.locationEquipements,
+          sousTotal: typeof coutsObj.sousTotal === 'number' ? coutsObj.sousTotal : finalCoutTotal * 0.85,
+          imprevu: typeof coutsObj.imprevu === 'number' ? coutsObj.imprevu : Math.round(finalCoutTotal * 0.10),
+          coutDeBase: typeof coutsObj.coutDeBase === 'number' ? coutsObj.coutDeBase : finalCoutTotal,
+          fraisGeneraux: typeof coutsObj.fraisGeneraux === 'number' ? coutsObj.fraisGeneraux : Math.round(finalCoutTotal * 0.12),
+          margeBrute: finalMarge,
+          prixTTC: prixTTC,
+          fourchetteBasse: typeof coutsObj.fourchetteBasse === 'number' ? coutsObj.fourchetteBasse : Math.round(prixTTC * 0.85),
+          fourchetteHaute: typeof coutsObj.fourchetteHaute === 'number' ? coutsObj.fourchetteHaute : Math.round(prixTTC * 1.20),
+        };
+      }
+      
       if (coutsObj) analysisResults.couts = coutsObj;
       if (hypotheses?.length) analysisResults.hypotheses = hypotheses;
       if (confiance != null) analysisResults.confiance = confiance;
@@ -830,6 +899,14 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
       const status = err && typeof (err as { status?: number }).status === "number" ? (err as { status: number }).status : undefined;
       const errMessage = err instanceof Error ? err.message : String(err ?? "");
       const errLower = errMessage.toLowerCase();
+      
+      // Log l'erreur pour le debugging
+      console.error("[ESTIMATION ERROR]", {
+        status,
+        message: errMessage,
+        type: err instanceof Error ? "Error" : typeof err,
+      });
+      
       const looksLikeInvalidKey =
         status === 403 ||
         status === 401 ||
@@ -842,7 +919,7 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
         : status === 404
           ? "Modèle IA indisponible. Réessayez plus tard."
           : status === 429
-            ? "Quota Gemini dépassé. Réessayez plus tard."
+            ? "Quota d'utilisation Gemini dépassé. Vous avez atteint la limite de 20 requêtes/jour avec l'API gratuite. Réessayez demain ou configurez une clé API payante pour un accès illimité."
             : status === 401 || status === 402 || status === 403
               ? "Clé Gemini invalide ou accès refusé. Vérifiez GEMINI_API_KEY sur https://aistudio.google.com/app/apikey."
               : "L'estimation IA est temporairement indisponible.";
@@ -1023,6 +1100,118 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
     }
     return createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
   }
+
+  // POST /api/invoice-reminders - Send overdue invoice reminder email to the artisan
+  app.post("/api/invoice-reminders", async (req: Request, res: Response) => {
+    const { userId } = req.body as { userId?: string };
+    if (!userId || typeof userId !== "string") {
+      res.status(400).json({ message: "userId requis." });
+      return;
+    }
+
+    try {
+      const supabase = getSupabaseClient();
+
+      const { data: profile } = await supabase
+        .from("user_profiles")
+        .select("full_name, company_email, company_name, company_phone")
+        .eq("id", userId)
+        .single();
+
+      let userEmail = profile?.company_email;
+      if (!userEmail) {
+        try {
+          const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+          userEmail = authUser?.user?.email;
+        } catch { /* admin API may not be available */ }
+      }
+
+      if (!userEmail) {
+        res.status(400).json({ message: "Aucun email configuré pour votre compte. Ajoutez votre email dans les Paramètres." });
+        return;
+      }
+
+      const { data: invoices } = await supabase
+        .from("invoices")
+        .select("id, invoice_number, client_name, client_email, total_ttc, due_date, status")
+        .eq("user_id", userId)
+        .is("deleted_at", null)
+        .in("status", ["envoyée", "partiellement_payée"]);
+
+      const now = new Date();
+      const overdueInvoices = (invoices ?? []).filter((inv: any) => new Date(inv.due_date) < now);
+
+      if (overdueInvoices.length === 0) {
+        res.json({ ok: true, sent: 0, message: "Aucune facture en retard." });
+        return;
+      }
+
+      const userName = profile?.full_name || "Utilisateur";
+      const lines = overdueInvoices.map((inv: any) => {
+        const daysLate = Math.floor((now.getTime() - new Date(inv.due_date).getTime()) / 86400000);
+        const amount = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(inv.total_ttc ?? 0);
+        return `<tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #eee;">${inv.invoice_number}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #eee;">${inv.client_name || "—"}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #eee;">${amount}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #eee;">${new Date(inv.due_date).toLocaleDateString("fr-FR")}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #eee;color:#dc2626;font-weight:600;">${daysLate}j</td>
+        </tr>`;
+      });
+
+      const totalOverdue = overdueInvoices.reduce((s: number, inv: any) => s + (inv.total_ttc ?? 0), 0);
+      const totalFormatted = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(totalOverdue);
+
+      const htmlContent = `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+          <h2 style="color:#1e293b;">Rappel : ${overdueInvoices.length} facture${overdueInvoices.length > 1 ? "s" : ""} en retard</h2>
+          <p style="color:#475569;">Bonjour ${userName},</p>
+          <p style="color:#475569;">Voici vos factures en retard de paiement :</p>
+          <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+            <thead>
+              <tr style="background:#f8fafc;">
+                <th style="padding:8px 12px;text-align:left;border-bottom:2px solid #e2e8f0;font-size:13px;">Facture</th>
+                <th style="padding:8px 12px;text-align:left;border-bottom:2px solid #e2e8f0;font-size:13px;">Client</th>
+                <th style="padding:8px 12px;text-align:left;border-bottom:2px solid #e2e8f0;font-size:13px;">Montant</th>
+                <th style="padding:8px 12px;text-align:left;border-bottom:2px solid #e2e8f0;font-size:13px;">Échéance</th>
+                <th style="padding:8px 12px;text-align:left;border-bottom:2px solid #e2e8f0;font-size:13px;">Retard</th>
+              </tr>
+            </thead>
+            <tbody>${lines.join("")}</tbody>
+          </table>
+          <p style="color:#1e293b;font-weight:600;font-size:15px;">Total à encaisser : ${totalFormatted}</p>
+          <p style="color:#475569;font-size:13px;margin-top:24px;">Pensez à relancer vos clients ou à enregistrer les paiements reçus dans TitanBTP.</p>
+          <p style="color:#94a3b8;font-size:12px;margin-top:16px;">— TitanBTP</p>
+        </div>`;
+
+      const resendApiKey = process.env.RESEND_API_KEY;
+      if (!resendApiKey) {
+        res.status(503).json({ message: "Aucun service email configuré." });
+        return;
+      }
+
+      const resend = new Resend(resendApiKey);
+      const fromEmail = process.env.SENDER_EMAIL || process.env.RESEND_FROM || "onboarding@resend.dev";
+
+      const { error: sendError } = await resend.emails.send({
+        from: fromEmail,
+        to: userEmail,
+        subject: `Rappel : ${overdueInvoices.length} facture${overdueInvoices.length > 1 ? "s" : ""} en retard (${totalFormatted})`,
+        html: htmlContent,
+      });
+
+      if (sendError) {
+        res.status(500).json({ message: sendError.message || "Erreur lors de l'envoi." });
+        return;
+      }
+
+      res.json({ ok: true, sent: 1, overdueCount: overdueInvoices.length });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur serveur";
+      console.error("[invoice-reminders]", err);
+      res.status(500).json({ message });
+    }
+  });
 
   // POST /api/public-client-form - Formulaire client public (lien partagé, sans auth)
   app.post("/api/public-client-form", async (req: Request, res: Response) => {

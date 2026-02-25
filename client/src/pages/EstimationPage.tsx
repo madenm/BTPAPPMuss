@@ -7,6 +7,13 @@ import { Label } from '@/components/ui/label';
 import { UserAccountButton } from '@/components/UserAccountButton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
   Upload, Wand2, Plus, Calculator, User, ArrowRight, ArrowLeft, CheckCircle2,
   Search, Loader2, Building, ChevronDown, ChevronUp, AlertTriangle,
   Clock, Users, DollarSign, Pencil, RefreshCw, FileText, Camera, SkipForward,
@@ -176,6 +183,8 @@ export default function EstimationPage() {
   const [editableMaterials, setEditableMaterials] = useState<EditableMaterial[]>([]);
   const [editingMaterials, setEditingMaterials] = useState(false);
   const [userTariffs, setUserTariffs] = useState<{ label: string; unit: string; price_ht: number; category: string }[]>([]);
+  const [showClientModalForDevis, setShowClientModalForDevis] = useState(false);
+  const [tempClientForDevis, setTempClientForDevis] = useState({ name: '', email: '', phone: '' });
 
   useEffect(() => {
     if (user?.id) {
@@ -293,6 +302,10 @@ export default function EstimationPage() {
         ? userTariffs.slice(0, 30).map(t => `${t.label} (${t.category}): ${t.price_ht}€/${t.unit}`).join(', ')
         : undefined;
 
+      // Ajouter un timeout pour éviter d'attendre trop longtemps
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 secondes timeout
+
       const res = await fetch('/api/estimate-chantier', {
         method: 'POST',
         headers: getApiPostHeaders(session?.access_token),
@@ -308,8 +321,11 @@ export default function EstimationPage() {
           photoAnalysis: descriptionZoneForApi,
           questionnaireAnswers: Object.keys(questionnaireAnswers).length > 0 ? questionnaireAnswers : undefined,
           userTariffs: tariffsContext,
-        })
+        }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
+      
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setEstimateError(typeof data?.message === 'string' ? data.message : 'L\'estimation IA est indisponible.');
@@ -321,8 +337,12 @@ export default function EstimationPage() {
       })));
       setEditingMaterials(false);
       setStep(3);
-    } catch {
-      setEstimateError('Erreur réseau. Réessayez.');
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        setEstimateError('L\'estimation a dépassé le délai d\'attente (60s). Veuillez réessayer ou simplifier votre description.');
+      } else {
+        setEstimateError('Erreur réseau. Réessayez.');
+      }
     } finally {
       setIsEstimating(false);
     }
@@ -350,26 +370,55 @@ export default function EstimationPage() {
     setLocation('/dashboard/projects?openDialog=true&fromEstimation=1');
   }, [analysisResults, selectedClient, chantierInfo.metier, photoAnalysis?.descriptionZone, questionnaireAnswers, setLocation]);
 
-  const handleCreateDevisFromEstimation = useCallback(() => {
+  const createDevisWithClient = useCallback((clientName: string, clientEmail: string, clientPhone: string) => {
     if (!analysisResults) return;
     const materials = editingMaterials ? editableMaterials : (analysisResults.materiaux ?? []);
     const payload = {
-      clientName: selectedClient?.name ?? '',
-      clientEmail: selectedClient?.email ?? '',
-      clientPhone: selectedClient?.phone ?? '',
+      clientName: clientName,
+      clientEmail: clientEmail,
+      clientPhone: clientPhone,
       projectType: TYPE_CHANTIER_LABELS[chantierInfo.metier] ?? chantierInfo.metier,
       projectDescription: `Estimation — ${chantierInfo.surface} m² — ${TYPE_CHANTIER_LABELS[chantierInfo.metier] ?? chantierInfo.metier}`,
-      items: materials.map((m: any) => ({
-        description: m.nom ?? 'Matériau',
-        quantity: parseFloat(m.quantite) || 1,
-        unitPrice: m.prixUnitaire ?? m.prix ?? 0,
-        unit: '',
-      })),
+      items: materials.map((m: any) => {
+        // Calculer correctement le prix unitaire
+        const quantiteNum = parseFloat(m.quantite) || 1;
+        const prixTotal = m.prix ?? 0;
+        // Si on a un prixUnitaire fourni, l'utiliser. Sinon, diviser le prix total par la quantité
+        const unitPrice = m.prixUnitaire !== undefined && m.prixUnitaire !== null ? m.prixUnitaire : Math.round(prixTotal / quantiteNum);
+        return {
+          description: m.nom ?? 'Matériau',
+          quantity: quantiteNum,
+          unitPrice: unitPrice,
+          unit: '',
+        };
+      }),
       conditions: profile?.default_conditions ?? '',
     };
     try { sessionStorage.setItem(ESTIMATION_DEVIS_KEY, JSON.stringify(payload)); } catch {}
     setLocation('/dashboard/quotes?new=1&fromEstimation=1');
-  }, [analysisResults, editableMaterials, editingMaterials, selectedClient, chantierInfo, profile, setLocation]);
+  }, [analysisResults, editableMaterials, editingMaterials, chantierInfo, profile, setLocation]);
+
+  const handleCreateDevisFromEstimation = useCallback(() => {
+    if (!analysisResults) return;
+    // Si on a un client sélectionné, créer directement le devis
+    if (selectedClient) {
+      createDevisWithClient(selectedClient.name, selectedClient.email, selectedClient.phone);
+    } else {
+      // Sinon, afficher la modale pour demander les infos du client
+      setTempClientForDevis({ name: '', email: '', phone: '' });
+      setShowClientModalForDevis(true);
+    }
+  }, [analysisResults, selectedClient, createDevisWithClient]);
+  
+  const handleSubmitClientForDevis = useCallback(() => {
+    if (!tempClientForDevis.name.trim()) {
+      alert('Le nom du client est requis');
+      return;
+    }
+    createDevisWithClient(tempClientForDevis.name, tempClientForDevis.email, tempClientForDevis.phone);
+    setShowClientModalForDevis(false);
+    setTempClientForDevis({ name: '', email: '', phone: '' });
+  }, [tempClientForDevis, createDevisWithClient]);
 
   const handleRetryEstimation = () => {
     setAnalysisResults(null);
@@ -971,6 +1020,68 @@ export default function EstimationPage() {
           )}
         </AnimatePresence>
       </main>
+
+      {/* Modal pour infos client - Créer un devis */}
+      <Dialog open={showClientModalForDevis} onOpenChange={setShowClientModalForDevis}>
+        <DialogContent className="bg-gradient-to-b from-black/80 to-black/90 border border-white/10">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <User className="h-5 w-5 text-white/70" />
+              Infos du client
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-white">Nom du client *</Label>
+              <Input
+                type="text"
+                placeholder="Ex: Jean Dupont"
+                value={tempClientForDevis.name}
+                onChange={(e) => setTempClientForDevis({ ...tempClientForDevis, name: e.target.value })}
+                className="bg-black/40 border-white/10 text-white placeholder:text-white/40"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-white">Email (optionnel)</Label>
+              <Input
+                type="email"
+                placeholder="exemple@email.com"
+                value={tempClientForDevis.email}
+                onChange={(e) => setTempClientForDevis({ ...tempClientForDevis, email: e.target.value })}
+                className="bg-black/40 border-white/10 text-white placeholder:text-white/40"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-white">Téléphone (optionnel)</Label>
+              <Input
+                type="tel"
+                placeholder="06 XX XX XX XX"
+                value={tempClientForDevis.phone}
+                onChange={(e) => setTempClientForDevis({ ...tempClientForDevis, phone: e.target.value })}
+                className="bg-black/40 border-white/10 text-white placeholder:text-white/40"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowClientModalForDevis(false)}
+              className="text-white border-white/20 hover:bg-white/10"
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={handleSubmitClientForDevis}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Créer le devis
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageWrapper>
   );
 }
+

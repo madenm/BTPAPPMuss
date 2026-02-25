@@ -1,0 +1,20 @@
+# Cursor / IDE
+.cursor/
+
+node_modules
+dist
+.DS_Store
+server/public
+vite.config.ts.*
+*.tar.gz
+
+# Environment variables (contain secrets)
+.env
+.env.local
+.env.*.local
+client/.env
+client/.env.local
+client/.env.*.local
+
+# Local/build artifacts (do not deploy)
+api/server.bundle.js
