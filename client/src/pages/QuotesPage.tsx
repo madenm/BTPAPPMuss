@@ -1917,10 +1917,7 @@ export default function QuotesPage() {
                         />
                         <VoiceInputButton
                           onTranscript={(text) => {
-                            setProjectDescription((prev) => {
-                              const trimmed = prev.trim();
-                              return trimmed ? `${trimmed} ${text}` : text;
-                            });
+                            setProjectDescription(text);
                           }}
                           className="self-start mt-1"
                         />

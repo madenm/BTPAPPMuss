@@ -65,18 +65,24 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
   const [error, setError] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const transcriptRef = useRef('');
-  const lastSentRef = useRef('');
   const onTranscriptRef = useRef(onTranscript);
   const isStartingRef = useRef(false);
+  const processedFinalCountRef = useRef(0);
 
-  // Mettre à jour la ref à chaque changement de onTranscript (sans créer de dépendance)
+  // Mettre à jour la ref à chaque changement de onTranscript
   useEffect(() => {
     onTranscriptRef.current = onTranscript;
   }, [onTranscript]);
 
   useEffect(() => {
     // Vérifier si l'API est supportée au montage
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    // Support de tous les préfixes de navigateurs
+    const SpeechRecognition = 
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition ||
+      (window as any).mozSpeechRecognition ||
+      (window as any).msSpeechRecognition;
+    
     const isSupp = !!SpeechRecognition;
     setIsSupported(isSupp);
 
@@ -94,24 +100,28 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
   const startListening = useCallback(() => {
     // Guard 1: Déjà en écoute
     if (isListening) {
-      console.log('⚠️ Écoute déjà active');
       return;
     }
 
     // Guard 2: Déjà en train de démarrer
     if (isStartingRef.current) {
-      console.log('⚠️ Démarrage déjà en cours');
       return;
     }
 
     isStartingRef.current = true;
-    console.log('▶️  Démarrage de la reconnaissance...');
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognition = 
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition ||
+      (window as any).mozSpeechRecognition ||
+      (window as any).msSpeechRecognition;
     
     if (!SpeechRecognition) {
       console.error('❌ Speech Recognition API non disponible');
-      setError('API non supportée');
+      isStartingRef.current = false;
+      setError('Microphone non supporté - Utilisez Chrome, Edge, Opera, Safari ou Firefox');
+      setIsListening(false);
+      setTimeout(() => setError(null), 5000);
       return;
     }
 
@@ -128,105 +138,120 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
 
       const recognition = new SpeechRecognition();
 
-      // Configuration stricte
-      recognition.continuous = true;
-      recognition.interimResults = true;
+      // Configuration
+      recognition.continuous = true;      // Continue sans s'arrêter
+      recognition.interimResults = true;  // Affiche au fur et à mesure
       recognition.lang = 'fr-FR';
 
-      // Handlers d'événements - définis UNE FOIS
-      recognition.onstart = () => {
-        console.log('✅ Reconnaissance vocale active');
+      // Handlers d'événements
+      const handleStart = () => {
         isStartingRef.current = false;
         setIsListening(true);
         setError(null);
         transcriptRef.current = '';
+        processedFinalCountRef.current = 0;
       };
 
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
+      const handleResult = (event: SpeechRecognitionEvent) => {
         let interimTranscript = '';
-        
-        for (let i = event.resultIndex; i < event.results.length; i++) {
+        let newFinalText = '';
+        let finalCount = 0;
+
+        // Boucler à travers tous les résultats
+        for (let i = 0; i < event.results.length; i++) {
           const transcript = event.results[i][0].transcript;
 
           if (event.results[i].isFinal) {
-            transcriptRef.current += transcript + ' ';
+            finalCount = i + 1;
+            // Ne traiter que les nouveaux finaux pour éviter la duplication
+            if (i >= processedFinalCountRef.current) {
+              newFinalText += transcript + ' ';
+            }
           } else {
+            // Pour les intermédiaires, toujours les inclure pour l'affichage temps réel
             interimTranscript += transcript;
           }
         }
 
-        // Envoyer le texte COMPLET (final accumulé + temporaire)
-        const fullText = (transcriptRef.current + interimTranscript).trim();
-        if (fullText) {
-          onTranscriptRef.current(fullText);
+        // Ajouter les nouveaux résultats finaux
+        if (newFinalText) {
+          transcriptRef.current += newFinalText;
+          processedFinalCountRef.current = finalCount;
+        }
+
+        // Construire le texte à afficher: finaux accumulés + intermédiaires en temps réel
+        const textToDisplay = (transcriptRef.current + interimTranscript).trim();
+
+        // Envoyer le texte complet à chaque changement (affiche au fur et à mesure)
+        if (textToDisplay) {
+          onTranscriptRef.current(textToDisplay);
         }
       };
 
-      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.error('❌ Erreur:', event.error);
+      const handleError = (event: SpeechRecognitionErrorEvent) => {
+        console.error('❌ Erreur vocale:', event.error);
         isStartingRef.current = false;
-        setIsListening(false);
 
         const errorMessages: Record<string, string> = {
-          'network': 'Erreur réseau - Vérifiez HTTPS ou connextion',
-          'not-allowed': 'Permission refusée - Autorisez le micro',
-          'no-speech': 'Aucune parole détectée',
-          'service-not-allowed': 'Service non autorisé',
-          'audio-capture': 'Erreur micro',
+          'network': 'Erreur réseau - Vérifiez votre connexion internet',
+          'not-allowed': 'Permission refusée - Autorisez le microphone dans les paramètres du navigateur',
+          'no-speech': 'Aucune parole détectée - Essayez de nouveau en parlant',
+          'service-not-allowed': 'Service non autorisé par le navigateur',
+          'audio-capture': 'Erreur microphone - Vérifiez que le micro fonctionne',
+          'bad-grammar': 'Erreur de grammaire',
+          'network-error': 'Erreur réseau',
+          'aborted': 'Enregistrement annulé',
         };
 
-        setError(errorMessages[event.error] || `Erreur: ${event.error}`);
-        setTimeout(() => setError(null), 4000);
+        const message = errorMessages[event.error] || `Erreur: ${event.error}`;
+        setError(message);
+        setIsListening(false);
+        setTimeout(() => setError(null), 5000);
       };
 
-      recognition.onend = () => {
-        console.log('⏹️ Reconnaissance arrêtée');
+      const handleEnd = () => {
         isStartingRef.current = false;
-        
-        // Envoyer le texte final accumulé avant de réinitialiser
-        const finalText = transcriptRef.current.trim();
-        if (finalText) {
-          onTranscriptRef.current(finalText);
-        }
-        
         setIsListening(false);
         transcriptRef.current = '';
+        processedFinalCountRef.current = 0;
       };
+
+      // Attacher les handlers
+      recognition.onstart = handleStart;
+      recognition.onresult = handleResult;
+      recognition.onerror = handleError;
+      recognition.onend = handleEnd;
 
       recognitionRef.current = recognition;
 
-      // Démarrer
-      try {
-        recognition.start();
-        console.log('🔊 start() exécuté');
-      } catch (err) {
-        console.error('❌ Erreur start():', err);
-        isStartingRef.current = false;
-        setError('Impossible de démarrer');
-        setIsListening(false);
-        setTimeout(() => setError(null), 3000);
-      }
+      // Démarrer l'enregistrement
+      recognition.start();
 
     } catch (err) {
-      console.error('❌ Erreur création:', err);
+      console.error('❌ Erreur exception:', err);
       isStartingRef.current = false;
-      setError('Erreur création reconnaissance');
+      
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      
+      // Vérifier si c'est une erreur de permission
+      if (errorMsg.includes('Permission') || errorMsg.includes('permission')) {
+        setError('Permission refusée - Autorisez le microphone');
+      } else {
+        setError('Erreur: ' + errorMsg);
+      }
+      
       setIsListening(false);
-      setTimeout(() => setError(null), 3000);
+      setTimeout(() => setError(null), 5000);
     }
   }, [isListening]);
 
   const stopListening = useCallback(() => {
-    console.log('⏹️ Arrêt demandé');
-    // Mettre l'état à jour IMMÉDIATEMENT
     setIsListening(false);
     
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
-        console.log('✅ stop() exécuté');
       } catch (err) {
-        console.error('Erreur stop():', err);
         try {
           recognitionRef.current.abort();
         } catch (e) {
@@ -237,7 +262,9 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
   }, []);
 
   const toggleListening = useCallback(() => {
-    if (disabled || !isSupported) return;
+    if (disabled || !isSupported) {
+      return;
+    }
 
     if (isListening) {
       stopListening();
@@ -263,14 +290,14 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
         } transition-colors`}
         title={
           !isSupported
-            ? 'Reconnaissance vocale non supportée par votre navigateur (Chrome, Edge ou Safari requis)'
+            ? 'Reconnaissance vocale non supportée - Chrome, Edge, Opera, Safari ou Firefox requis'
             : isListening
             ? 'Arrêter la dictée vocale'
             : 'Démarrer la dictée vocale'
         }
         aria-label={
           !isSupported
-            ? 'Reconnaissance vocale non supportée'
+            ? 'Reconnaissance vocale non supportée par votre navigateur'
             : isListening
             ? 'Arrêter la dictée vocale'
             : 'Démarrer la dictée vocale'
@@ -283,13 +310,13 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
         )}
       </Button>
       {error && (
-        <div className="absolute top-full left-0 mt-1 px-2 py-1 bg-red-500/90 text-white text-xs rounded whitespace-nowrap z-50">
+        <div className="absolute top-full left-0 mt-1 px-3 py-2 bg-red-500/95 text-white text-xs rounded whitespace-normal z-50 max-w-xs shadow-lg">
           {error}
         </div>
       )}
       {isListening && (
-        <div className="absolute top-full left-0 mt-1 px-2 py-1 bg-blue-500/90 text-white text-xs rounded whitespace-nowrap z-50">
-          En écoute...
+        <div className="absolute top-full left-0 mt-1 px-3 py-2 bg-blue-500/95 text-white text-xs rounded whitespace-nowrap z-50 shadow-lg animate-pulse">
+          🎤 En écoute...
         </div>
       )}
     </div>
