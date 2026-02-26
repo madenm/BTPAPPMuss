@@ -1287,7 +1287,12 @@ JSON:
       }
 
       // Insérer la signature
-      const ipAddress = req.ip || req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() || "unknown";
+      let ipAddress = "unknown";
+      try {
+        ipAddress = req.ip || req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() || "unknown";
+      } catch {
+        // Si req.ip échoue, utiliser "unknown"
+      }
       const userAgent = req.headers["user-agent"] || "unknown";
 
       const { error: insertError } = await supabase
