@@ -38,7 +38,7 @@ import {
   deleteProspect,
 } from "@/lib/supabaseProspects"
 import { fetchQuotesForUser, updateQuoteStatus, type SupabaseQuote } from "@/lib/supabaseQuotes"
-import { fetchInvoicesForUser, createInvoiceFromQuote, type InvoiceWithPayments } from "@/lib/supabaseInvoices"
+import { fetchInvoicesForUser, type InvoiceWithPayments } from "@/lib/supabaseInvoices"
 import { getQuotePdfBase64, fetchLogoDataUrl, buildQuoteEmailHtml, buildContactBlockHtml, type QuotePdfParams } from "@/lib/quotePdf"
 import { buildInvoiceEmailHtml } from "@/lib/invoicePdf"
 import { toast } from "@/hooks/use-toast"
@@ -498,7 +498,8 @@ export function CRMPipeline() {
       if (quoteModalSelectedQuote && userId) {
         try {
           await updateQuoteStatus(quoteModalSelectedQuote.id, userId, 'validé')
-          await createInvoiceFromQuote(userId, quoteModalSelectedQuote)
+          // Note: La facture ne sera créée que manuellement quand le devis est confirmé par le client
+          // (via le bouton "Valider le devis" dans ProjectsPage ou manuellement dans Factures)
         } catch (err) { console.error('Error updating quote status:', err) }
       }
 
