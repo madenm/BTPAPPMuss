@@ -232,14 +232,14 @@ export const QuoteSignatureForm: React.FC<QuoteSignatureFormProps> = ({
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Votre signature <span className="text-red-500">*</span>
         </label>
-        <div className="border-2 border-gray-300 rounded-lg overflow-hidden bg-white">
+        <div className="border-2 border-gray-300 rounded-lg overflow-hidden bg-white shadow-md">
           <canvas
             ref={canvasRef}
             onMouseDown={startDrawing}
             onMouseMove={draw}
             onMouseUp={stopDrawing}
             onMouseLeave={stopDrawing}
-            className="w-full h-40 cursor-crosshair bg-white"
+            className="w-full h-64 cursor-crosshair bg-white block touch-none"
           />
         </div>
         <p className="text-xs text-gray-500 mt-2">Cliquez et glissez pour signer</p>

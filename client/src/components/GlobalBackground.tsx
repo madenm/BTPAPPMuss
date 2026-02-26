@@ -20,7 +20,7 @@ export function GlobalBackground() {
   }, [])
 
   return (
-    <div className="fixed inset-0 w-screen h-screen z-0 pointer-events-none">
+    <div className="fixed inset-0 w-screen h-screen -z-10 pointer-events-none">
       {mounted && (
         <MeshGradient
           width={dimensions.width}
