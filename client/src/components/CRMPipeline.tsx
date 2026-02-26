@@ -480,14 +480,23 @@ export function CRMPipeline() {
       const customMessageHtml = quoteModalCustomMessage.trim()
         ? "<p>" + quoteModalCustomMessage.trim().replace(/\n/g, "</p><p>") + "</p>"
         : ""
-      const htmlContent = (customMessageHtml + builtHtml).trim() || undefined
+      // N'envoyer que le message personnalisé, pas les détails du devis (qui sont dans le PDF)
+      const htmlContent = customMessageHtml.trim() || undefined
 
       setStoredPipelineMessage(userId, "quote", quoteModalCustomMessage)
 
       const emailRes = await fetch("/api/send-quote-email", {
         method: "POST",
         headers: getApiPostHeaders(session?.access_token),
-        body: JSON.stringify({ to: selectedProspect.email, pdfBase64, fileName, htmlContent, replyTo: userReplyToEmail }),
+        body: JSON.stringify({ 
+          to: selectedProspect.email, 
+          pdfBase64, 
+          fileName, 
+          htmlContent, 
+          replyTo: userReplyToEmail,
+          quoteId: quoteModalSelectedQuote?.id,
+          userId: userId
+        }),
       })
       const data = await emailRes.json().catch(() => ({}))
       if (!emailRes.ok) {

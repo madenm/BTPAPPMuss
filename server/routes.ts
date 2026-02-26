@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { appendFileSync, mkdirSync, existsSync } from "fs";
 import { join, resolve, dirname } from "path";
 import { fileURLToPath } from "url";
+import { randomBytes } from "crypto";
 import { storage } from "./storage";
 
 import { generateInvoicePdfBuffer } from "./lib/invoicePdfServer";
@@ -928,13 +929,15 @@ JSON:
   });
 
   app.post("/api/send-quote-email", async (req: Request, res: Response) => {
-    const { to, fromEmail, replyTo, pdfBase64, fileName, htmlContent } = req.body as {
+    const { to, fromEmail, replyTo, pdfBase64, fileName, htmlContent, quoteId, userId } = req.body as {
       to?: string;
       fromEmail?: string | null;
       replyTo?: string | null;
       pdfBase64?: string;
       fileName?: string;
       htmlContent?: string | null;
+      quoteId?: string;
+      userId?: string;
     };
 
     if (!to || typeof to !== "string" || !to.trim()) {
@@ -950,6 +953,41 @@ JSON:
     const toAddress = to.trim();
     const attachmentFilename = fileName && String(fileName).trim() ? String(fileName).trim() : "devis.pdf";
     const resendApiKey = process.env.RESEND_API_KEY;
+    
+    // Générer un lien de signature si userId est fourni
+    let signatureLink: string | null = null;
+    if (userId) {
+      try {
+        const supabase = getSupabaseClient();
+        
+        // Générer un token unique
+        const signatureToken = randomBytes(32).toString('hex');
+        
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 30);
+        
+        // Insérer dans quote_signature_links (avec quote_id nullable)
+        const { error: insertError } = await supabase
+          .from("quote_signature_links")
+          .insert({
+            quote_id: quoteId ?? null,
+            token: signatureToken,
+            user_id: userId,
+            expires_at: expiresAt.toISOString(),
+            prospect_email: toAddress,
+          });
+        
+        if (!insertError) {
+          const baseUrl = process.env.PUBLIC_URL || "https://titan-btp.vercel.app";
+          signatureLink = `${baseUrl}/sign-quote/${signatureToken}`;
+        } else {
+          console.error("[QUOTE SIGNATURE LINK] Erreur lors de l'insertion:", insertError);
+        }
+      } catch (err) {
+        console.error("[QUOTE SIGNATURE LINK]", err);
+        // Ignorer l'erreur et continuer sans lien de signature
+      }
+    }
 
     // --- Resend ---
     if (resendApiKey) {
@@ -970,12 +1008,37 @@ JSON:
       try {
         const buffer = Buffer.from(pdfBase64, "base64");
         const replyToAddr = replyTo && String(replyTo).trim() ? String(replyTo).trim() : undefined;
+        
+        // Construire le contenu HTML
+        let finalHtmlContent = htmlContent && String(htmlContent).trim() 
+          ? String(htmlContent).trim()
+          : "<p>Veuillez trouver ci-joint votre devis.</p>";
+        
+        // Ajouter le lien de signature s'il est disponible
+        if (signatureLink) {
+          const signatureLinkHtml = `
+            <div style="background-color: #f0f9ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 16px; margin-top: 20px; margin-bottom: 20px;">
+              <p style="margin: 0 0 12px 0; font-weight: 600; color: #0369a1;">⚡ Signer électroniquement</p>
+              <p style="margin: 0 0 12px 0; color: #475569; font-size: 14px;">
+                Vous pouvez signer ce devis directement en ligne en cliquant sur le lien ci-dessous.
+              </p>
+              <a href="${signatureLink}" style="display: inline-block; background-color: #0369a1; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 600; margin-bottom: 10px;">
+                Signer le devis
+              </a>
+              <p style="margin: 0; color: #64748b; font-size: 12px;">Ce lien expirera dans 30 jours.</p>
+            </div>
+          `;
+          
+          // Inserter le lien après le contenu principal
+          finalHtmlContent += signatureLinkHtml;
+        }
+        
         const { data, error } = await resend.emails.send({
           from,
           to: toAddress,
           ...(replyToAddr ? { replyTo: replyToAddr } : {}),
           subject: "Votre devis",
-          html: (htmlContent && String(htmlContent).trim()) || "<p>Veuillez trouver ci-joint votre devis.</p>",
+          html: finalHtmlContent,
           attachments: [{ filename: attachmentFilename, content: buffer }],
         });
 
@@ -995,7 +1058,7 @@ JSON:
           res.status(500).json({ message: errMsg || "Erreur lors de l'envoi de l'email." });
           return;
         }
-        res.status(200).json({ ok: true, id: data?.id });
+        res.status(200).json({ ok: true, id: data?.id, signatureLink });
         return;
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Erreur lors de l'envoi de l'email.";
@@ -1082,6 +1145,193 @@ JSON:
     res.status(503).json({
       message: "Aucun service email configuré. Ajoutez RESEND_API_KEY dans le .env.",
     });
+  });
+
+  // POST /api/generate-quote-signature-link - Générer un lien de signature pour un devis
+  app.post("/api/generate-quote-signature-link", async (req: Request, res: Response) => {
+    const { quoteId, expirationDays } = req.body as {
+      quoteId?: string;
+      expirationDays?: number;
+    };
+
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+
+    if (!quoteId || typeof quoteId !== "string") {
+      res.status(400).json({ message: "quoteId (string) requis." });
+      return;
+    }
+
+    if (!token) {
+      res.status(401).json({ message: "Non authentifié." });
+      return;
+    }
+
+    try {
+      const supabase = getSupabaseClient();
+
+      // Vérifier que le devis appartient à l'utilisateur authentifié
+      const { data: { user: authUser } } = await supabase.auth.getUser(token);
+      if (!authUser?.id) {
+        res.status(401).json({ message: "Authentification invalide." });
+        return;
+      }
+
+      const { data: quote } = await supabase
+        .from("quotes")
+        .select("id, user_id")
+        .eq("id", quoteId)
+        .single();
+
+      if (!quote || quote.user_id !== authUser.id) {
+        res.status(403).json({ message: "Accès refusé. Ce devis ne vous appartient pas." });
+        return;
+      }
+
+      // Générer un token unique
+      const signatureToken = randomBytes(32).toString('hex');
+
+      const expirationDaysValue = expirationDays ?? 30;
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + expirationDaysValue);
+
+      // Insérer dans quote_signature_links
+      const { error: insertError } = await supabase
+        .from("quote_signature_links")
+        .insert({
+          quote_id: quoteId,
+          token: signatureToken,
+          user_id: authUser.id,
+          expires_at: expiresAt.toISOString(),
+        });
+
+      if (insertError) {
+        res.status(500).json({ message: "Erreur lors de la création du lien de signature." });
+        return;
+      }
+
+      // Retourner le lien public pour le client
+      const baseUrl = process.env.PUBLIC_URL || "https://titan-btp.vercel.app";
+      const signatureLink = `${baseUrl}/sign-quote/${signatureToken}`;
+
+      res.status(200).json({
+        ok: true,
+        signatureToken,
+        signatureLink,
+        expiresAt: expiresAt.toISOString(),
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur lors de la génération du lien de signature.";
+      res.status(500).json({ message });
+    }
+  });
+
+  // POST /api/submit-quote-signature - Soumettre une signature pour un devis
+  app.post("/api/submit-quote-signature", async (req: Request, res: Response) => {
+    const { signatureToken, firstName, lastName, email, signatureDataBase64 } = req.body as {
+      signatureToken?: string;
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+      signatureDataBase64?: string;
+    };
+
+    if (!signatureToken || typeof signatureToken !== "string") {
+      res.status(400).json({ message: "signatureToken requis." });
+      return;
+    }
+
+    if (!firstName || typeof firstName !== "string" || !firstName.trim()) {
+      res.status(400).json({ message: "firstName requis." });
+      return;
+    }
+
+    if (!lastName || typeof lastName !== "string" || !lastName.trim()) {
+      res.status(400).json({ message: "lastName requis." });
+      return;
+    }
+
+    try {
+      const supabase = getSupabaseClient();
+
+      // Récupérer le lien de signature et vérifier qu'il n'est pas expiré
+      const { data: signatureLink } = await supabase
+        .from("quote_signature_links")
+        .select("id, quote_id, expires_at")
+        .eq("token", signatureToken)
+        .single();
+
+      if (!signatureLink) {
+        res.status(404).json({ message: "Lien de signature invalide ou expiré." });
+        return;
+      }
+
+      const expiresAt = new Date(signatureLink.expires_at);
+      if (expiresAt < new Date()) {
+        res.status(410).json({ message: "Ce lien de signature a expiré." });
+        return;
+      }
+
+      // Vérifier si une signature existe déjà pour ce devis (seulement si quoteId existe)
+      if (signatureLink.quote_id) {
+        const { data: existingSignature } = await supabase
+          .from("quote_signatures")
+          .select("id")
+          .eq("quote_id", signatureLink.quote_id)
+          .single();
+
+        if (existingSignature) {
+          res.status(409).json({ message: "Ce devis a déjà été signé." });
+          return;
+        }
+      }
+
+      // Insérer la signature
+      const ipAddress = req.ip || req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() || "unknown";
+      const userAgent = req.headers["user-agent"] || "unknown";
+
+      const { error: insertError } = await supabase
+        .from("quote_signatures")
+        .insert({
+          quote_id: signatureLink.quote_id ?? null,
+          signature_token: signatureToken,
+          client_firstname: firstName.trim(),
+          client_lastname: lastName.trim(),
+          client_email: email && typeof email === "string" ? email.trim() : null,
+          signature_data: signatureDataBase64 ?? null,
+          ip_address: ipAddress,
+          user_agent: userAgent,
+        });
+
+      if (insertError) {
+        res.status(500).json({ message: "Erreur lors de l'enregistrement de la signature." });
+        return;
+      }
+
+      // Mettre à jour le statut du devis à "signé" (seulement si quoteId existe)
+      if (signatureLink.quote_id) {
+        const { error: updateError } = await supabase
+          .from("quotes")
+          .update({
+            status: "signé",
+            accepted_at: new Date().toISOString(),
+          })
+          .eq("id", signatureLink.quote_id);
+
+        if (updateError) {
+          console.error("[QUOTE SIGNATURE] Erreur lors de la mise à jour du devis:", updateError);
+        }
+      }
+
+      res.status(200).json({
+        ok: true,
+        message: "Signature enregistrée avec succès.",
+        quoteId: signatureLink.quote_id ?? null,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur lors de l'enregistrement de la signature.";
+      res.status(500).json({ message });
+    }
   });
 
   // ===== Routes API Factures =====

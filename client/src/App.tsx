@@ -16,6 +16,7 @@ import LoginPage from "@/pages/LoginPage";
 import LoadingRedirectPage from "@/pages/LoadingRedirectPage";
 import InvitePage from "@/pages/InvitePage";
 import ClientFormPage from "@/pages/ClientFormPage";
+import SignQuotePage from "@/pages/SignQuotePage";
 import NotFound from "@/pages/not-found";
 import { UserSettingsProvider } from "@/context/UserSettingsContext";
 
@@ -79,6 +80,9 @@ function Router() {
     if (pathname.startsWith('/client-form/')) {
       return <ClientFormPage />;
     }
+    if (pathname.startsWith('/sign-quote/')) {
+      return <SignQuotePage />;
+    }
 
     switch (pathname) {
       case "/":
@@ -134,7 +138,7 @@ function Router() {
   };
 
   // Pages without sidebar (Home, Auth, Login, Loading, Invite, Client form) get full page animation
-  const isFullPage = location === "/" || location === "/auth" || location === "/login" || location === "/loading" || location.startsWith("/invite/") || location.startsWith("/client-form/");
+  const isFullPage = location === "/" || location === "/auth" || location === "/login" || location === "/loading" || location.startsWith("/invite/") || location.startsWith("/client-form/") || location.startsWith("/sign-quote/");
 
   if (isFullPage) {
     return (
