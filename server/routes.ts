@@ -92,6 +92,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     autre: "Autre",
   };
 
+  function normalizeEnvValue(value?: string): string {
+    const trimmed = (value || "").trim();
+    if (
+      trimmed &&
+      ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+        (trimmed.startsWith("'") && trimmed.endsWith("'")))
+    ) {
+      return trimmed.slice(1, -1).trim();
+    }
+    return trimmed;
+  }
+
   app.get("/api/ai-status", (_req: Request, res: Response) => {
     res.json({
       available: !!getGeminiClient(),
@@ -851,13 +863,15 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
   });
 
   app.post("/api/send-quote-email", async (req: Request, res: Response) => {
-    const { to, fromEmail, replyTo, pdfBase64, fileName, htmlContent } = req.body as {
+    const { to, fromEmail, replyTo, pdfBase64, fileName, htmlContent, quoteId, expirationDays } = req.body as {
       to?: string;
       fromEmail?: string | null;
       replyTo?: string | null;
       pdfBase64?: string;
       fileName?: string;
       htmlContent?: string | null;
+      quoteId?: string;
+      expirationDays?: number;
     };
 
     if (!to || typeof to !== "string" || !to.trim()) {
@@ -873,6 +887,24 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
     const toAddress = to.trim();
     const attachmentFilename = fileName && String(fileName).trim() ? String(fileName).trim() : "devis.pdf";
     const resendApiKey = process.env.RESEND_API_KEY;
+
+    let htmlToSend = (htmlContent && String(htmlContent).trim()) || "<p>Veuillez trouver ci-joint votre devis.</p>";
+
+    if (quoteId && typeof quoteId === "string" && quoteId.trim()) {
+      try {
+        const { signatureLink } = await generateQuoteSignatureLink(req, quoteId.trim(), expirationDays);
+        htmlToSend += `
+          <div style="margin: 24px 0; padding: 16px; background-color: #f3f4f6; border-radius: 8px; text-align: center;">
+            <p style="margin: 0 0 12px 0; font-weight: 600; color: #374151;">Pour signer votre devis en ligne :</p>
+            <a href="${signatureLink}" style="display: inline-block; padding: 12px 24px; background-color: #8b5cf6; color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">✍️ Signer le devis</a>
+          </div>
+        `;
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Impossible de générer le lien de signature.";
+        res.status(500).json({ message, detail: message });
+        return;
+      }
+    }
 
     // --- Resend ---
     if (resendApiKey) {
@@ -898,7 +930,7 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
           to: toAddress,
           ...(replyToAddr ? { replyTo: replyToAddr } : {}),
           subject: "Votre devis",
-          html: (htmlContent && String(htmlContent).trim()) || "<p>Veuillez trouver ci-joint votre devis.</p>",
+          html: htmlToSend,
           attachments: [{ filename: attachmentFilename, content: buffer }],
         });
 
@@ -1029,53 +1061,11 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
     }
 
     try {
-      const supabase = getSupabaseClient();
-      const { data: quoteRow, error: quoteError } = await supabase
-        .from("quotes")
-        .select("id, user_id")
-        .eq("id", normalizedQuoteId)
-        .single();
-
-      if (quoteError || !quoteRow?.user_id) {
-        console.error("❌ [generate-quote-signature-link] Devis introuvable:", quoteError?.message || "no data")
-        res.status(404).json({ message: "Devis introuvable pour générer le lien de signature." });
-        return;
-      }
-      const userId = quoteRow.user_id;
-      console.log("👤 [generate-quote-signature-link] userId from quote:", userId)
-
-      if (!userId) {
-        console.error("❌ [generate-quote-signature-link] Impossible de déterminer le userId")
-        res.status(401).json({ message: "Authentification requise." });
-        return;
-      }
-
-      // Générer un token unique
-      const signatureToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-      const expiresAt = new Date(Date.now() + (expirationDays || 30) * 24 * 60 * 60 * 1000).toISOString();
-
-      console.log("🔐 [generate-quote-signature-link] Token généré:", signatureToken)
-
-      // Insérer dans quote_signature_links
-      const { error: insertError } = await supabase
-        .from("quote_signature_links")
-        .insert({
-          quote_id: normalizedQuoteId,
-          token: signatureToken,
-          expires_at: expiresAt,
-          user_id: userId,
-        });
-
-      if (insertError) {
-        console.error("❌ [generate-quote-signature-link] Erreur insertion:", JSON.stringify(insertError));
-        res.status(500).json({ message: "Erreur lors de la génération du lien de signature.", detail: insertError.message });
-        return;
-      }
-
-      const proto = req.get("x-forwarded-proto") || req.protocol || "https";
-      const host = req.get("x-forwarded-host") || req.get("host") || "app.titanbtp.com";
-      const origin = process.env.VITE_APP_URL || `${proto}://${host}`;
-      const signatureLink = `${origin}/sign-quote/${signatureToken}`;
+      const { signatureToken, signatureLink, expiresAt } = await generateQuoteSignatureLink(
+        req,
+        normalizedQuoteId,
+        expirationDays
+      );
 
       console.log("✅ [generate-quote-signature-link] Lien créé:", signatureLink)
 
@@ -1284,7 +1274,8 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
     process.env.VITE_SUPABASE_URL ||
     "https://hvnjlxxcxfxvuwlmnwtw.supabase.co";
   // Server must use service_role key so RLS does not block (auth.uid() is null server-side).
-  const SUPABASE_SERVICE_KEY = (process.env.SUPABASE_SERVICE_KEY || "").trim();
+  const SUPABASE_SERVICE_KEY = normalizeEnvValue(process.env.SUPABASE_SERVICE_KEY);
+  const SUPABASE_ANON_KEY = normalizeEnvValue(process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY);
 
   function getSupabaseClient() {
     if (!SUPABASE_SERVICE_KEY) {
@@ -1293,6 +1284,62 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
       );
     }
     return createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+  }
+
+  function getSupabaseClientFromRequest(req: Request) {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+    if (!token || !SUPABASE_ANON_KEY) return null;
+    return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    });
+  }
+
+  function getSupabaseClientWithFallback(req: Request) {
+    const requestClient = getSupabaseClientFromRequest(req);
+    if (requestClient) return requestClient;
+    return getSupabaseClient();
+  }
+
+  async function generateQuoteSignatureLink(req: Request, normalizedQuoteId: string, expirationDays?: number) {
+    const supabase = getSupabaseClientWithFallback(req);
+    const { data: quoteRow, error: quoteError } = await supabase
+      .from("quotes")
+      .select("id, user_id")
+      .eq("id", normalizedQuoteId)
+      .single();
+
+    if (quoteError || !quoteRow?.user_id) {
+      throw new Error(quoteError?.message || "Devis introuvable pour générer le lien de signature.");
+    }
+
+    const userId = quoteRow.user_id;
+    const signatureToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    const expiresAt = new Date(Date.now() + (expirationDays || 30) * 24 * 60 * 60 * 1000).toISOString();
+
+    const { error: insertError } = await supabase
+      .from("quote_signature_links")
+      .insert({
+        quote_id: normalizedQuoteId,
+        token: signatureToken,
+        expires_at: expiresAt,
+        user_id: userId,
+      });
+
+    if (insertError) {
+      throw new Error(insertError.message || "Erreur insertion quote_signature_links");
+    }
+
+    const proto = req.get("x-forwarded-proto") || req.protocol || "https";
+    const host = req.get("x-forwarded-host") || req.get("host") || "app.titanbtp.com";
+    const origin = normalizeEnvValue(process.env.VITE_APP_URL) || `${proto}://${host}`;
+    const signatureLink = `${origin}/sign-quote/${signatureToken}`;
+
+    return { signatureToken, signatureLink, expiresAt };
   }
 
   // POST /api/invoice-reminders - Send overdue invoice reminder email to the artisan
