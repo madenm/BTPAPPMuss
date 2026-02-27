@@ -1412,13 +1412,35 @@ JSON:
       // Envoyer un email de confirmation avec le devis signé en pièce jointe
       if (clientEmail && signatureLink.quote_id) {
         try {
-          const { data: quote } = await supabase
+          // Requête sans les colonnes PDF optionnelles (peuvent ne pas exister en base)
+          const { data: quote, error: quoteError } = await supabase
             .from("quotes")
             .select(
-              "id, project_description, total_ht, total_ttc, client_name, validity_days, items, user_id, status, quote_pdf_base64, quote_signature_rect_coords"
+              "id, project_description, total_ht, total_ttc, client_name, validity_days, items, user_id, status"
             )
             .eq("id", signatureLink.quote_id)
             .single();
+
+          if (quoteError) {
+            console.error("[QUOTE SIGNATURE] Erreur récupération devis:", quoteError);
+          }
+
+          // Essayer de récupérer les colonnes PDF séparément (peuvent ne pas exister)
+          let quotePdfBase64: string | null = null;
+          let quoteSignatureRectCoords: string | null = null;
+          try {
+            const { data: pdfData } = await supabase
+              .from("quotes")
+              .select("quote_pdf_base64, quote_signature_rect_coords")
+              .eq("id", signatureLink.quote_id)
+              .single();
+            if (pdfData) {
+              quotePdfBase64 = (pdfData as any).quote_pdf_base64 || null;
+              quoteSignatureRectCoords = (pdfData as any).quote_signature_rect_coords || null;
+            }
+          } catch (pdfColErr) {
+            console.log("[QUOTE SIGNATURE] Colonnes PDF non disponibles");
+          }
 
           if (quote && signatureLink.user_id) {
             // Récupérer le profil utilisateur pour les infos de l'entreprise
@@ -1443,13 +1465,13 @@ JSON:
                 let pdfError: string | null = null;
 
                 // Essayer d'ajouter la signature au PDF existant
-                if (quote.quote_pdf_base64 && signatureDataBase64) {
+                if (quotePdfBase64 && signatureDataBase64) {
                   try {
                     // Récupérer et parser les coordonnées du rectangle
                     let rectCoords: { x: number; y: number; width: number; height: number } | undefined;
-                    if (quote.quote_signature_rect_coords) {
+                    if (quoteSignatureRectCoords) {
                       try {
-                        rectCoords = JSON.parse(quote.quote_signature_rect_coords as string);
+                        rectCoords = JSON.parse(quoteSignatureRectCoords as string);
                       } catch (parseErr) {
                         console.error("[QUOTE SIGNATURE] Erreur parsing coordonnées:", parseErr);
                         rectCoords = undefined;
@@ -1458,7 +1480,7 @@ JSON:
                     
                     // Utiliser le PDF stocké et ajouter la signature dessus
                     pdfBuffer = await addSignatureToPdf(
-                      quote.quote_pdf_base64,
+                      quotePdfBase64,
                       signatureDataBase64,
                       firstName,
                       lastName,
