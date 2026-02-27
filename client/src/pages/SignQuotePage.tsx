@@ -168,6 +168,24 @@ export default function SignQuotePage() {
             <div className="bg-white rounded-xl shadow-lg p-6 sticky top-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Devis</h3>
               <div className="space-y-3 text-sm">
+                {quote?.client_name && (
+                  <div>
+                    <p className="text-gray-500">Client</p>
+                    <p className="text-gray-900 font-medium">{quote.client_name}</p>
+                  </div>
+                )}
+                {quote?.project_description && (
+                  <div>
+                    <p className="text-gray-500">Projet</p>
+                    <p className="text-gray-900 font-medium">{quote.project_description}</p>
+                  </div>
+                )}
+                {quote?.total_ttc != null && (
+                  <div>
+                    <p className="text-gray-500">Montant TTC</p>
+                    <p className="text-gray-900 font-semibold text-lg">{Number(quote.total_ttc).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</p>
+                  </div>
+                )}
                 <div>
                   <p className="text-gray-500">Type</p>
                   <p className="text-gray-900 font-medium">Signature électronique</p>

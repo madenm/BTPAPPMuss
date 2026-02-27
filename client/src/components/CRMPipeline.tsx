@@ -24,7 +24,7 @@ import {
   updateProspect,
   deleteProspect,
 } from "@/lib/supabaseClients"
-import { fetchQuotesForUser, updateQuoteStatus, type SupabaseQuote, hasQuoteBeenSigned, isQuoteValidityExpired } from "@/lib/supabaseQuotes"
+import { fetchQuotesForUser, updateQuoteStatus, type SupabaseQuote, hasQuoteBeenSigned, isQuoteValidityExpired, generateSignatureLink } from "@/lib/supabaseQuotes"
 import { getQuotePdfBase64, getSignatureRectangleCoordinates, fetchLogoDataUrl, buildQuoteEmailHtml, buildContactBlockHtml, type QuotePdfParams } from "@/lib/quotePdf"
 import { toast } from "@/hooks/use-toast"
 
@@ -661,27 +661,15 @@ export function CRMPipeline() {
       let signatureLink = ""
       console.log("🔗 Génération lien signature - linkedQuoteId:", linkedQuoteId)
       
-      if (linkedQuoteId) {
+      if (linkedQuoteId && userId) {
         try {
-          console.log("📤 Appel API generate-quote-signature-link...")
-          const linkRes = await fetch("/api/generate-quote-signature-link", {
-            method: "POST",
-            headers: getApiPostHeaders(session?.access_token),
-            body: JSON.stringify({
-              quoteId: linkedQuoteId,
-              expirationDays: 30
-            }),
-          })
-          
-          console.log("📥 Réponse API:", linkRes.status, linkRes.statusText)
-          
-          if (linkRes.ok) {
-            const linkData = await linkRes.json()
-            signatureLink = linkData.signatureLink || ""
+          console.log("📤 Génération lien signature côté client...")
+          const link = await generateSignatureLink(linkedQuoteId, userId, 30)
+          if (link) {
+            signatureLink = link
             console.log("✅ Lien généré:", signatureLink)
           } else {
-            const errorData = await linkRes.json().catch(() => ({}))
-            console.error("❌ Erreur API:", linkRes.status, errorData)
+            console.error("❌ Échec génération lien signature")
           }
         } catch (err) {
           console.error("❌ Erreur génération lien signature:", err)

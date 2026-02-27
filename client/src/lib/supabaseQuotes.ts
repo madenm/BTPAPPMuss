@@ -384,3 +384,34 @@ export async function getQuoteSignatureLink(quoteId: string): Promise<string | n
     return null;
   }
 }
+
+/**
+ * Génère un nouveau lien de signature pour un devis côté client.
+ * Insère dans quote_signature_links via Supabase (l'utilisateur est authentifié).
+ */
+export async function generateSignatureLink(quoteId: string, userId: string, expirationDays = 30): Promise<string | null> {
+  try {
+    const token = crypto.randomUUID().replace(/-/g, '') + Math.random().toString(36).substring(2, 10);
+    const expiresAt = new Date(Date.now() + expirationDays * 24 * 60 * 60 * 1000).toISOString();
+
+    const { error } = await supabase
+      .from("quote_signature_links")
+      .insert({
+        quote_id: quoteId,
+        token,
+        user_id: userId,
+        expires_at: expiresAt,
+      });
+
+    if (error) {
+      console.error("❌ Erreur insertion quote_signature_links:", error);
+      return null;
+    }
+
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    return `${origin}/sign-quote/${token}`;
+  } catch (err) {
+    console.error("❌ Erreur generateSignatureLink:", err);
+    return null;
+  }
+}
