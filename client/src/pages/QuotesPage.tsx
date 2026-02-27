@@ -28,6 +28,7 @@ import { VoiceInputButton } from '@/components/VoiceInputButton';
 import { insertQuote, updateQuote, deleteQuote, updateQuoteStatus, fetchQuoteById, fetchQuotesForUser, getQuoteDisplayNumber, type QuoteItem, type QuoteSubItem, type SupabaseQuote } from '@/lib/supabaseQuotes';
 import { DEFAULT_THEME_COLOR, QUOTE_STATUS_LABELS, QUOTE_UNIT_NONE, QUOTE_UNIT_OPTIONS, inferUnitFromDescription, backfillUnitOnItems } from '@/lib/quoteConstants';
 import { downloadPdfBase64, downloadQuotePdf, fetchLogoDataUrl } from '@/lib/quotePdf';
+import { findProspectByEmail, findProspectByName, getProspectById, fetchProspectsForUser as fetchCRMClients, insertProspect, updateProspect } from '@/lib/supabaseClients';
 import { QuotePreview } from '@/components/QuotePreview';
 import { QuoteList } from '@/components/QuoteList';
 import { InvoiceDialog } from '@/components/InvoiceDialog';
@@ -66,6 +67,8 @@ import {
   Columns2
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface ClientInfo {
   name: string;
@@ -155,6 +158,7 @@ export default function QuotesPage() {
   const [highlightMissing, setHighlightMissing] = useState<{
     clientName?: boolean;
     clientEmail?: boolean;
+    clientEmailInvalid?: boolean;
     itemsSection?: boolean;
     itemIds?: string[];
   }>({});
@@ -165,6 +169,10 @@ export default function QuotesPage() {
   const lastAppliedQuoteIdRef = useRef<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isCreatingChantier, setIsCreatingChantier] = useState(false);
+  const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
+  const [quoteToSend, setQuoteToSend] = useState<SupabaseQuote | null>(null);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [recipientEmail, setRecipientEmail] = useState('');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -619,7 +627,32 @@ export default function QuotesPage() {
   const tva = subtotalAfterDiscount * (parsedTvaRate / 100);
   const total = subtotalAfterDiscount + tva;
 
-  const handleNext = async () => {
+  const handleNext = async () => {    // Validation étape 1 : vérifier le nom et l'email
+    if (step === 1) {
+      const missingName = !clientInfo.name?.trim();
+      const missingEmail = !clientInfo.email?.trim();
+      const invalidEmail = clientInfo.email?.trim() && !EMAIL_REGEX.test(clientInfo.email.trim());
+      
+      if (missingName || missingEmail || invalidEmail) {
+        setHighlightMissing({
+          clientName: missingName,
+          clientEmail: missingEmail,
+          clientEmailInvalid: invalidEmail,
+        });
+        
+        if (!canGoNextFromStep1) {
+          toast({
+            title: 'Informations client requises',
+            description: invalidEmail 
+              ? 'Le format de l\'email est invalide (ex: nom@exemple.com)' 
+              : 'Veuillez renseigner le nom et l\'email du contact',
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
+    }
+
     const nextStep = Math.min(3, step + 1);
     const needPrefill = step === 2 && nextStep === 3 && projectDescription.trim();
 
@@ -730,7 +763,11 @@ export default function QuotesPage() {
   const handlePrev = () => {
     setStep((s) => Math.max(1, s - 1));
   };
-  const canGoNextFromStep1 = Boolean(clientInfo.name?.trim() && clientInfo.email?.trim());
+  const canGoNextFromStep1 = Boolean(
+    clientInfo.name?.trim() && 
+    clientInfo.email?.trim() && 
+    EMAIL_REGEX.test(clientInfo.email.trim())
+  );
 
   const handleNewQuote = () => {
     lastAppliedQuoteIdRef.current = null;
@@ -759,6 +796,9 @@ export default function QuotesPage() {
   const handleDuplicateQuote = async (quote: SupabaseQuote) => {
     if (!user) return;
     try {
+      // Copie profonde des items pour éviter les références partagées
+      const itemsCopy = JSON.parse(JSON.stringify(quote.items ?? []));
+      
       const duplicated = await insertQuote(user.id, {
         chantier_id: quote.chantier_id ?? undefined,
         client_name: quote.client_name ?? '',
@@ -770,7 +810,7 @@ export default function QuotesPage() {
         total_ht: quote.total_ht,
         total_ttc: quote.total_ttc,
         validity_days: quote.validity_days ?? 30,
-        items: quote.items ?? [],
+        items: itemsCopy,
         status: 'brouillon',
       });
       setListQuotes((prev) => [duplicated, ...prev]);
@@ -840,6 +880,176 @@ export default function QuotesPage() {
     }
   };
 
+  const handleSendEmailFromList = async (quote: SupabaseQuote) => {
+    setQuoteToSend(quote);
+    let emailToUse = quote.client_email || '';
+    
+    // Si le devis a un contact_id, récupérer l'email à jour du contact
+    if (user?.id && quote.contact_id) {
+      try {
+        const contact = await getProspectById(user.id, quote.contact_id);
+        if (contact && contact.email) {
+          emailToUse = contact.email;
+        }
+      } catch (err) {
+        console.error('Erreur lors de la récupération du contact:', err);
+      }
+    }
+    
+    setRecipientEmail(emailToUse);
+    setSendEmailDialogOpen(true);
+  };
+
+  const handleConfirmSendEmail = async () => {
+    if (!quoteToSend || !user?.id) return;
+    
+    if (!recipientEmail.trim()) {
+      toast({ title: 'Erreur', description: 'Veuillez saisir une adresse email', variant: 'destructive' });
+      return;
+    }
+
+    setSendingEmail(true);
+    try {
+      // Générer le PDF
+      const pdfItems = (quoteToSend.items ?? []).map((i) => ({
+        description: i.description,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+        total: i.total ?? i.quantity * i.unitPrice,
+        unit: i.unit ?? undefined,
+        subItems: i.subItems?.map((s) => ({
+          description: s.description,
+          quantity: s.quantity,
+          unitPrice: s.unitPrice,
+          total: s.total,
+          unit: s.unit ?? undefined,
+        })),
+      }));
+      
+      const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : undefined;
+      const quoteNum = getQuoteDisplayNumber(listQuotes, quoteToSend.id);
+      
+      const { getQuotePdfBase64 } = await import('@/lib/quotePdf');
+      const pdfBase64 = getQuotePdfBase64({
+        clientInfo: {
+          name: quoteToSend.client_name ?? '',
+          email: quoteToSend.client_email ?? '',
+          phone: quoteToSend.client_phone ?? '',
+          address: quoteToSend.client_address ?? '',
+        },
+        projectType: quoteToSend.project_type ?? '',
+        projectDescription: quoteToSend.project_description ?? '',
+        validityDays: String(quoteToSend.validity_days ?? 30),
+        items: pdfItems,
+        subtotal: quoteToSend.total_ht,
+        tva: quoteToSend.total_ttc - quoteToSend.total_ht,
+        total: quoteToSend.total_ttc,
+        themeColor: accentColor,
+        quoteNumber: quoteNum || undefined,
+        companyName: profile?.company_name || profile?.full_name || undefined,
+        companyAddress: profile?.company_address ?? undefined,
+        companyCityPostal: profile?.company_city_postal ?? undefined,
+        companyPhone: profile?.company_phone ?? undefined,
+        companyEmail: profile?.company_email ?? undefined,
+        companySiret: profile?.company_siret ?? undefined,
+        companyLegal: [profile?.company_name, profile?.company_siret && `SIRET ${profile.company_siret}`, profile?.company_tva_number && `TVA ${profile.company_tva_number}`, profile?.company_rcs && `RCS ${profile.company_rcs}`, profile?.company_capital && `Capital ${profile.company_capital} €`].filter(Boolean).join(' — ') || undefined,
+        ...(logoDataUrl && { logoDataUrl }),
+      });
+
+      // Créer le contenu HTML de l'email
+      const htmlContent = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: ${accentColor || '#334155'};">Nouveau devis</h2>
+          <p>Bonjour ${quoteToSend.client_name || 'Madame, Monsieur'},</p>
+          <p>Veuillez trouver ci-joint votre devis ${quoteNum || ''}.</p>
+          <p>Cordialement,<br/>${profile?.company_name || profile?.full_name || ''}</p>
+          ${profile?.company_phone ? `<p style="color: #64748b;">Tel: ${profile.company_phone}</p>` : ''}
+          ${profile?.company_email ? `<p style="color: #64748b;">Email: ${profile.company_email}</p>` : ''}
+        </div>
+      `;
+
+      const safeName = (quoteToSend.client_name || 'devis').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
+      const date = new Date().toISOString().slice(0, 10);
+      const filename = `devis-${safeName}-${date}.pdf`;
+
+      const replyTo = profile?.company_email || user?.email || null;
+      
+      // Envoyer l'email
+      const res = await fetch('/api/send-quote-email', {
+        method: 'POST',
+        headers: getApiPostHeaders(session?.access_token),
+        body: JSON.stringify({
+          to: recipientEmail,
+          fromEmail: profile?.company_email || user?.email,
+          replyTo,
+          pdfBase64,
+          fileName: filename,
+          htmlContent,
+          quoteId: quoteToSend.id,
+          userId: user.id,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Erreur lors de l\'envoi de l\'email');
+      }
+
+      // Mettre à jour le statut du devis
+      if (quoteToSend.status === 'brouillon') {
+        await updateQuoteStatus(quoteToSend.id, user.id, 'envoyé');
+        // Rafraîchir la liste
+        const updatedQuotes = await fetchQuotesForUser(user.id, listStatusFilter === 'all' ? undefined : listStatusFilter);
+        setListQuotes(updatedQuotes);
+      }
+
+      // Créer ou mettre à jour la carte CRM liée à CE devis spécifique
+      try {
+        const allProspects = await fetchCRMClients(user.id);
+        // Chercher un prospect déjà lié à CE devis précis
+        const existingForQuote = allProspects.find(p => p.linkedQuoteId === quoteToSend.id);
+        
+        const crmUpdates = {
+          stage: 'quote',
+          linked_quote_id: quoteToSend.id,
+          last_action_at: new Date().toISOString(),
+          last_action_type: 'Devis envoyé',
+          last_email_sent_at: new Date().toISOString(),
+          relance_count: 0,
+        };
+        
+        if (existingForQuote) {
+          // Ce devis a déjà une carte CRM, on la met à jour
+          await updateProspect(user.id, existingForQuote.id, crmUpdates);
+        } else {
+          // Créer une nouvelle carte CRM pour ce devis
+          const newProspect = await insertProspect(user.id, {
+            name: quoteToSend.client_name || 'Client',
+            email: recipientEmail.trim(),
+            phone: quoteToSend.client_phone || undefined,
+          });
+          await updateProspect(user.id, newProspect.id, crmUpdates);
+        }
+      } catch (err) {
+        console.warn('CRM: impossible de mettre à jour:', err);
+      }
+
+      toast({ title: 'Succès', description: 'Le devis a été envoyé par email' });
+      setSendEmailDialogOpen(false);
+      setQuoteToSend(null);
+      setRecipientEmail('');
+    } catch (error) {
+      console.error(error);
+      toast({ 
+        title: 'Erreur', 
+        description: error instanceof Error ? error.message : 'Impossible d\'envoyer l\'email', 
+        variant: 'destructive' 
+      });
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   const filteredListQuotes = useMemo(() => {
     let result = listQuotes;
     if (listProjectFilter && listProjectFilter !== 'all') {
@@ -862,12 +1072,13 @@ export default function QuotesPage() {
     
     const missingName = !clientInfo.name?.trim();
     const missingEmail = !clientInfo.email?.trim();
+    const invalidEmail = clientInfo.email?.trim() && !EMAIL_REGEX.test(clientInfo.email.trim());
     
     // Calculer les totaux pour vérifier si le devis est valide
     const currentSubtotal = items.reduce((sum, item) => sum + getItemTotal(item), 0);
     const missingItems = items.length === 0 || currentSubtotal === 0;
     
-    return !missingName && !missingEmail && !missingItems;
+    return !missingName && !missingEmail && !invalidEmail && !missingItems;
   };
 
   // Fonction de sauvegarde manuelle du devis
@@ -876,6 +1087,7 @@ export default function QuotesPage() {
     
     const missingName = !clientInfo.name?.trim();
     const missingEmail = !clientInfo.email?.trim();
+    const invalidEmail = clientInfo.email?.trim() && !EMAIL_REGEX.test(clientInfo.email.trim());
     const invalidItemIds = items.filter((i) => !i.description?.trim() || getItemTotal(i) === 0).map((i) => i.id);
     const currentSubtotal = items.reduce((sum, item) => sum + getItemTotal(item), 0);
     const currentDiscountAmt = discountType === 'percent'
@@ -886,17 +1098,19 @@ export default function QuotesPage() {
     const currentSubtotalAfterDiscount = Math.max(0, currentSubtotal - currentDiscountAmt);
     const missingItems = items.length === 0 || currentSubtotal === 0;
     
-    if (missingName || missingEmail || missingItems) {
+    if (missingName || missingEmail || invalidEmail || missingItems) {
       setHighlightMissing({
         clientName: missingName,
         clientEmail: missingEmail,
+        clientEmailInvalid: invalidEmail,
         itemsSection: missingItems,
         itemIds: missingItems ? invalidItemIds : undefined,
       });
-      if (missingName || missingEmail) setStep(1);
+      if (missingName || missingEmail || invalidEmail) setStep(1);
       const parts: string[] = [];
       if (missingName) parts.push('Nom client');
       if (missingEmail) parts.push('Email client');
+      if (invalidEmail) parts.push('Format email valide');
       if (missingItems) parts.push('Au moins une ligne avec un montant');
       toast({
         title: 'Il manque des informations',
@@ -1109,19 +1323,22 @@ export default function QuotesPage() {
 
     const missingName = !clientInfo.name?.trim();
     const missingEmail = !clientInfo.email?.trim();
+    const invalidEmail = clientInfo.email?.trim() && !EMAIL_REGEX.test(clientInfo.email.trim());
     const invalidItemIds = items.filter((i) => !i.description?.trim() || getItemTotal(i) === 0).map((i) => i.id);
     const missingItems = items.length === 0 || subtotal === 0;
-    if (missingName || missingEmail || missingItems) {
+    if (missingName || missingEmail || invalidEmail || missingItems) {
       setHighlightMissing({
         clientName: missingName,
         clientEmail: missingEmail,
+        clientEmailInvalid: invalidEmail,
         itemsSection: missingItems,
         itemIds: missingItems ? invalidItemIds : undefined,
       });
-      if (missingName || missingEmail) setStep(1);
+      if (missingName || missingEmail || invalidEmail) setStep(1);
       const parts: string[] = [];
       if (missingName) parts.push('Nom client');
       if (missingEmail) parts.push('Email client');
+      if (invalidEmail) parts.push('Format email valide');
       if (missingItems) parts.push('Au moins une ligne avec un montant');
       toast({
         title: 'Il manque des informations',
@@ -1386,7 +1603,8 @@ export default function QuotesPage() {
           onDuplicateQuote={handleDuplicateQuote}
           onDeleteQuote={handleDeleteQuoteFromList}
           onChangeStatus={handleChangeStatusFromList}
-          onGoToProjects={() => setLocation('/dashboard/projects')}
+          onGoToProjects={(chantierId) => setLocation(`/dashboard/projects/${chantierId}`)}
+          onSendEmail={handleSendEmailFromList}
         />
       ) : (
         <>
@@ -1745,13 +1963,16 @@ export default function QuotesPage() {
                         onChange={(e) => {
                           const newEmail = e.target.value;
                           setClientInfo(prev => ({ ...prev, email: newEmail }));
-                          setHighlightMissing(prev => ({ ...prev, clientEmail: false }));
+                          setHighlightMissing(prev => ({ ...prev, clientEmail: false, clientEmailInvalid: false }));
                           const selClient = selectedClientId ? clients.find(c => c.id === selectedClientId) : null;
                           if (selectedClientId && selClient && newEmail.trim() !== (selClient.email ?? '')) setSelectedClientId(null);
                         }}
                         placeholder="email@exemple.com"
-                        className={`cursor-text rounded-xl border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 ${highlightMissing.clientEmail ? 'border-amber-400 dark:border-amber-500/80 bg-amber-50/20 dark:bg-amber-950/10' : ''}`}
+                        className={`cursor-text rounded-xl border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 ${highlightMissing.clientEmail || highlightMissing.clientEmailInvalid ? 'border-amber-400 dark:border-amber-500/80 bg-amber-50/20 dark:bg-amber-950/10' : ''}`}
                       />
+                      {highlightMissing.clientEmailInvalid && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400">Format d'email invalide (ex: nom@exemple.com)</p>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="client-phone" className="text-gray-700 dark:text-gray-300">Téléphone</Label>
@@ -2647,6 +2868,65 @@ export default function QuotesPage() {
       </div>
         </>
       )}
+
+      {/* Dialog d'envoi d'email */}
+      <Dialog open={sendEmailDialogOpen} onOpenChange={setSendEmailDialogOpen}>
+        <DialogContent className="sm:max-w-lg flex flex-col max-h-screen">
+          <DialogHeader>
+            <DialogTitle>Envoyer le devis par email</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="recipient-email">Email du destinataire</Label>
+              <Input
+                id="recipient-email"
+                type="email"
+                placeholder="client@example.com"
+                value={recipientEmail}
+                readOnly
+                disabled
+              />
+            </div>
+            {quoteToSend && (
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                <p><strong>Devis:</strong> {getQuoteDisplayNumber(listQuotes, quoteToSend.id)}</p>
+                <p><strong>Client:</strong> {quoteToSend.client_name}</p>
+                <p><strong>Montant:</strong> {quoteToSend.total_ttc.toFixed(2)} €</p>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-4 border-t mt-auto">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSendEmailDialogOpen(false);
+                setQuoteToSend(null);
+                setRecipientEmail('');
+              }}
+              disabled={sendingEmail}
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={handleConfirmSendEmail}
+              disabled={sendingEmail || !recipientEmail.trim()}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              {sendingEmail ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Envoi en cours...
+                </>
+              ) : (
+                <>
+                  <Mail className="h-4 w-4 mr-2" />
+                  Envoyer
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </PageWrapper>
   );
 }

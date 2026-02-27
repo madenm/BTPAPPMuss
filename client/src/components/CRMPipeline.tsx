@@ -1,17 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogTrigger,
-  DialogFooter,
-} from "@/components/ui/dialog"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,12 +10,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Mail, Phone, Plus, Loader2, Search } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { getApiPostHeaders } from "@/lib/apiHeaders"
 import { useAuth } from "@/context/AuthContext"
 import { useTeamEffectiveUserId } from "@/context/TeamEffectiveUserIdContext"
 import { useUserSettings } from "@/context/UserSettingsContext"
-import { useChantiers } from "@/context/ChantiersContext"
 import {
   type Prospect,
   type ProspectStage,
@@ -36,40 +23,29 @@ import {
   insertProspect,
   updateProspect,
   deleteProspect,
-} from "@/lib/supabaseProspects"
-import { fetchQuotesForUser, updateQuoteStatus, type SupabaseQuote } from "@/lib/supabaseQuotes"
-import { fetchInvoicesForUser, type InvoiceWithPayments } from "@/lib/supabaseInvoices"
+} from "@/lib/supabaseClients"
+import { fetchQuotesForUser, updateQuoteStatus, type SupabaseQuote, hasQuoteBeenSigned, isQuoteValidityExpired } from "@/lib/supabaseQuotes"
 import { getQuotePdfBase64, getSignatureRectangleCoordinates, fetchLogoDataUrl, buildQuoteEmailHtml, buildContactBlockHtml, type QuotePdfParams } from "@/lib/quotePdf"
-import { buildInvoiceEmailHtml } from "@/lib/invoicePdf"
 import { toast } from "@/hooks/use-toast"
 
 import { PipelineColumn } from "./crm/PipelineColumn"
 import { ProspectDetailPanel } from "./crm/ProspectDetailPanel"
-import { QuoteModal, InvoiceModal, FollowupModal } from "./crm/CRMModals"
+import { QuoteModal } from "./crm/CRMModals"
 
 /* ────────────── Column definitions ────────────── */
 
-interface ColumnDef { id: string; name: string }
+interface ColumnDef { id: string; name: string; isTerminal?: boolean }
 
 const QUOTE_COLUMNS: ColumnDef[] = [
-  { id: "all", name: "Nouveau prospect" },
-  { id: "quote", name: "Devis envoyé" },
-  { id: "quote_followup1", name: "Relance devis 1" },
-  { id: "quote_followup2", name: "Relance devis 2" },
-]
-
-const INVOICE_COLUMNS: ColumnDef[] = [
-  { id: "invoice", name: "Facture envoyée" },
-  { id: "invoice_followup1", name: "Relance facture 1" },
-  { id: "invoice_followup2", name: "Relance facture 2" },
+  { id: "quote", name: "📬 Devis envoyé" },
+  { id: "followup", name: "📢 À relancer" },
 ]
 
 const TERMINAL_COLUMNS: ColumnDef[] = [
-  { id: "won", name: "Gagné" },
-  { id: "lost", name: "Perdu" },
+  { id: "terminal", name: "✅ Terminé", isTerminal: true },
 ]
 
-const ALL_COLUMNS = [...QUOTE_COLUMNS, ...INVOICE_COLUMNS, ...TERMINAL_COLUMNS]
+const ALL_COLUMNS = [...QUOTE_COLUMNS, ...TERMINAL_COLUMNS]
 
 /* ────────────── Message storage ────────────── */
 
@@ -77,22 +53,18 @@ const DEFAULT_THEME_COLOR = "#8b5cf6"
 
 const DEFAULT_QUOTE_EMAIL_MESSAGE =
   "Bonjour,\n\nVeuillez trouver ci-joint notre devis. N'hésitez pas à nous contacter pour toute question.\n\nCordialement"
-const DEFAULT_INVOICE_EMAIL_MESSAGE =
-  "Bonjour,\n\nVeuillez trouver ci-joint notre facture. N'hésitez pas à nous contacter pour toute question.\n\nCordialement"
 const DEFAULT_QUOTE_FOLLOWUP =
-  "Bonjour, je souhaite faire un suivi concernant notre échange précédent et le devis que je vous ai transmis. N'hésitez pas à me recontacter pour en discuter. Cordialement."
-const DEFAULT_INVOICE_FOLLOWUP =
-  "Bonjour, je souhaite faire un suivi concernant la facture que je vous ai transmise. N'hésitez pas à me recontacter pour régler ou en discuter. Cordialement."
+  "Bonjour,\n\nJe me permets de revenir vers vous concernant le devis que je vous ai envoyé.\n\nSouhaitez-vous avoir des précisions ou modifier certains éléments ?\n\nJe reste à votre disposition.\n\nCordialement"
 
 function getDefaultMessageForColumn(columnId: string): string {
   if (columnId === "quote") return DEFAULT_QUOTE_EMAIL_MESSAGE
-  if (columnId === "invoice") return DEFAULT_INVOICE_EMAIL_MESSAGE
-  if (columnId.startsWith("quote_")) return DEFAULT_QUOTE_FOLLOWUP
-  if (columnId.startsWith("invoice_")) return DEFAULT_INVOICE_FOLLOWUP
+  if (columnId === "followup") return DEFAULT_QUOTE_FOLLOWUP
   return ""
 }
 
 const PIPELINE_MESSAGES_STORAGE_KEY = "crm_pipeline_messages"
+const PIPELINE_DELAYS_STORAGE_KEY = "crm_pipeline_delays"
+const DEFAULT_DAYS_BEFORE_FOLLOWUP = 7
 
 function getStoredPipelineMessages(userId: string | null): Record<string, string> {
   if (!userId || typeof window === "undefined") return {}
@@ -112,6 +84,29 @@ function setStoredPipelineMessage(userId: string | null, key: string, value: str
   } catch { /* ignore */ }
 }
 
+function getStoredPipelineDelays(userId: string | null): Record<string, number> {
+  if (!userId || typeof window === "undefined") return {}
+  try {
+    const raw = localStorage.getItem(`${PIPELINE_DELAYS_STORAGE_KEY}_${userId}`)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as Record<string, number>
+    return typeof parsed === "object" && parsed !== null ? parsed : {}
+  } catch { return {} }
+}
+
+function setStoredPipelineDelay(userId: string | null, key: string, value: number): void {
+  if (!userId || typeof window === "undefined") return
+  try {
+    const prev = getStoredPipelineDelays(userId)
+    localStorage.setItem(`${PIPELINE_DELAYS_STORAGE_KEY}_${userId}`, JSON.stringify({ ...prev, [key]: value }))
+  } catch { /* ignore */ }
+}
+
+function getDaysBeforeFollowup(userId: string | null, columnId: string): number {
+  const delays = getStoredPipelineDelays(userId)
+  return delays[columnId] ?? DEFAULT_DAYS_BEFORE_FOLLOWUP
+}
+
 /* ────────────── Main Component ────────────── */
 
 export function CRMPipeline() {
@@ -119,7 +114,6 @@ export function CRMPipeline() {
   const effectiveUserId = useTeamEffectiveUserId()
   const userId = effectiveUserId ?? user?.id ?? null
   const { profile, logoUrl, themeColor } = useUserSettings()
-  const { clients } = useChantiers()
   const accentColor = themeColor || DEFAULT_THEME_COLOR
   const userReplyToEmail = profile?.company_email || user?.email || null
 
@@ -128,21 +122,13 @@ export function CRMPipeline() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // ─── Add dialog ───
-  const [addDialogOpen, setAddDialogOpen] = useState(false)
-  const [clientSearchQuery, setClientSearchQuery] = useState("")
-  const [newProspect, setNewProspect] = useState({ name: "", email: "", phone: "", company: "", notes: "" })
-  const [adding, setAdding] = useState(false)
 
   // ─── Drag & drop ───
   const [draggedItem, setDraggedItem] = useState<{ prospect: Prospect; columnId: string } | null>(null)
 
   // ─── Modals ───
   const [showQuoteModal, setShowQuoteModal] = useState(false)
-  const [showFollowupModal, setShowFollowupModal] = useState(false)
-  const [showInvoiceModal, setShowInvoiceModal] = useState(false)
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null)
-  const [selectedColumn, setSelectedColumn] = useState("")
   const [updatingStage, setUpdatingStage] = useState(false)
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [prospectToRemove, setProspectToRemove] = useState<Prospect | null>(null)
@@ -155,15 +141,6 @@ export function CRMPipeline() {
   const [quoteModalDragOver, setQuoteModalDragOver] = useState(false)
   const [quoteModalCustomMessage, setQuoteModalCustomMessage] = useState("")
 
-  // ─── Invoice modal state ───
-  const [invoiceModalInvoices, setInvoiceModalInvoices] = useState<InvoiceWithPayments[]>([])
-  const [invoiceModalSelectedInvoice, setInvoiceModalSelectedInvoice] = useState<InvoiceWithPayments | null>(null)
-  const [invoiceModalLoading, setInvoiceModalLoading] = useState(false)
-  const [invoiceModalCustomMessage, setInvoiceModalCustomMessage] = useState("")
-
-  // ─── Followup modal state ───
-  const [followupMessage, setFollowupMessage] = useState(DEFAULT_QUOTE_FOLLOWUP)
-
   // ─── Column message editor ───
   const [pipelineMessageEditColumnId, setPipelineMessageEditColumnId] = useState<string | null>(null)
   const [pipelineMessageEditDraft, setPipelineMessageEditDraft] = useState("")
@@ -174,7 +151,6 @@ export function CRMPipeline() {
 
   // ─── Linked documents for detail panel ───
   const [allQuotes, setAllQuotes] = useState<SupabaseQuote[]>([])
-  const [allInvoices, setAllInvoices] = useState<InvoiceWithPayments[]>([])
 
   /* ────────────── Computed columns ────────────── */
 
@@ -184,15 +160,53 @@ export function CRMPipeline() {
 
     for (const p of prospects) {
       const stage = p.stage
-      if (stage === "followup1") { map["quote_followup1"]?.push(p); continue }
-      if (stage === "followup2") { map["quote_followup2"]?.push(p); continue }
-      if (stage === "followup3") { map["invoice_followup1"]?.push(p); continue }
-      if (stage === "followup4") { map["invoice_followup2"]?.push(p); continue }
+      // Route to followup column if in either followup stage
+      if (stage === "quote_followup1" || stage === "quote_followup2") { 
+        map["followup"]?.push(p); 
+        continue 
+      }
+      // Route to terminal column if won or lost
+      if (stage === "won" || stage === "lost") { 
+        map["terminal"]?.push(p); 
+        continue 
+      }
+      // Default: route quote and all to quote column
+      if (stage === "quote" || stage === "all") { 
+        map["quote"]?.push(p); 
+        continue 
+      }
+      // Fallback
       if (map[stage]) map[stage].push(p)
-      else map["all"].push(p)
+      else map["quote"]?.push(p)
     }
     return map
   }, [prospects])
+
+  /* ────────────── Prospect statuses (signed/expired) ────────────── */
+
+  const prospectStatuses = useMemo(() => {
+    const statuses: Record<string, { isSigned: boolean; isExpired: boolean }> = {}
+    
+    for (const prospect of prospects) {
+      if (!prospect.linkedQuoteId) {
+        statuses[prospect.id] = { isSigned: false, isExpired: false }
+        continue
+      }
+      
+      const quote = allQuotes.find(q => q.id === prospect.linkedQuoteId)
+      if (!quote) {
+        statuses[prospect.id] = { isSigned: false, isExpired: false }
+        continue
+      }
+      
+      const isSigned = quote.status === "signé" || quote.status === "accepté"
+      const isExpired = isQuoteValidityExpired(quote)
+      
+      statuses[prospect.id] = { isSigned, isExpired }
+    }
+    
+    return statuses
+  }, [prospects, allQuotes])
 
   /* ────────────── Data loading ────────────── */
 
@@ -216,8 +230,93 @@ export function CRMPipeline() {
   useEffect(() => {
     if (!userId) return
     fetchQuotesForUser(userId).then(setAllQuotes).catch(() => setAllQuotes([]))
-    fetchInvoicesForUser(userId).then(setAllInvoices).catch(() => setAllInvoices([]))
   }, [userId])
+
+  /* ────────────── Auto-update prospects based on quote status and delays ────────────── */
+
+  useEffect(() => {
+    if (!userId || prospects.length === 0) return
+
+    const checkAndUpdateProspects = async () => {
+      const updates: Array<{ prospect: Prospect; updates: ProspectUpdatePayload }> = []
+      const now = new Date()
+      const daysBeforeFollowup = getDaysBeforeFollowup(userId, "quote")
+
+      for (const prospect of prospects) {
+        // Auto-move from "Devis envoyé" to "À relancer" after delay
+        if (prospect.stage === "quote" && prospect.lastEmailSentAt) {
+          const lastEmailDate = new Date(prospect.lastEmailSentAt)
+          const daysSinceEmail = Math.floor((now.getTime() - lastEmailDate.getTime()) / (1000 * 60 * 60 * 24))
+          
+          if (daysSinceEmail >= daysBeforeFollowup) {
+            const relanceCount = (prospect.relanceCount ?? 0) + 1
+            const newStage = relanceCount === 1 ? "quote_followup1" : "quote_followup2"
+            
+            updates.push({
+              prospect,
+              updates: {
+                stage: newStage,
+                last_action_at: new Date().toISOString(),
+                last_action_type: `Passage automatique en relance ${relanceCount}`,
+              },
+            })
+          }
+        }
+
+        // Check quote status if linked
+        if (prospect.linkedQuoteId && allQuotes.length > 0) {
+          const quote = allQuotes.find((q) => q.id === prospect.linkedQuoteId)
+          if (quote) {
+            // Check if quote is signed or has a signature
+            let shouldUpdateToWon = false
+            if (quote.status === "signé" || quote.status === "accepté") {
+              shouldUpdateToWon = true
+            } else {
+              const isSigned = await hasQuoteBeenSigned(quote.id)
+              if (isSigned) {
+                shouldUpdateToWon = true
+              }
+            }
+
+            // Check if quote validity has expired
+            const hasExpired = isQuoteValidityExpired(quote)
+
+            if (shouldUpdateToWon && prospect.stage !== "won") {
+              updates.push({
+                prospect,
+                updates: {
+                  stage: "won",
+                  last_action_at: new Date().toISOString(),
+                  last_action_type: "Devis signé automatiquement détecté",
+                },
+              })
+            } else if (hasExpired && prospect.stage !== "lost" && prospect.stage !== "won") {
+              updates.push({
+                prospect,
+                updates: {
+                  stage: "lost",
+                  last_action_at: new Date().toISOString(),
+                  last_action_type: "Validité du devis dépassée",
+                },
+              })
+            }
+          }
+        }
+      }
+
+      // Apply all updates
+      for (const { prospect, updates: updatePayload } of updates) {
+        try {
+          const updated = await updateProspect(userId, prospect.id, updatePayload)
+          refreshAfterUpdate(updated)
+        } catch (err) {
+          console.error("Error updating prospect:", err)
+        }
+      }
+    }
+
+    checkAndUpdateProspects()
+  }, [userId, prospects, allQuotes])
 
   /* ────────────── Modal data loading ────────────── */
 
@@ -234,42 +333,14 @@ export function CRMPipeline() {
         setQuoteModalQuotes(quotes)
         setAllQuotes(quotes)
         if (prospect && quotes.length > 0) {
-          const norm = (s: string) => (s ?? "").trim().toLowerCase()
-          const match = quotes.find((q) => norm(q.client_email ?? "") === norm(prospect.email))
+          // Utiliser contact_id au lieu de comparer les emails
+          const match = quotes.find((q) => q.contact_id === prospect.id)
           if (match) setQuoteModalSelectedQuote(match)
         }
       })
       .catch(() => setQuoteModalQuotes([]))
       .finally(() => setQuoteModalQuotesLoading(false))
   }, [showQuoteModal, userId, selectedProspect?.id])
-
-  useEffect(() => {
-    if (!showFollowupModal || !selectedColumn || !userId) return
-    const stored = getStoredPipelineMessages(userId)
-    const defaultMsg = selectedColumn.startsWith("quote_") ? DEFAULT_QUOTE_FOLLOWUP : DEFAULT_INVOICE_FOLLOWUP
-    setFollowupMessage(stored[selectedColumn] ?? defaultMsg)
-  }, [showFollowupModal, selectedColumn, userId])
-
-  useEffect(() => {
-    if (!showInvoiceModal || !userId) return
-    setInvoiceModalSelectedInvoice(null)
-    const stored = getStoredPipelineMessages(userId)
-    setInvoiceModalCustomMessage(stored["invoice"] ?? DEFAULT_INVOICE_EMAIL_MESSAGE)
-    setInvoiceModalLoading(true)
-    const prospect = selectedProspect
-    fetchInvoicesForUser(userId)
-      .then((invoices) => {
-        setInvoiceModalInvoices(invoices)
-        setAllInvoices(invoices)
-        if (prospect && invoices.length > 0) {
-          const norm = (s: string) => (s ?? "").trim().toLowerCase()
-          const match = invoices.find((inv) => norm(inv.client_email ?? "") === norm(prospect.email))
-          if (match) setInvoiceModalSelectedInvoice(match)
-        }
-      })
-      .catch(() => setInvoiceModalInvoices([]))
-      .finally(() => setInvoiceModalLoading(false))
-  }, [showInvoiceModal, userId, selectedProspect?.id])
 
   /* ────────────── Helpers ────────────── */
 
@@ -279,33 +350,6 @@ export function CRMPipeline() {
   }
 
   /* ────────────── Prospect CRUD ────────────── */
-
-  const handleAddProspect = async () => {
-    if (!userId || !newProspect.name.trim() || !newProspect.email.trim()) {
-      toast({ title: "Nom et email requis", variant: "destructive" })
-      return
-    }
-    setAdding(true)
-    try {
-      const created = await insertProspect(userId, {
-        name: newProspect.name.trim(),
-        email: newProspect.email.trim(),
-        phone: newProspect.phone.trim() || undefined,
-        company: newProspect.company.trim() || undefined,
-        notes: newProspect.notes.trim() || undefined,
-      })
-      setProspects((prev) => [created, ...prev])
-      setNewProspect({ name: "", email: "", phone: "", company: "", notes: "" })
-      setClientSearchQuery("")
-      setAddDialogOpen(false)
-      toast({ title: "Prospect ajouté" })
-    } catch (err) {
-      console.error(err)
-      toast({ title: "Erreur lors de l'ajout", variant: "destructive" })
-    } finally {
-      setAdding(false)
-    }
-  }
 
   const handleRemoveProspectClick = (prospect: Prospect, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -329,11 +373,6 @@ export function CRMPipeline() {
     }
   }
 
-  const handleSelectClient = (client: { name: string; email: string; phone?: string | null }) => {
-    setNewProspect({ name: client.name, email: client.email, phone: client.phone || "", company: "", notes: "" })
-    setClientSearchQuery("")
-  }
-
   /* ────────────── Stage movement ────────────── */
 
   const moveProspectToStage = async (prospect: Prospect, targetStage: ProspectStage) => {
@@ -343,24 +382,6 @@ export function CRMPipeline() {
       setSelectedProspect(prospect)
       setSelectedColumn(targetStage)
       setShowQuoteModal(true)
-      return
-    }
-    if (targetStage === "invoice") {
-      setSelectedProspect(prospect)
-      setSelectedColumn(targetStage)
-      setShowInvoiceModal(true)
-      return
-    }
-    if (targetStage === "quote_followup1" || targetStage === "quote_followup2") {
-      setSelectedProspect(prospect)
-      setSelectedColumn(targetStage)
-      setShowFollowupModal(true)
-      return
-    }
-    if (targetStage === "invoice_followup1" || targetStage === "invoice_followup2") {
-      setSelectedProspect(prospect)
-      setSelectedColumn(targetStage)
-      setShowFollowupModal(true)
       return
     }
 
@@ -396,6 +417,34 @@ export function CRMPipeline() {
     const { prospect, columnId: sourceColumnId } = draggedItem
     setDraggedItem(null)
     if (sourceColumnId === targetColumnId) return
+
+    // Handle terminal column (Won/Lost)
+    if (targetColumnId === "terminal") {
+      const choice = window.confirm(
+        `Marquer "${prospect.name}" comme gagné ? Cliquez OK pour gagné, ou Annuler pour perdu.`
+      )
+      const finalStage: ProspectStage = choice ? "won" : "lost"
+      await moveProspectToStage(prospect, finalStage)
+      return
+    }
+
+    // Handle drag to "followup" (À relancer) - mettre en Relance 1 directement
+    if (targetColumnId === "followup") {
+      await moveProspectToStage(prospect, "quote_followup1")
+      toast({ 
+        title: "Prospect en À relancer", 
+        description: "Cliquez sur le bouton 📧 Relancer pour envoyer l'email.",
+      })
+      return
+    }
+
+    // Allow dragging back to "quote" (Devis envoyé)
+    if (targetColumnId === "quote") {
+      await moveProspectToStage(prospect, "quote")
+      return
+    }
+
+    // Regular stage movement
     await moveProspectToStage(prospect, targetColumnId as ProspectStage)
   }
 
@@ -437,6 +486,13 @@ export function CRMPipeline() {
       let rectCoords: { x: number; y: number; width: number; height: number } | undefined = undefined
       if (hasQuote && quoteModalSelectedQuote) {
         const params = quoteToPdfParams(quoteModalSelectedQuote)
+        // Utiliser les données du contact au lieu du devis
+        params.clientInfo = {
+          name: selectedProspect.name ?? "",
+          email: selectedProspect.email ?? "",
+          phone: selectedProspect.phone ?? "",
+          address: selectedProspect.address ?? ""
+        }
         params.themeColor = accentColor
         params.companyName = profile?.company_name || profile?.full_name || undefined
         params.companyAddress = profile?.company_address ?? undefined
@@ -450,7 +506,7 @@ export function CRMPipeline() {
         }
         pdfBase64 = getQuotePdfBase64(params)
         rectCoords = getSignatureRectangleCoordinates(params)
-        const safeName = (quoteModalSelectedQuote.client_name || "devis").replace(/\s+/g, "-").replace(/[^a-zA-Z0-9-]/g, "")
+        const safeName = (selectedProspect.name || "devis").replace(/\s+/g, "-").replace(/[^a-zA-Z0-9-]/g, "")
         fileName = `devis-${safeName}.pdf`
       } else if (hasPdf && quoteModalPdfFile) {
         pdfBase64 = await new Promise<string>((resolve, reject) => {
@@ -464,10 +520,10 @@ export function CRMPipeline() {
 
       const builtHtml = quoteModalSelectedQuote
         ? buildQuoteEmailHtml({
-            clientName: quoteModalSelectedQuote.client_name ?? "",
-            clientAddress: quoteModalSelectedQuote.client_address ?? undefined,
-            clientPhone: quoteModalSelectedQuote.client_phone ?? undefined,
-            clientEmail: quoteModalSelectedQuote.client_email ?? undefined,
+            clientName: selectedProspect.name ?? "",
+            clientAddress: selectedProspect.address ?? undefined,
+            clientPhone: selectedProspect.phone ?? undefined,
+            clientEmail: selectedProspect.email ?? undefined,
             total: quoteModalSelectedQuote.total_ttc ?? 0,
             subtotal: quoteModalSelectedQuote.total_ht ?? undefined,
             tva: (quoteModalSelectedQuote.total_ttc ?? 0) - (quoteModalSelectedQuote.total_ht ?? 0),
@@ -515,9 +571,8 @@ export function CRMPipeline() {
 
       if (quoteModalSelectedQuote && userId) {
         try {
-          await updateQuoteStatus(quoteModalSelectedQuote.id, userId, 'validé')
-          // Note: La facture ne sera créée que manuellement quand le devis est confirmé par le client
-          // (via le bouton "Valider le devis" dans ProjectsPage ou manuellement dans Factures)
+          await updateQuoteStatus(quoteModalSelectedQuote.id, userId, 'envoyé')
+          // La facture sera créée uniquement quand le devis sera signé ou validé manuellement
         } catch (err) { console.error('Error updating quote status:', err) }
       }
 
@@ -525,11 +580,31 @@ export function CRMPipeline() {
         stage: "quote",
         last_action_at: new Date().toISOString(),
         last_action_type: "Devis envoyé",
+        last_email_sent_at: new Date().toISOString(),
+        relance_count: 0,
       }
       if (quoteModalSelectedQuote) prospectUpdates.linked_quote_id = quoteModalSelectedQuote.id
 
-      const updated = await updateProspect(userId, selectedProspect.id, prospectUpdates)
-      refreshAfterUpdate(updated)
+      // Si le prospect a déjà un devis lié DIFFÉRENT, créer un nouveau prospect pour ce devis
+      const existingLinkedQuoteId = selectedProspect.linkedQuoteId
+      const newQuoteId = quoteModalSelectedQuote?.id
+      const needsNewCard = existingLinkedQuoteId && newQuoteId && existingLinkedQuoteId !== newQuoteId
+
+      let updated: Prospect
+      if (needsNewCard) {
+        // Créer une nouvelle carte CRM pour ce devis
+        const newProspect = await insertProspect(userId, {
+          name: selectedProspect.name,
+          email: selectedProspect.email,
+          phone: selectedProspect.phone,
+          company: selectedProspect.company,
+        })
+        updated = await updateProspect(userId, newProspect.id, prospectUpdates)
+        setProspects((prev) => [...prev, updated])
+      } else {
+        updated = await updateProspect(userId, selectedProspect.id, prospectUpdates)
+        refreshAfterUpdate(updated)
+      }
       setShowQuoteModal(false)
       setSelectedProspect(null)
       setDraggedItem(null)
@@ -538,127 +613,11 @@ export function CRMPipeline() {
       setQuoteModalCustomMessage("")
       toast({
         title: "Email envoyé",
-        description: "Le devis a été envoyé au prospect." + (quoteModalSelectedQuote ? " La facture correspondante a été créée dans la page Factures." : ""),
+        description: "Le devis a été envoyé au prospect.",
       })
     } catch (err) {
       console.error(err)
       toast({ title: "Erreur", description: err instanceof Error ? err.message : "Impossible d'envoyer l'email.", variant: "destructive" })
-    } finally { setUpdatingStage(false) }
-  }
-
-  const handleInvoiceConfirm = async () => {
-    if (!userId || !selectedProspect || !invoiceModalSelectedInvoice) return
-    if (!invoiceModalSelectedInvoice.client_email?.trim()) {
-      toast({ title: "Erreur", description: "Cette facture n'a pas d'email client.", variant: "destructive" })
-      return
-    }
-    setUpdatingStage(true)
-    try {
-      const builtInvoiceHtml = buildInvoiceEmailHtml({
-        clientName: invoiceModalSelectedInvoice.client_name ?? "",
-        clientEmail: invoiceModalSelectedInvoice.client_email,
-        clientPhone: invoiceModalSelectedInvoice.client_phone,
-        clientAddress: invoiceModalSelectedInvoice.client_address,
-        invoiceNumber: invoiceModalSelectedInvoice.invoice_number ?? "",
-        items: invoiceModalSelectedInvoice.items ?? [],
-        subtotalHt: invoiceModalSelectedInvoice.subtotal_ht ?? 0,
-        tvaAmount: invoiceModalSelectedInvoice.tva_amount ?? 0,
-        total: invoiceModalSelectedInvoice.total_ttc ?? 0,
-        dueDate: invoiceModalSelectedInvoice.due_date ?? new Date().toISOString(),
-        paymentTerms: invoiceModalSelectedInvoice.payment_terms ?? "",
-        companyName: profile?.company_name || profile?.full_name || undefined,
-        companyAddress: profile?.company_address != null ? profile.company_address : undefined,
-        companyCityPostal: profile?.company_city_postal != null ? profile.company_city_postal : undefined,
-        companyPhone: profile?.company_phone != null ? profile.company_phone : undefined,
-        companyEmail: profile?.company_email != null ? profile.company_email : undefined,
-        contactBlock: { contactName: profile?.full_name, phone: profile?.company_phone, email: profile?.company_email, address: profile?.company_address, cityPostal: profile?.company_city_postal },
-      })
-      const customInvoiceHtml = invoiceModalCustomMessage.trim()
-        ? "<p>" + invoiceModalCustomMessage.trim().replace(/\n/g, "</p><p>") + "</p>"
-        : ""
-      const invoiceHtml = (customInvoiceHtml + builtInvoiceHtml).trim() || builtInvoiceHtml
-
-      setStoredPipelineMessage(userId, "invoice", invoiceModalCustomMessage)
-
-      const toEmail = (selectedProspect.email?.trim() || invoiceModalSelectedInvoice.client_email?.trim()) ?? ""
-      const emailRes = await fetch(`/api/invoices/${invoiceModalSelectedInvoice.id}/send-email`, {
-        method: "POST",
-        headers: getApiPostHeaders(session?.access_token),
-        body: JSON.stringify({ userId, to: toEmail, subject: `Facture ${invoiceModalSelectedInvoice.invoice_number}`, message: invoiceHtml, replyTo: userReplyToEmail }),
-      })
-      const data = await emailRes.json().catch(() => ({}))
-      if (!emailRes.ok) {
-        toast({ title: "Erreur d'envoi", description: data.message || "Impossible d'envoyer la facture par email.", variant: "destructive" })
-        return
-      }
-
-      const prospectUpdates: ProspectUpdatePayload = {
-        stage: "invoice",
-        last_action_at: new Date().toISOString(),
-        last_action_type: "Facture envoyée",
-        linked_invoice_id: invoiceModalSelectedInvoice.id,
-      }
-      const updated = await updateProspect(userId, selectedProspect.id, prospectUpdates)
-      refreshAfterUpdate(updated)
-      closeInvoiceModal()
-      toast({ title: "Facture envoyée", description: "La facture a été envoyée au prospect." })
-    } catch (err) {
-      console.error(err)
-      toast({ title: "Erreur", description: err instanceof Error ? err.message : "Impossible d'envoyer la facture.", variant: "destructive" })
-    } finally { setUpdatingStage(false) }
-  }
-
-  const handleFollowupConfirm = async () => {
-    if (!userId || !selectedProspect || !selectedColumn) return
-    setUpdatingStage(true)
-    try {
-      const contactBlock = buildContactBlockHtml({
-        contactName: profile?.full_name,
-        phone: profile?.company_phone,
-        email: profile?.company_email,
-        address: profile?.company_address,
-        cityPostal: profile?.company_city_postal,
-      })
-      const baseHtml = followupMessage.trim().includes("<")
-        ? followupMessage.trim()
-        : `<p>${followupMessage.trim().replace(/\n/g, "</p><p>")}</p>`
-      const htmlContent = baseHtml + contactBlock
-
-      const relanceLabel =
-        selectedColumn === "quote_followup1" ? "Relance devis 1" :
-        selectedColumn === "quote_followup2" ? "Relance devis 2" :
-        selectedColumn === "invoice_followup1" ? "Relance facture 1" : "Relance facture 2"
-      const subjectSuffix = selectedColumn.startsWith("quote_") ? "Votre devis" : "Votre facture"
-
-      const emailRes = await fetch("/api/send-followup-email", {
-        method: "POST",
-        headers: getApiPostHeaders(session?.access_token),
-        body: JSON.stringify({ to: selectedProspect.email, subject: `${relanceLabel} - ${subjectSuffix}`, htmlContent, replyTo: userReplyToEmail }),
-      })
-      const resText = await emailRes.text()
-      const data = resText ? (() => { try { return JSON.parse(resText) } catch { return {} } })() : {}
-      if (!emailRes.ok) {
-        toast({ title: "Erreur d'envoi", description: data.message || "Impossible d'envoyer l'email de relance.", variant: "destructive" })
-        return
-      }
-
-      setStoredPipelineMessage(userId, selectedColumn, followupMessage)
-
-      const prospectUpdates: ProspectUpdatePayload = {
-        stage: selectedColumn,
-        last_action_at: new Date().toISOString(),
-        last_action_type: relanceLabel,
-      }
-      const updated = await updateProspect(userId, selectedProspect.id, prospectUpdates)
-      refreshAfterUpdate(updated)
-      setShowFollowupModal(false)
-      setSelectedProspect(null)
-      setSelectedColumn("")
-      setDraggedItem(null)
-      toast({ title: "Relance envoyée", description: "L'email de relance a été envoyé au prospect." })
-    } catch (err) {
-      console.error(err)
-      toast({ title: "Erreur", description: err instanceof Error ? err.message : "Impossible d'envoyer la relance.", variant: "destructive" })
     } finally { setUpdatingStage(false) }
   }
 
@@ -671,12 +630,131 @@ export function CRMPipeline() {
     setQuoteModalCustomMessage("")
   }
 
-  const closeInvoiceModal = () => {
-    setShowInvoiceModal(false)
-    setSelectedProspect(null)
-    setDraggedItem(null)
-    setInvoiceModalSelectedInvoice(null)
+  /* ────────────── Relance handler (direct from card button) ────────────── */
+
+  const handleRelance = async (prospect: Prospect) => {
+    if (!userId) return
+    setUpdatingStage(true)
+    try {
+      // Récupérer le message de relance personnalisé
+      const stored = getStoredPipelineMessages(userId)
+      const relanceMessage = stored["followup"] ?? DEFAULT_QUOTE_FOLLOWUP
+
+      // Trouver le devis lié : priorité à linkedQuoteId, sinon chercher par contact_id
+      let linkedQuoteId = prospect.linkedQuoteId
+      
+      if (!linkedQuoteId && allQuotes.length > 0) {
+        const matchingQuote = allQuotes.find(q => q.contact_id === prospect.id)
+        if (matchingQuote) {
+          linkedQuoteId = matchingQuote.id
+          console.log("📋 Devis trouvé via contact_id:", linkedQuoteId)
+          
+          // Mettre à jour le linkedQuoteId dans le prospect pour les prochaines fois
+          try {
+            await updateProspect(userId, prospect.id, { linked_quote_id: linkedQuoteId })
+          } catch (err) {
+            console.warn("⚠️ Impossible de mettre à jour linked_quote_id:", err)
+          }
+        }
+      }
+
+      // Générer un lien de signature si le prospect a un devis lié
+      let signatureLink = ""
+      console.log("🔗 Génération lien signature - linkedQuoteId:", linkedQuoteId)
+      
+      if (linkedQuoteId) {
+        try {
+          console.log("📤 Appel API generate-quote-signature-link...")
+          const linkRes = await fetch("/api/generate-quote-signature-link", {
+            method: "POST",
+            headers: getApiPostHeaders(session?.access_token),
+            body: JSON.stringify({
+              quoteId: linkedQuoteId,
+              expirationDays: 30
+            }),
+          })
+          
+          console.log("📥 Réponse API:", linkRes.status, linkRes.statusText)
+          
+          if (linkRes.ok) {
+            const linkData = await linkRes.json()
+            signatureLink = linkData.signatureLink || ""
+            console.log("✅ Lien généré:", signatureLink)
+          } else {
+            const errorData = await linkRes.json().catch(() => ({}))
+            console.error("❌ Erreur API:", linkRes.status, errorData)
+          }
+        } catch (err) {
+          console.error("❌ Erreur génération lien signature:", err)
+        }
+      } else {
+        console.warn("⚠️ Pas de devis lié trouvé - aucun lien de signature généré")
+      }
+
+      const contactBlock = buildContactBlockHtml({
+        contactName: profile?.full_name,
+        phone: profile?.company_phone,
+        email: profile?.company_email,
+        address: profile?.company_address,
+        cityPostal: profile?.company_city_postal,
+      })
+      const baseHtml = relanceMessage.trim().includes("<")
+        ? relanceMessage.trim()
+        : `<p>${relanceMessage.trim().replace(/\n/g, "</p><p>")}</p>`
+      
+      // Ajouter le lien de signature au message si disponible
+      const signatureLinkHtml = signatureLink
+        ? `<div style="margin: 24px 0; padding: 16px; background-color: #f3f4f6; border-radius: 8px; text-align: center;">
+             <p style="margin: 0 0 12px 0; font-weight: 600; color: #374151;">Pour signer votre devis en ligne :</p>
+             <a href="${signatureLink}" style="display: inline-block; padding: 12px 24px; background-color: #8b5cf6; color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">✍️ Signer le devis</a>
+           </div>`
+        : ""
+      
+      console.log("📧 Construction email - signatureLink:", signatureLink)
+      console.log("📧 signatureLinkHtml:", signatureLinkHtml ? "Présent" : "Absent")
+      
+      const htmlContent = baseHtml + signatureLinkHtml + contactBlock
+      console.log("📧 HTML final longueur:", htmlContent.length, "caractères")
+
+      const currentRelanceCount = prospect.relanceCount ?? 0
+      const newRelanceCount = currentRelanceCount + 1
+      const relanceLabel = `Relance devis ${newRelanceCount}`
+
+      const emailRes = await fetch("/api/send-followup-email", {
+        method: "POST",
+        headers: getApiPostHeaders(session?.access_token),
+        body: JSON.stringify({ 
+          to: prospect.email, 
+          subject: `${relanceLabel} - Votre devis`, 
+          htmlContent, 
+          replyTo: userReplyToEmail 
+        }),
+      })
+      const resText = await emailRes.text()
+      const data = resText ? (() => { try { return JSON.parse(resText) } catch { return {} } })() : {}
+      if (!emailRes.ok) {
+        toast({ title: "Erreur d'envoi", description: data.message || "Impossible d'envoyer l'email de relance.", variant: "destructive" })
+        return
+      }
+
+      // Remettre le prospect en "Devis envoyé" avec compteur incrémenté
+      const prospectUpdates: ProspectUpdatePayload = {
+        stage: "quote",
+        last_action_at: new Date().toISOString(),
+        last_action_type: relanceLabel,
+        relance_count: newRelanceCount,
+        last_email_sent_at: new Date().toISOString(),
+      }
+      const updated = await updateProspect(userId, prospect.id, prospectUpdates)
+      refreshAfterUpdate(updated)
+      toast({ title: "Relance envoyée", description: "L'email de relance a été envoyé et le prospect est retourné dans 'Devis envoyé'." })
+    } catch (err) {
+      console.error(err)
+      toast({ title: "Erreur", description: err instanceof Error ? err.message : "Impossible d'envoyer la relance.", variant: "destructive" })
+    } finally { setUpdatingStage(false) }
   }
+
+
 
   /* ────────────── Detail panel ────────────── */
 
@@ -701,11 +779,6 @@ export function CRMPipeline() {
     return allQuotes.find((q) => q.id === detailProspect.linkedQuoteId) ?? null
   }, [detailProspect?.linkedQuoteId, allQuotes])
 
-  const linkedInvoiceForDetail = useMemo(() => {
-    if (!detailProspect?.linkedInvoiceId) return null
-    return allInvoices.find((inv) => inv.id === detailProspect.linkedInvoiceId) ?? null
-  }, [detailProspect?.linkedInvoiceId, allInvoices])
-
   /* ────────────── Column message helpers ────────────── */
 
   const handleEditColumnOpen = (columnId: string, currentMessage: string) => {
@@ -721,10 +794,8 @@ export function CRMPipeline() {
   /* ────────────── Render helpers ────────────── */
 
   const renderColumnGroup = (label: string, columns: ColumnDef[], gridCols: string, isTerminal?: boolean) => (
-    <div>
-      <p className="text-xs font-medium text-white/60 uppercase tracking-wider mb-3">{label}</p>
-      <div className={`grid grid-cols-1 ${gridCols} gap-4 max-md:flex max-md:overflow-x-auto max-md:gap-4 max-md:snap-x max-md:snap-mandatory max-md:pb-2 max-md:overflow-y-visible`}>
-        {columns.map((col) => (
+    <>
+      {columns.map((col) => (
           <PipelineColumn
             key={col.id}
             id={col.id}
@@ -735,6 +806,8 @@ export function CRMPipeline() {
             editDraft={pipelineMessageEditDraft}
             defaultMessage={getDefaultMessageForColumn(col.id)}
             userId={userId}
+            prospectStatuses={prospectStatuses}
+            daysBeforeFollowup={getDaysBeforeFollowup(userId, col.id)}
             isTerminal={isTerminal}
             onDragOver={handleDragOver}
             onDrop={() => handleDrop(col.id)}
@@ -746,10 +819,12 @@ export function CRMPipeline() {
             onEditColumnClose={() => setPipelineMessageEditColumnId(null)}
             onEditDraftChange={setPipelineMessageEditDraft}
             onSaveMessage={handleSaveColumnMessage}
+            onSaveDelay={(columnId, days) => setStoredPipelineDelay(userId, columnId, days)}
+            onRelance={handleRelance}
+            allQuotes={allQuotes}
           />
         ))}
-      </div>
-    </div>
+    </>
   )
 
   /* ────────────── Guards ────────────── */
@@ -785,108 +860,11 @@ export function CRMPipeline() {
 
   return (
     <div className="space-y-6">
-      {/* Header + Add button */}
-      <div className="flex items-center justify-between">
-        <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30">
-              <Plus className="h-4 w-4 mr-2" />
-              Ajouter un prospect
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="bg-black/20 backdrop-blur-xl border border-white/10 text-white max-w-2xl max-h-[90vh] flex flex-col">
-            <DialogHeader className="flex-shrink-0">
-              <DialogTitle>Nouveau prospect</DialogTitle>
-              <DialogDescription className="text-white/70">
-                Ajoutez un prospect à votre pipeline. Il apparaîtra dans &quot;Nouveau prospect&quot;.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="overflow-y-auto flex-1 pr-2">
-              {clients.length > 0 && (
-                <div className="space-y-2 py-2">
-                  <Label className="text-white text-sm">Sélectionner un client (recherche optionnelle)</Label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
-                    <Input
-                      placeholder="Rechercher un client (nom, email, téléphone)..."
-                      value={clientSearchQuery}
-                      onChange={(e) => setClientSearchQuery(e.target.value)}
-                      className="pl-9 bg-black/20 border-white/10 text-white placeholder:text-white/50"
-                    />
-                  </div>
-                  {(() => {
-                    const q = clientSearchQuery.trim().toLowerCase()
-                    const filtered = q
-                      ? clients.filter((c) => c.name?.toLowerCase().includes(q) || c.email?.toLowerCase().includes(q) || (c.phone ?? "").includes(q))
-                      : clients
-                    return filtered.length > 0 ? (
-                      <div className="max-h-48 overflow-y-auto space-y-1 border border-white/10 rounded-lg p-2 bg-black/10">
-                        {filtered.map((client) => (
-                          <button
-                            key={client.id}
-                            type="button"
-                            onClick={() => handleSelectClient(client)}
-                            className="w-full text-left p-2 rounded-md border border-white/10 bg-black/20 hover:bg-white/10 transition-colors flex flex-col gap-1"
-                          >
-                            <span className="font-medium text-white text-sm">{client.name}</span>
-                            <span className="text-xs text-white/70 flex items-center gap-1">
-                              <Mail className="h-3 w-3" />{client.email}
-                            </span>
-                            {client.phone && (
-                              <span className="text-xs text-white/70 flex items-center gap-1">
-                                <Phone className="h-3 w-3" />{client.phone}
-                              </span>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-white/50 py-2">Aucun client trouvé</p>
-                    )
-                  })()}
-                </div>
-              )}
-              <div className="space-y-4 py-4">
-                <div>
-                  <Label className="text-white">Nom</Label>
-                  <Input value={newProspect.name} onChange={(e) => setNewProspect((p) => ({ ...p, name: e.target.value }))} placeholder="Nom du prospect" className="bg-black/20 border-white/10 text-white placeholder:text-white/50" />
-                </div>
-                <div>
-                  <Label className="text-white">Email</Label>
-                  <Input type="email" value={newProspect.email} onChange={(e) => setNewProspect((p) => ({ ...p, email: e.target.value }))} placeholder="email@exemple.com" className="bg-black/20 border-white/10 text-white placeholder:text-white/50" />
-                </div>
-                <div>
-                  <Label className="text-white">Téléphone</Label>
-                  <Input value={newProspect.phone} onChange={(e) => setNewProspect((p) => ({ ...p, phone: e.target.value }))} placeholder="06 12 34 56 78" className="bg-black/20 border-white/10 text-white placeholder:text-white/50" />
-                </div>
-                <div>
-                  <Label className="text-white">Entreprise</Label>
-                  <Input value={newProspect.company} onChange={(e) => setNewProspect((p) => ({ ...p, company: e.target.value }))} placeholder="Nom de l'entreprise" className="bg-black/20 border-white/10 text-white placeholder:text-white/50" />
-                </div>
-                <div>
-                  <Label className="text-white">Notes</Label>
-                  <Textarea value={newProspect.notes} onChange={(e) => setNewProspect((p) => ({ ...p, notes: e.target.value }))} placeholder="Notes..." rows={3} className="bg-black/20 border-white/10 text-white placeholder:text-white/50" />
-                </div>
-              </div>
-            </div>
-            <DialogFooter className="flex-shrink-0">
-              <Button variant="outline" className="text-white border-white/20 hover:bg-white/10" onClick={() => { setAddDialogOpen(false); setClientSearchQuery("") }}>
-                Annuler
-              </Button>
-              <Button onClick={handleAddProspect} disabled={adding || !newProspect.name.trim() || !newProspect.email.trim()} className="bg-white/20 text-white border border-white/10 hover:bg-white/30">
-                {adding ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Ajouter
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
 
       {/* Pipeline columns */}
-      <div className="space-y-6 w-full">
-        {renderColumnGroup("Devis", QUOTE_COLUMNS, "sm:grid-cols-2 lg:grid-cols-4")}
-        {renderColumnGroup("Factures", INVOICE_COLUMNS, "sm:grid-cols-3")}
-        {renderColumnGroup("Résultat", TERMINAL_COLUMNS, "sm:grid-cols-2", true)}
+      <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory">
+        {renderColumnGroup("📬 Devis", QUOTE_COLUMNS, "sm:grid-cols-1 lg:grid-cols-2")}
+        {renderColumnGroup("✅ Résultat", TERMINAL_COLUMNS, "sm:grid-cols-1 lg:grid-cols-1")}
       </div>
 
       {/* Modals */}
@@ -910,33 +888,6 @@ export function CRMPipeline() {
         onClose={closeQuoteModal}
       />
 
-      <InvoiceModal
-        open={showInvoiceModal}
-        prospect={selectedProspect}
-        invoices={invoiceModalInvoices}
-        selectedInvoice={invoiceModalSelectedInvoice}
-        loading={invoiceModalLoading}
-        customMessage={invoiceModalCustomMessage}
-        sending={updatingStage}
-        defaultMessage={DEFAULT_INVOICE_EMAIL_MESSAGE}
-        onSelectedInvoiceChange={setInvoiceModalSelectedInvoice}
-        onCustomMessageChange={setInvoiceModalCustomMessage}
-        onCustomMessageBlur={() => userId && setStoredPipelineMessage(userId, "invoice", invoiceModalCustomMessage)}
-        onConfirm={handleInvoiceConfirm}
-        onClose={closeInvoiceModal}
-      />
-
-      <FollowupModal
-        open={showFollowupModal}
-        prospect={selectedProspect}
-        message={followupMessage}
-        sending={updatingStage}
-        onMessageChange={setFollowupMessage}
-        onMessageBlur={() => userId && selectedColumn && setStoredPipelineMessage(userId, selectedColumn, followupMessage)}
-        onConfirm={handleFollowupConfirm}
-        onClose={() => { setShowFollowupModal(false); setSelectedProspect(null); setSelectedColumn(""); setDraggedItem(null) }}
-      />
-
       {/* Detail panel */}
       <ProspectDetailPanel
         prospect={detailProspect}
@@ -944,7 +895,6 @@ export function CRMPipeline() {
         onClose={() => setDetailOpen(false)}
         onSave={handleDetailSave}
         linkedQuote={linkedQuoteForDetail}
-        linkedInvoice={linkedInvoiceForDetail}
       />
 
       {/* Delete confirmation */}

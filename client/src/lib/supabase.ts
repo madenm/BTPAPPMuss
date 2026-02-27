@@ -74,20 +74,7 @@ export async function fetchAllTeamMembers(): Promise<TeamMember[]> {
     if (error) throw error;
     if (typeof window !== 'undefined') sessionStorage.removeItem(TEAM_MEMBERS_TABLE_MISSING_KEY);
 
-    const membersWithPermissions = (data || []).map(member => {
-      try {
-        const stored = localStorage.getItem(`team_member_permissions_${member.id}`);
-        if (stored) {
-          const permissions = JSON.parse(stored);
-          return { ...member, ...permissions };
-        }
-      } catch (e) {
-        console.warn(`Could not load permissions for member ${member.id}:`, e);
-      }
-      return member;
-    });
-
-    return membersWithPermissions;
+    return data || [];
   } catch (error: unknown) {
     if (isTeamMembersTableMissing(error)) {
       const alreadyWarned = typeof window !== 'undefined' && sessionStorage.getItem(TEAM_MEMBERS_TABLE_MISSING_KEY) === '1';
@@ -119,22 +106,7 @@ export async function fetchTeamMembers(): Promise<TeamMember[]> {
     if (error) throw error;
     if (typeof window !== 'undefined') sessionStorage.removeItem(TEAM_MEMBERS_TABLE_MISSING_KEY);
     
-    // Fusionner les permissions depuis localStorage pour chaque membre (solution temporaire
-    // jusqu'à ce que la migration SQL soit exécutée)
-    const membersWithPermissions = (data || []).map(member => {
-      try {
-        const stored = localStorage.getItem(`team_member_permissions_${member.id}`);
-        if (stored) {
-          const permissions = JSON.parse(stored);
-          return { ...member, ...permissions };
-        }
-      } catch (e) {
-        console.warn(`Could not load permissions for member ${member.id}:`, e);
-      }
-      return member;
-    });
-    
-    return membersWithPermissions;
+    return data || [];
   } catch (error: unknown) {
     if (isTeamMembersTableMissing(error)) {
       const alreadyWarned = typeof window !== 'undefined' && sessionStorage.getItem(TEAM_MEMBERS_TABLE_MISSING_KEY) === '1';
@@ -182,36 +154,7 @@ export async function updateTeamMember(id: string, updates: Partial<TeamMember>)
     const userId = await getCurrentUserId();
     if (!userId) throw new Error('User not authenticated');
 
-    // Filtrer les colonnes de permissions si elles causent des erreurs (colonnes n'existant pas encore dans la DB)
-    // On garde seulement les colonnes de base qui existent toujours
-    const baseUpdates: Partial<TeamMember> = {
-      name: updates.name,
-      role: updates.role,
-      email: updates.email,
-      phone: updates.phone,
-      status: updates.status,
-      login_code: updates.login_code,
-      updated_at: new Date().toISOString(),
-    };
-
-    // Liste des colonnes de permissions qui pourraient ne pas exister
-    const permissionColumns = [
-      'can_view_dashboard',
-      'can_use_estimation',
-      'can_view_all_chantiers',
-      'can_manage_chantiers',
-      'can_view_planning',
-      'can_manage_planning',
-      'can_access_crm',
-      'can_create_quotes',
-      'can_manage_invoices',
-      'can_use_ai_visualization',
-      'can_manage_team',
-      'can_manage_clients',
-    ];
-
-    // Essayer d'abord avec toutes les colonnes
-    let updatePayload = { ...baseUpdates, ...updates, updated_at: new Date().toISOString() };
+    const updatePayload = { ...updates, updated_at: new Date().toISOString() };
     
     const { data, error } = await supabase
       .from('team_members')
@@ -220,51 +163,6 @@ export async function updateTeamMember(id: string, updates: Partial<TeamMember>)
       .eq('user_id', userId)
       .select()
       .single();
-
-    // Si erreur liée à une colonne manquante, réessayer sans les colonnes de permissions
-    if (error && error.code === 'PGRST204' && error.message?.includes('column')) {
-      // Stocker les permissions dans localStorage comme solution temporaire
-      // jusqu'à ce que la migration SQL soit exécutée
-      const permissions: Partial<TeamMember> = {};
-      permissionColumns.forEach(col => {
-        if (updates[col as keyof TeamMember] !== undefined) {
-          permissions[col as keyof TeamMember] = updates[col as keyof TeamMember];
-        }
-      });
-      if (Object.keys(permissions).length > 0) {
-        try {
-          localStorage.setItem(`team_member_permissions_${id}`, JSON.stringify(permissions));
-        } catch (e) {
-          console.warn('Could not save permissions to localStorage:', e);
-        }
-      }
-      
-      // Réessayer avec seulement les colonnes de base
-      const { data: retryData, error: retryError } = await supabase
-        .from('team_members')
-        .update(baseUpdates)
-        .eq('id', id)
-        .eq('user_id', userId)
-        .select()
-        .single();
-
-      if (retryError) throw retryError;
-      
-      // Fusionner les permissions depuis localStorage avec les données retournées
-      if (retryData) {
-        try {
-          const storedPermissions = localStorage.getItem(`team_member_permissions_${id}`);
-          if (storedPermissions) {
-            const parsed = JSON.parse(storedPermissions);
-            return { ...retryData, ...parsed };
-          }
-        } catch (e) {
-          console.warn('Could not load permissions from localStorage:', e);
-        }
-      }
-      
-      return retryData;
-    }
 
     if (error) throw error;
     return data;
@@ -294,8 +192,6 @@ export async function deleteTeamMember(id: string): Promise<boolean> {
 
 export async function verifyTeamMemberCode(code: string, invitationToken?: string): Promise<TeamMember | null> {
   try {
-    let member: TeamMember | null = null;
-    
     // Si un token d'invitation est fourni, utiliser la RPC (fonction SECURITY DEFINER) pour éviter la RLS
     if (invitationToken) {
       const { data, error } = await supabase.rpc('verify_invite_code', {
@@ -304,7 +200,7 @@ export async function verifyTeamMemberCode(code: string, invitationToken?: strin
       });
 
       if (error || data == null) return null;
-      member = data as TeamMember;
+      return data as TeamMember;
     } else {
       // Sinon, vérification normale avec auth
       const userId = await getCurrentUserId();
@@ -319,67 +215,8 @@ export async function verifyTeamMemberCode(code: string, invitationToken?: strin
         .single();
 
       if (error || !data) return null;
-      member = data;
+      return data;
     }
-    
-    // Charger les permissions depuis localStorage si elles existent
-    // (solution temporaire jusqu'à ce que la migration SQL soit exécutée)
-    // Les permissions stockées dans team_member_permissions_${id} ont la priorité
-    if (member) {
-      try {
-        const storedPermissions = localStorage.getItem(`team_member_permissions_${member.id}`);
-        if (storedPermissions) {
-          const permissions = JSON.parse(storedPermissions);
-          // Fusionner les permissions avec le membre
-          // Donner la priorité aux permissions stockées dans localStorage car c'est là que l'admin les a définies
-          return {
-            ...member,
-            // Si les permissions sont stockées dans localStorage, les utiliser en priorité
-            // Sinon, utiliser celles du membre (qui peuvent venir de la DB)
-            can_view_dashboard: permissions.can_view_dashboard !== undefined 
-              ? permissions.can_view_dashboard 
-              : (member.can_view_dashboard ?? false),
-            can_use_estimation: permissions.can_use_estimation !== undefined 
-              ? permissions.can_use_estimation 
-              : (member.can_use_estimation ?? false),
-            can_view_all_chantiers: permissions.can_view_all_chantiers !== undefined 
-              ? permissions.can_view_all_chantiers 
-              : (member.can_view_all_chantiers ?? false),
-            can_manage_chantiers: permissions.can_manage_chantiers !== undefined 
-              ? permissions.can_manage_chantiers 
-              : (member.can_manage_chantiers ?? false),
-            can_view_planning: permissions.can_view_planning !== undefined 
-              ? permissions.can_view_planning 
-              : (member.can_view_planning ?? false),
-            can_manage_planning: permissions.can_manage_planning !== undefined 
-              ? permissions.can_manage_planning 
-              : (member.can_manage_planning ?? false),
-            can_access_crm: permissions.can_access_crm !== undefined 
-              ? permissions.can_access_crm 
-              : (member.can_access_crm ?? false),
-            can_create_quotes: permissions.can_create_quotes !== undefined 
-              ? permissions.can_create_quotes 
-              : (member.can_create_quotes ?? false),
-            can_manage_invoices: permissions.can_manage_invoices !== undefined 
-              ? permissions.can_manage_invoices 
-              : (member.can_manage_invoices ?? false),
-            can_use_ai_visualization: permissions.can_use_ai_visualization !== undefined 
-              ? permissions.can_use_ai_visualization 
-              : (member.can_use_ai_visualization ?? false),
-            can_manage_team: permissions.can_manage_team !== undefined 
-              ? permissions.can_manage_team 
-              : (member.can_manage_team ?? false),
-            can_manage_clients: permissions.can_manage_clients !== undefined 
-              ? permissions.can_manage_clients 
-              : (member.can_manage_clients ?? false),
-          };
-        }
-      } catch (e) {
-        console.warn('Could not load permissions from localStorage:', e);
-      }
-    }
-    
-    return member;
   } catch (error) {
     console.error('Error verifying code:', error);
     return null;

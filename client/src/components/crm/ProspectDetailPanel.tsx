@@ -23,7 +23,6 @@ import {
   Building2,
   CalendarDays,
   FileText,
-  Receipt,
   Clock,
   Save,
   Loader2,
@@ -31,10 +30,9 @@ import {
   XCircle,
   ExternalLink,
 } from "lucide-react"
-import type { Prospect, ProspectStage } from "@/lib/supabaseProspects"
-import { STAGE_LABELS } from "@/lib/supabaseProspects"
+import type { Prospect, ProspectStage } from "@/lib/supabaseClients"
+import { STAGE_LABELS } from "@/lib/supabaseClients"
 import type { SupabaseQuote } from "@/lib/supabaseQuotes"
-import type { InvoiceWithPayments } from "@/lib/supabaseInvoices"
 
 interface ProspectDetailPanelProps {
   prospect: Prospect | null
@@ -49,7 +47,6 @@ interface ProspectDetailPanelProps {
     stage?: string
   }) => Promise<void>
   linkedQuote: SupabaseQuote | null
-  linkedInvoice: InvoiceWithPayments | null
 }
 
 const STAGE_COLORS: Record<string, string> = {
@@ -57,9 +54,6 @@ const STAGE_COLORS: Record<string, string> = {
   quote: 'bg-blue-500/20 text-blue-300 border-blue-400/30',
   quote_followup1: 'bg-blue-500/20 text-blue-300 border-blue-400/30',
   quote_followup2: 'bg-blue-500/20 text-blue-300 border-blue-400/30',
-  invoice: 'bg-purple-500/20 text-purple-300 border-purple-400/30',
-  invoice_followup1: 'bg-purple-500/20 text-purple-300 border-purple-400/30',
-  invoice_followup2: 'bg-purple-500/20 text-purple-300 border-purple-400/30',
   won: 'bg-green-500/20 text-green-300 border-green-400/30',
   lost: 'bg-red-500/20 text-red-300 border-red-400/30',
 }
@@ -81,7 +75,6 @@ export function ProspectDetailPanel({
   onClose,
   onSave,
   linkedQuote,
-  linkedInvoice,
 }: ProspectDetailPanelProps) {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -221,7 +214,7 @@ export function ProspectDetailPanel({
           </div>
 
           {/* Linked Documents */}
-          {(linkedQuote || linkedInvoice) && (
+          {linkedQuote && (
             <div className="space-y-3">
               <h3 className="text-xs font-medium text-white/60 uppercase tracking-wider">Documents liés</h3>
               <div className="space-y-2">
@@ -240,25 +233,6 @@ export function ProspectDetailPanel({
                       </div>
                     </div>
                     <a href="/devis" className="text-blue-300 hover:text-blue-200">
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
-                  </div>
-                )}
-                {linkedInvoice && (
-                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-400/20">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Receipt className="h-4 w-4 text-emerald-400 shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-white truncate">
-                          {linkedInvoice.invoice_number || 'Facture'} — {linkedInvoice.client_name || 'Sans nom'}
-                        </p>
-                        <p className="text-xs text-white/60">
-                          {linkedInvoice.total_ttc?.toFixed(2)} € TTC
-                          {linkedInvoice.invoice_date && ` — ${new Date(linkedInvoice.invoice_date).toLocaleDateString('fr-FR')}`}
-                        </p>
-                      </div>
-                    </div>
-                    <a href="/factures" className="text-emerald-300 hover:text-emerald-200">
                       <ExternalLink className="h-4 w-4" />
                     </a>
                   </div>

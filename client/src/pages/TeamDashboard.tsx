@@ -85,49 +85,7 @@ export default function TeamDashboard() {
     let teamMemberForCheck: TeamMember | null = null;
     if (storedMember) {
       try {
-        const member = JSON.parse(storedMember);
-        let permissionsFromStorage: Partial<TeamMember> = {};
-        try {
-          const storedPermissions = localStorage.getItem(`team_member_permissions_${member.id}`);
-          if (storedPermissions) {
-            permissionsFromStorage = JSON.parse(storedPermissions);
-          }
-        } catch (e) {
-          console.warn('Could not load permissions from localStorage:', e);
-        }
-        // Donner la priorité aux permissions stockées dans localStorage
-        teamMemberForCheck = {
-          ...member,
-          can_view_dashboard: permissionsFromStorage.can_view_dashboard !== undefined 
-            ? permissionsFromStorage.can_view_dashboard 
-            : (member.can_view_dashboard ?? false),
-          can_use_estimation: permissionsFromStorage.can_use_estimation !== undefined 
-            ? permissionsFromStorage.can_use_estimation 
-            : (member.can_use_estimation ?? false),
-          can_view_all_chantiers: permissionsFromStorage.can_view_all_chantiers !== undefined 
-            ? permissionsFromStorage.can_view_all_chantiers 
-            : (member.can_view_all_chantiers ?? false),
-          can_manage_chantiers: permissionsFromStorage.can_manage_chantiers !== undefined 
-            ? permissionsFromStorage.can_manage_chantiers 
-            : (member.can_manage_chantiers ?? false),
-          can_view_planning: permissionsFromStorage.can_view_planning !== undefined 
-            ? permissionsFromStorage.can_view_planning 
-            : (member.can_view_planning ?? false),
-          can_manage_planning: permissionsFromStorage.can_manage_planning !== undefined 
-            ? permissionsFromStorage.can_manage_planning 
-            : (member.can_manage_planning ?? false),
-          can_access_crm: permissionsFromStorage.can_access_crm !== undefined 
-            ? permissionsFromStorage.can_access_crm 
-            : (member.can_access_crm ?? false),
-          can_create_quotes: permissionsFromStorage.can_create_quotes !== undefined 
-            ? permissionsFromStorage.can_create_quotes 
-            : (member.can_create_quotes ?? false),
-          can_manage_invoices: permissionsFromStorage.can_manage_invoices !== undefined 
-            ? permissionsFromStorage.can_manage_invoices 
-            : (member.can_manage_invoices ?? false),
-          can_use_ai_visualization: permissionsFromStorage.can_use_ai_visualization !== undefined 
-            ? permissionsFromStorage.can_use_ai_visualization 
-            : (member.can_use_ai_visualization ?? false),
+        teamMemberForCheck = JSON.parse(storedMember) as TeamMember;
           can_manage_team: permissionsFromStorage.can_manage_team !== undefined 
             ? permissionsFromStorage.can_manage_team 
             : (member.can_manage_team ?? false),
@@ -216,31 +174,6 @@ export default function TeamDashboard() {
       window.dispatchEvent(new CustomEvent('teamMemberRefreshed'))
     }
 
-    const mergePermissions = (member: TeamMember): TeamMember => {
-      let permissionsFromStorage: Partial<TeamMember> = {}
-      try {
-        const storedPermissions = localStorage.getItem(`team_member_permissions_${member.id}`)
-        if (storedPermissions) permissionsFromStorage = JSON.parse(storedPermissions)
-      } catch (e) {
-        console.warn('Could not load permissions from localStorage:', e)
-      }
-      return {
-        ...member,
-        can_view_dashboard: permissionsFromStorage.can_view_dashboard !== undefined ? permissionsFromStorage.can_view_dashboard : (member.can_view_dashboard ?? false),
-        can_use_estimation: permissionsFromStorage.can_use_estimation !== undefined ? permissionsFromStorage.can_use_estimation : (member.can_use_estimation ?? false),
-        can_view_all_chantiers: permissionsFromStorage.can_view_all_chantiers !== undefined ? permissionsFromStorage.can_view_all_chantiers : (member.can_view_all_chantiers ?? false),
-        can_manage_chantiers: permissionsFromStorage.can_manage_chantiers !== undefined ? permissionsFromStorage.can_manage_chantiers : (member.can_manage_chantiers ?? false),
-        can_view_planning: permissionsFromStorage.can_view_planning !== undefined ? permissionsFromStorage.can_view_planning : (member.can_view_planning ?? false),
-        can_manage_planning: permissionsFromStorage.can_manage_planning !== undefined ? permissionsFromStorage.can_manage_planning : (member.can_manage_planning ?? false),
-        can_access_crm: permissionsFromStorage.can_access_crm !== undefined ? permissionsFromStorage.can_access_crm : (member.can_access_crm ?? false),
-        can_create_quotes: permissionsFromStorage.can_create_quotes !== undefined ? permissionsFromStorage.can_create_quotes : (member.can_create_quotes ?? false),
-        can_manage_invoices: permissionsFromStorage.can_manage_invoices !== undefined ? permissionsFromStorage.can_manage_invoices : (member.can_manage_invoices ?? false),
-        can_use_ai_visualization: permissionsFromStorage.can_use_ai_visualization !== undefined ? permissionsFromStorage.can_use_ai_visualization : (member.can_use_ai_visualization ?? false),
-        can_manage_team: permissionsFromStorage.can_manage_team !== undefined ? permissionsFromStorage.can_manage_team : (member.can_manage_team ?? false),
-        can_manage_clients: permissionsFromStorage.can_manage_clients !== undefined ? permissionsFromStorage.can_manage_clients : (member.can_manage_clients ?? false),
-      }
-    }
-
     ;(async () => {
       try {
         const member = JSON.parse(storedMember) as TeamMember
@@ -249,11 +182,11 @@ export default function TeamDashboard() {
           const refreshed = await refreshTeamMember(member.id, code)
           if (refreshed) {
             localStorage.setItem('teamMember', JSON.stringify(refreshed))
-            applyMember(mergePermissions(refreshed))
+            applyMember(refreshed)
             return
           }
         }
-        applyMember(mergePermissions(member))
+        applyMember(member)
       } catch (error) {
         console.error('Error loading team member:', error)
       }

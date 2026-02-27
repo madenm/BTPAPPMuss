@@ -520,39 +520,8 @@ export default function ProjectsPage() {
   };
 
   const handleEditChantier = async (chantier: Chantier, scrollToDevis = false) => {
-    scrollToDevisRef.current = scrollToDevis;
-    setSelectedChantier(chantier);
-    setEditChantier({
-      id: chantier.id,
-      nom: chantier.nom,
-      clientId: chantier.clientId,
-      clientName: chantier.clientName,
-      dateDebut: chantier.dateDebut,
-      dateFin: chantier.dateFin ?? '',
-      duree: chantier.duree,
-      images: [...chantier.images],
-      statut: chantier.statut,
-      notes: chantier.notes || '',
-      notesAvancement: chantier.notesAvancement || '',
-      typeChantier: chantier.typeChantier,
-      montantDevis: chantier.montantDevis,
-    });
-    setEditUploadedImages([]);
-    setIsEditDialogOpen(true);
-    setLoadingAssignments(true);
-    try {
-      const [members, assigned] = await Promise.all([
-        fetchTeamMembers(),
-        fetchChantierAssignmentsByChantier(chantier.id),
-      ]);
-      setTeamMembers(members);
-      setEditAssignedMemberIds(assigned.map((m) => m.id));
-    } catch {
-      setTeamMembers([]);
-      setEditAssignedMemberIds([]);
-    } finally {
-      setLoadingAssignments(false);
-    }
+    // Navigate to project detail page instead of opening modal
+    setLocation(`/dashboard/projects/${chantier.id}`);
   };
 
   const toggleMemberAssignment = (memberId: string, checked: boolean) => {

@@ -245,25 +245,20 @@ export default function TeamPage() {
   };
 
   const handleEditMember = async (member: TeamMember) => {
-    let perms: Partial<TeamMember> = {};
-    try {
-      const stored = localStorage.getItem(`team_member_permissions_${member.id}`);
-      if (stored) perms = JSON.parse(stored);
-    } catch {}
     const memberWithDefaults: TeamMember = {
       ...member,
-      can_view_dashboard: member.can_view_dashboard ?? perms.can_view_dashboard ?? false,
-      can_use_estimation: member.can_use_estimation ?? perms.can_use_estimation ?? false,
-      can_view_all_chantiers: member.can_view_all_chantiers ?? perms.can_view_all_chantiers ?? false,
-      can_manage_chantiers: member.can_manage_chantiers ?? perms.can_manage_chantiers ?? false,
-      can_view_planning: member.can_view_planning ?? perms.can_view_planning ?? false,
-      can_manage_planning: member.can_manage_planning ?? perms.can_manage_planning ?? false,
-      can_access_crm: member.can_access_crm ?? perms.can_access_crm ?? false,
-      can_create_quotes: member.can_create_quotes ?? perms.can_create_quotes ?? false,
-      can_manage_invoices: member.can_manage_invoices ?? perms.can_manage_invoices ?? false,
-      can_use_ai_visualization: member.can_use_ai_visualization ?? perms.can_use_ai_visualization ?? false,
-      can_manage_team: member.can_manage_team ?? perms.can_manage_team ?? false,
-      can_manage_clients: member.can_manage_clients ?? perms.can_manage_clients ?? false,
+      can_view_dashboard: member.can_view_dashboard ?? false,
+      can_use_estimation: member.can_use_estimation ?? false,
+      can_view_all_chantiers: member.can_view_all_chantiers ?? false,
+      can_manage_chantiers: member.can_manage_chantiers ?? false,
+      can_view_planning: member.can_view_planning ?? false,
+      can_manage_planning: member.can_manage_planning ?? false,
+      can_access_crm: member.can_access_crm ?? false,
+      can_create_quotes: member.can_create_quotes ?? false,
+      can_manage_invoices: member.can_manage_invoices ?? false,
+      can_use_ai_visualization: member.can_use_ai_visualization ?? false,
+      can_manage_team: member.can_manage_team ?? false,
+      can_manage_clients: member.can_manage_clients ?? false,
     };
     setEditingMember(memberWithDefaults);
     setEditTab('infos');

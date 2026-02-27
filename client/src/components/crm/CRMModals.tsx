@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Loader2, Upload, X } from "lucide-react"
-import type { Prospect } from "@/lib/supabaseProspects"
+import type { Prospect } from "@/lib/supabaseClients"
 import type { SupabaseQuote } from "@/lib/supabaseQuotes"
 import type { InvoiceWithPayments } from "@/lib/supabaseInvoices"
 

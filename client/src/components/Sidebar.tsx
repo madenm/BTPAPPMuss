@@ -24,7 +24,7 @@ export default function Sidebar() {
     { icon: DollarSign, label: 'Tarifs', path: '/dashboard/tarifs' },
     { icon: Receipt, label: 'Factures', path: '/dashboard/invoices' },
     { icon: Users, label: 'Équipe', path: '/dashboard/team' },
-    { icon: User, label: 'Clients', path: '/dashboard/clients' },
+    { icon: User, label: 'Contacts', path: '/dashboard/clients' },
   ];
 
 

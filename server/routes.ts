@@ -3,11 +3,9 @@ import { createServer, type Server } from "http";
 import { appendFileSync, mkdirSync, existsSync } from "fs";
 import { join, resolve, dirname } from "path";
 import { fileURLToPath } from "url";
-import { randomBytes } from "crypto";
 import { storage } from "./storage";
 
 import { generateInvoicePdfBuffer } from "./lib/invoicePdfServer";
-import { addSignatureToPdf } from "./lib/quotePdfServer";
 import { getArtiprixForMetier } from "./lib/artiprixCatalog";
 
 import { Resend } from "resend";
@@ -58,17 +56,6 @@ function extractJsonFromResponse(text: string): string {
   const codeBlockMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (codeBlockMatch?.[1]) return codeBlockMatch[1].trim();
   return trimmed;
-}
-
-/** Escape HTML special characters for safe display in HTML content. */
-function escapeHtml(text: string | null | undefined): string {
-  if (!text) return "";
-  return String(text)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -411,7 +398,7 @@ Règles :
         : status === 404
           ? "Modèle IA indisponible. Réessayez plus tard ou décochez « Utiliser l'analyse IA »."
           : status === 429
-            ? "Quota d'utilisation Gemini dépassé (max 20 requêtes/jour avec l'API gratuite). Réessayez demain ou configurez une clé API payante."
+            ? "Quota Gemini dépassé. Réessayez demain ou décochez « Utiliser l'analyse IA » pour saisir le devis manuellement."
             : status === 401 || status === 402 || status === 403
               ? "Clé Gemini invalide ou accès refusé. Vérifiez GEMINI_API_KEY sur https://aistudio.google.com/app/apikey."
               : "L'analyse IA est temporairement indisponible.";
@@ -559,7 +546,7 @@ Règles :
         : status === 404
           ? "Modèle IA indisponible. Réessayez plus tard."
           : status === 429
-            ? "Quota d'utilisation Gemini dépassé (max 20 requêtes/jour avec l'API gratuite). Réessayez demain ou configurez une clé API payante."
+            ? "Quota Gemini dépassé. Réessayez plus tard."
             : "L'analyse photo IA est temporairement indisponible.";
       res.status(503).json({ message });
     }
@@ -601,7 +588,6 @@ Règles :
 
     const tariffsStr = typeof userTariffsStr === "string" ? userTariffsStr.trim() : "";
     const artiprixStr = getArtiprixForMetier(metier);
-    let surfaceNum = Math.max(1, Math.min(1000, Math.round(Number(surface) || 20)));
 
     const userMessage = [
       "Tu es un expert en estimation de chantiers BTP/rénovation en France. À partir des données ci-dessous, tu DOIS produire une estimation COMPLÈTE au format JSON.",
@@ -618,19 +604,13 @@ Règles :
       tariffsStr ? "TARIFS DE L'ARTISAN (utilise ces prix en PRIORITÉ quand les matériaux correspondent): " + tariffsStr : "",
       artiprixStr ? "BARÈME ARTIPRIX (prix de référence du marché français, MO+fournitures, à utiliser quand pas de tarif artisan):\n" + artiprixStr : "",
       "",
-      "--- CALCUL PAR MÉTIER (JOURS RÉALISTES) ---",
-      "Peinture: ~1-2 heures par 5m². " + surface + "m² = " + Math.max(1, Math.ceil(Number(surface || 20) / 10)) + " jour(s) MAX",
-      "Terrasse/Patio: 1-3 jours si standard, 5-10 si complexe",
-      "Rénovation: 2-15 jours selon ampleur",
-      "Maçonnerie: 3-15 jours selon surface et complexité",
-      "",
-      "--- INSTRUCTIONS CRITIQUES ---",
-      "1. Utilise 80% des TARIFS ARTISAN & ARTIPRIX fournis - ce sont tes données de référence.",
-      "2. Calcule RÉALISTE: PAS de 22 jours pour peinture " + surface + "m²! Utilise formule par métier.",
-      "3. Marges RÉALISTES: 15-20% MAX (pas 25%), frais généraux 8-12%, imprévus 10-15%.",
-      "4. Localisation: Paris/IDF = +10-15%. Accès difficile = +20% coûts.",
-      "5. JAMAIS coutTotal <= 0. Si manque info = estime depuis barème du métier.",
-      "6. Minimum 3 matériaux, 3 outils, 3 recommandations. Jamais de tableaux vides.",
+      "--- INSTRUCTIONS ---",
+      "1. Utilise TOUTES les données ci-dessus pour estimer.",
+      "2. Priorité des prix: 1) tarifs artisan, 2) barème Artiprix (référence marché), 3) estimation marché. Cite la référence Artiprix quand utilisée.",
+      "3. Localisation: Paris/IDF = +10-15%. Accès difficile = +20-30% délai.",
+      "4. Règles par défaut: main-d'œuvre 150€/jour/ouvrier, marge 25%, frais généraux 20%, imprévus 15%.",
+      "5. Fournis une FOURCHETTE de prix (basse = conditions optimales, haute = imprévus/complexité).",
+      "6. Minimum 3 matériaux, 3 outils, 3 recommandations. Aucun tableau vide, aucun 0 pour coutTotal.",
       "",
       "JSON OBLIGATOIRE (pas de texte avant/après):",
       JSON.stringify({
@@ -650,30 +630,24 @@ Règles :
       }),
     ].filter(Boolean).join("\n");
 
-    const systemInstruction = `Tu es un expert en estimation BTP/rénovation en France reconnu pour la PRÉCISION. UNIQUEMENT JSON valide compact.
+    const systemInstruction = `Tu es un expert en estimation de chantiers (BTP, rénovation) en France. Tu produis UNIQUEMENT un JSON valide, sans markdown ni texte autour.
 
-MISSION: Estimer RÉALISTE basé 80% sur tarifs artisan & Artiprix fournis.
-
-CALCULS RÉALISTES MÉTIER:
-- Peinture 18m²: 1-2 jours = ~600-900€ HT (~750-1080€ TTC), PAS 3700€
-- Terrasse 50m²: 5-10 jours = 5000-15000€ TTC selon complexité  
-- Rénovation courte: 3000-8000€ TTC selon ampleur
-- Maçonnerie 30m²: 5000-12000€ TTC selon complexité
-
-MARGES RÉALISTES: 15-20% MAX (NOT 25%+). Frais généraux 8-12%. Imprévus 10-15%.
-
-JSON:
-- tempsRealisation: str RÉALISTE (ex "1-2 jours")
-- materiaux: [≥3 items {nom, quantite str, prix number TOTAL, prixUnitaire number}]
-- outils: [≥3 strings]  
-- nombreOuvriers: ≥1 int
-- coutTotal: number > 0 (JAMAIS zéro)
-- repartitionCouts: {transport, mainOeuvre, materiaux, autres} (sum ≈ coutTotal)
+CHAMPS OBLIGATOIRES:
+- tempsRealisation: string (ex "2 semaines")
+- materiaux: tableau ≥3 objets {nom, quantite (string), prix (number), prixUnitaire (number)}
+- outils: tableau ≥3 strings
+- nombreOuvriers: number ≥1
+- coutTotal: number >0
+- marge, benefice: number ≥0
+- repartitionCouts: {transport, mainOeuvre, materiaux, autres} (numbers, somme ≈ coutTotal)
+- recommandations: tableau ≥3 strings
 - couts: {materiaux, mainOeuvre, imprevu, fraisGeneraux, margeBrute, prixTTC, fourchetteBasse, fourchetteHaute}
-- recommandations: [≥3]
-- confiance: 0-1 (realism 0.7-0.95)
-- hypotheses: [strings]`;
+  fourchetteBasse = estimation optimiste (-15%), fourchetteHaute = pessimiste (+20%)
+- confiance: number 0-1 (fiabilité de l'estimation)
+- confiance_explication: string courte
+- hypotheses: tableau de strings (hypothèses utilisées)
 
+Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marché estimés. Ne renvoie jamais de tableaux vides ni coutTotal à 0.`;
 
     const geminiClient = getGeminiClient();
     if (!geminiClient) {
@@ -718,7 +692,7 @@ JSON:
       type OutilLouer = { nom?: string; duree?: string; coutLocation?: number };
       type TempsRaw = string | { dureeEstimee?: string; decomposition?: { preparation?: string; travauxPrincipaux?: string; finitions?: string; imprevu?: string } };
       type OutilsRaw = string[] | { aLouer?: OutilLouer[]; fourniParArtisan?: string[]; estimationLocationTotal?: number };
-      type CoutsRaw = { materiaux?: number; mainOeuvre?: number; transportLivraison?: number; locationEquipements?: number; sousTotal?: number; imprevu?: number; coutDeBase?: number; fraisGeneraux?: number; margeBrute?: number; prixTTC?: number; fourchetteBasse?: number; fourchetteHaute?: number };
+      type CoutsRaw = { materiaux?: number; mainOeuvre?: number; transportLivraison?: number; locationEquipements?: number; sousTotal?: number; imprevu?: number; coutDeBase?: number; fraisGeneraux?: number; margeBrute?: number; prixTTC?: number };
       type EstimateRaw = {
         tempsRealisation?: TempsRaw;
         materiaux?: MatRaw[];
@@ -752,24 +726,6 @@ JSON:
         tempsRealisation = tr.dureeEstimee.trim();
         if (tr.decomposition && typeof tr.decomposition === "object") tempsRealisationDecomposition = tr.decomposition;
       }
-      
-      // Détecter les estimations de durée aberrantes et corriger
-      let durationAberrant = false;
-      const tempsLower = tempsRealisation.toLowerCase();
-      if (metier === "peinture" && surfaceNum < 50) {
-        // Pour peinture < 50m², si "semaine" est mentionné, c'est aberrant
-        if (tempsLower.includes("semaine")) {
-          durationAberrant = true;
-          tempsRealisation = "1-2 jours";
-        }
-      } else if ((metier === "paysage" || metier === "terrasse") && surfaceNum < 100) {
-        // Pour terrasse/paysage < 100m², si > 2 semaines, aberrant
-        if (tempsLower.includes("3 semaine") || tempsLower.includes("mois")) {
-          durationAberrant = true;
-          tempsRealisation = "3-7 jours";
-        }
-      }
-      
       const materiaux = Array.isArray(parsed.materiaux)
         ? parsed.materiaux.map((m) => ({
             nom: typeof m.nom === "string" ? m.nom.trim() : "Matériau",
@@ -786,29 +742,8 @@ JSON:
         materiaux: Math.round(Number(rep.materiaux) || 0),
         autres: Math.round(Number(rep.autres) || 0),
       };
-      let coutsObj = parsed.couts && typeof parsed.couts === "object" ? parsed.couts : undefined;
+      const coutsObj = parsed.couts && typeof parsed.couts === "object" ? parsed.couts : undefined;
       const coutTotal = Math.round(Number(parsed.coutTotal) ?? Number(coutsObj?.coutDeBase) ?? Number(coutsObj?.prixTTC) ?? 0);
-      
-      // Validation du coût total - détecter les estimations aberrantes
-      let coutTotalAberrant = false;
-      const maxPrixParMetier: Record<string, number> = {
-        peinture: 200,        // max 200€/m² = 3600€ pour 18m²
-        terrasse: 300,
-        paysage: 300,
-        renovation: 250,
-        maconnerie: 250,
-        menuiserie: 350,
-        plomberie: 400,
-        electricite: 400,
-        chauffage: 400,
-        piscine: 600,
-      };
-      const maxPrixRealiste = (maxPrixParMetier[metier] ?? 250) * surfaceNum;
-      if (coutTotal > maxPrixRealiste * 1.3) {
-        // Coût > 130% du max réaliste = aberrant
-        coutTotalAberrant = true;
-      }
-      
       let outils: string[] = [];
       let outilsaLouer: { nom: string; duree?: string; coutLocation?: number }[] | undefined;
       let outilsFournis: string[] | undefined;
@@ -836,6 +771,7 @@ JSON:
       let finalMarge = Math.round(Number(parsed.marge) || 0);
       let finalBenefice = Math.round(Number(parsed.benefice) || 0);
       let finalRepartition = repartitionCouts;
+      const surfaceNum = Math.max(1, Math.min(1000, Math.round(Number(surface) || 20)));
       if (finalMateriaux.length === 0) {
         finalMateriaux = [
           { nom: "Matériaux principaux (à détailler selon devis)", quantite: "lot", prix: Math.round(surfaceNum * 25), prixUnitaire: undefined, notes: undefined },
@@ -854,13 +790,20 @@ JSON:
         ];
       }
       if (!finalTemps || finalTemps === "Non estimé") {
-        let jours = Math.max(3, Math.min(60, Math.round(surfaceNum * 1.2)));
+        const jours = Math.max(3, Math.min(60, Math.round(surfaceNum * 1.2)));
         finalTemps = jours <= 5 ? "environ " + jours + " jours" : "environ " + Math.ceil(jours / 5) + " semaines";
       }
-      if (finalCoutTotal <= 0 || coutTotalAberrant || durationAberrant) {
-        // Recalculer si: coût vide, coût aberrant, ou durée aberrante
-        // TODO: Réimplémenter fallback calculation
-        finalCoutTotal = Math.max(100, Math.min(500000, Math.round(surfaceNum * 500)));
+      if (finalCoutTotal <= 0) {
+        const base = surfaceNum * (metier === "piscine" ? 400 : metier === "renovation" ? 120 : metier === "peinture" ? 45 : 80);
+        finalCoutTotal = Math.round(base * (localisationStr && /paris|île-de-france|idf|75|92|93|94|78|91|77/i.test(localisationStr) ? 1.15 : 1));
+        finalMarge = Math.round(finalCoutTotal * 0.25);
+        finalBenefice = Math.round(finalMarge * 0.7);
+        finalRepartition = {
+          transport: Math.round(finalCoutTotal * 0.05),
+          mainOeuvre: Math.round(finalCoutTotal * 0.45),
+          materiaux: Math.round(finalCoutTotal * 0.35),
+          autres: Math.round(finalCoutTotal * 0.15),
+        };
       }
       const analysisResults: Record<string, unknown> = {
         tempsRealisation: finalTemps,
@@ -878,31 +821,6 @@ JSON:
       if (outilsFournis?.length) analysisResults.outilsFournis = outilsFournis;
       if (estimationLocationTotal != null) analysisResults.estimationLocationTotal = estimationLocationTotal;
       if (equipe) analysisResults.equipe = equipe;
-      
-      // S'assurer que l'objet "couts" est toujours valide et coherent avec finalCoutTotal
-      if (coutsObj) {
-        // Valider et compléter les champs
-        const prixHT = finalCoutTotal;
-        const prixTVA = Math.round(prixHT * 0.20);
-        const prixTTC = prixHT + prixTVA;
-        
-        // Sauvegarder les valeurs retournées par l'IA, mais en ajouter les champs manquants
-        coutsObj = {
-          materiaux: typeof coutsObj.materiaux === 'number' ? coutsObj.materiaux : finalRepartition.materiaux,
-          mainOeuvre: typeof coutsObj.mainOeuvre === 'number' ? coutsObj.mainOeuvre : finalRepartition.mainOeuvre,
-          transportLivraison: typeof coutsObj.transportLivraison === 'number' ? coutsObj.transportLivraison : finalRepartition.transport,
-          locationEquipements: coutsObj.locationEquipements,
-          sousTotal: typeof coutsObj.sousTotal === 'number' ? coutsObj.sousTotal : finalCoutTotal * 0.85,
-          imprevu: typeof coutsObj.imprevu === 'number' ? coutsObj.imprevu : Math.round(finalCoutTotal * 0.10),
-          coutDeBase: typeof coutsObj.coutDeBase === 'number' ? coutsObj.coutDeBase : finalCoutTotal,
-          fraisGeneraux: typeof coutsObj.fraisGeneraux === 'number' ? coutsObj.fraisGeneraux : Math.round(finalCoutTotal * 0.12),
-          margeBrute: finalMarge,
-          prixTTC: prixTTC,
-          fourchetteBasse: typeof coutsObj.fourchetteBasse === 'number' ? coutsObj.fourchetteBasse : Math.round(prixTTC * 0.85),
-          fourchetteHaute: typeof coutsObj.fourchetteHaute === 'number' ? coutsObj.fourchetteHaute : Math.round(prixTTC * 1.20),
-        };
-      }
-      
       if (coutsObj) analysisResults.couts = coutsObj;
       if (hypotheses?.length) analysisResults.hypotheses = hypotheses;
       if (confiance != null) analysisResults.confiance = confiance;
@@ -912,14 +830,6 @@ JSON:
       const status = err && typeof (err as { status?: number }).status === "number" ? (err as { status: number }).status : undefined;
       const errMessage = err instanceof Error ? err.message : String(err ?? "");
       const errLower = errMessage.toLowerCase();
-      
-      // Log l'erreur pour le debugging
-      console.error("[ESTIMATION ERROR]", {
-        status,
-        message: errMessage,
-        type: err instanceof Error ? "Error" : typeof err,
-      });
-      
       const looksLikeInvalidKey =
         status === 403 ||
         status === 401 ||
@@ -932,7 +842,7 @@ JSON:
         : status === 404
           ? "Modèle IA indisponible. Réessayez plus tard."
           : status === 429
-            ? "Quota d'utilisation Gemini dépassé. Vous avez atteint la limite de 20 requêtes/jour avec l'API gratuite. Réessayez demain ou configurez une clé API payante pour un accès illimité."
+            ? "Quota Gemini dépassé. Réessayez plus tard."
             : status === 401 || status === 402 || status === 403
               ? "Clé Gemini invalide ou accès refusé. Vérifiez GEMINI_API_KEY sur https://aistudio.google.com/app/apikey."
               : "L'estimation IA est temporairement indisponible.";
@@ -941,16 +851,13 @@ JSON:
   });
 
   app.post("/api/send-quote-email", async (req: Request, res: Response) => {
-    const { to, fromEmail, replyTo, pdfBase64, fileName, htmlContent, quoteId, userId, signatureRectCoords } = req.body as {
+    const { to, fromEmail, replyTo, pdfBase64, fileName, htmlContent } = req.body as {
       to?: string;
       fromEmail?: string | null;
       replyTo?: string | null;
       pdfBase64?: string;
       fileName?: string;
       htmlContent?: string | null;
-      quoteId?: string;
-      userId?: string;
-      signatureRectCoords?: { x: number; y: number; width: number; height: number };
     };
 
     if (!to || typeof to !== "string" || !to.trim()) {
@@ -966,41 +873,6 @@ JSON:
     const toAddress = to.trim();
     const attachmentFilename = fileName && String(fileName).trim() ? String(fileName).trim() : "devis.pdf";
     const resendApiKey = process.env.RESEND_API_KEY;
-    
-    // Générer un lien de signature si userId est fourni
-    let signatureLink: string | null = null;
-    if (userId) {
-      try {
-        const supabase = getSupabaseClient();
-        
-        // Générer un token unique
-        const signatureToken = randomBytes(32).toString('hex');
-        
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 30);
-        
-        // Insérer dans quote_signature_links (avec quote_id nullable)
-        const { error: insertError } = await supabase
-          .from("quote_signature_links")
-          .insert({
-            quote_id: quoteId ?? null,
-            token: signatureToken,
-            user_id: userId,
-            expires_at: expiresAt.toISOString(),
-            prospect_email: toAddress,
-          });
-        
-        if (!insertError) {
-          const baseUrl = process.env.PUBLIC_URL || "https://titan-btp.vercel.app";
-          signatureLink = `${baseUrl}/sign-quote/${signatureToken}`;
-        } else {
-          console.error("[QUOTE SIGNATURE LINK] Erreur lors de l'insertion:", insertError);
-        }
-      } catch (err) {
-        console.error("[QUOTE SIGNATURE LINK]", err);
-        // Ignorer l'erreur et continuer sans lien de signature
-      }
-    }
 
     // --- Resend ---
     if (resendApiKey) {
@@ -1021,37 +893,12 @@ JSON:
       try {
         const buffer = Buffer.from(pdfBase64, "base64");
         const replyToAddr = replyTo && String(replyTo).trim() ? String(replyTo).trim() : undefined;
-        
-        // Construire le contenu HTML
-        let finalHtmlContent = htmlContent && String(htmlContent).trim() 
-          ? String(htmlContent).trim()
-          : "<p>Veuillez trouver ci-joint votre devis.</p>";
-        
-        // Ajouter le lien de signature s'il est disponible
-        if (signatureLink) {
-          const signatureLinkHtml = `
-            <div style="background-color: #f0f9ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 16px; margin-top: 20px; margin-bottom: 20px;">
-              <p style="margin: 0 0 12px 0; font-weight: 600; color: #0369a1;">⚡ Signer électroniquement</p>
-              <p style="margin: 0 0 12px 0; color: #475569; font-size: 14px;">
-                Vous pouvez signer ce devis directement en ligne en cliquant sur le lien ci-dessous.
-              </p>
-              <a href="${signatureLink}" style="display: inline-block; background-color: #0369a1; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 600; margin-bottom: 10px;">
-                Signer le devis
-              </a>
-              <p style="margin: 0; color: #64748b; font-size: 12px;">Ce lien expirera dans 30 jours.</p>
-            </div>
-          `;
-          
-          // Inserter le lien après le contenu principal
-          finalHtmlContent += signatureLinkHtml;
-        }
-        
         const { data, error } = await resend.emails.send({
           from,
           to: toAddress,
           ...(replyToAddr ? { replyTo: replyToAddr } : {}),
           subject: "Votre devis",
-          html: finalHtmlContent,
+          html: (htmlContent && String(htmlContent).trim()) || "<p>Veuillez trouver ci-joint votre devis.</p>",
           attachments: [{ filename: attachmentFilename, content: buffer }],
         });
 
@@ -1071,30 +918,7 @@ JSON:
           res.status(500).json({ message: errMsg || "Erreur lors de l'envoi de l'email." });
           return;
         }
-        
-        // Stocker le PDF en base de données pour le retrouver à la signature
-        if (quoteId) {
-          try {
-            const supabase = getSupabaseClient();
-            const { error: updateError } = await supabase
-              .from("quotes")
-              .update({
-                quote_pdf_base64: pdfBase64,
-                quote_signature_rect_coords: signatureRectCoords ? JSON.stringify(signatureRectCoords) : null,
-              })
-              .eq("id", quoteId);
-            
-            if (updateError) {
-              console.error("[SEND QUOTE EMAIL] Erreur lors du stockage du PDF:", updateError);
-              // Continuer même si le stockage échoue
-            }
-          } catch (err) {
-            console.error("[SEND QUOTE EMAIL] Erreur lors du stockage du PDF:", err);
-            // Continuer même si le stockage échoue
-          }
-        }
-        
-        res.status(200).json({ ok: true, id: data?.id, signatureLink });
+        res.status(200).json({ ok: true, id: data?.id });
         return;
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Erreur lors de l'envoi de l'email.";
@@ -1123,7 +947,7 @@ JSON:
       return;
     }
 
-    // Toujours envoyer au destinataire du prospect (pas de redirection RESEND_TEST_EMAIL) pour que l'UI et l'envoi correspondent
+    // Envoyer au vrai email du contact
     const toAddress = to.trim();
     const subjectText = subject && String(subject).trim() ? String(subject).trim() : "Relance - Votre devis";
     const html = (htmlContent && String(htmlContent).trim()) ? String(htmlContent).trim() : "<p>Bonjour, je souhaite faire un suivi concernant notre échange précédent.</p>";
@@ -1183,53 +1007,40 @@ JSON:
     });
   });
 
-  // POST /api/generate-quote-signature-link - Générer un lien de signature pour un devis
+  // POST /api/generate-quote-signature-link - Générer un lien de signature unique
   app.post("/api/generate-quote-signature-link", async (req: Request, res: Response) => {
     const { quoteId, expirationDays } = req.body as {
       quoteId?: string;
       expirationDays?: number;
     };
 
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+    console.log("🔗 [generate-quote-signature-link] Requête reçue - quoteId:", quoteId, "expirationDays:", expirationDays)
 
     if (!quoteId || typeof quoteId !== "string") {
-      res.status(400).json({ message: "quoteId (string) requis." });
-      return;
-    }
-
-    if (!token) {
-      res.status(401).json({ message: "Non authentifié." });
+      console.error("❌ [generate-quote-signature-link] quoteId manquant ou invalide")
+      res.status(400).json({ message: "quoteId requis." });
       return;
     }
 
     try {
+      // Récupérer le userId du token Authorization
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+      
       const supabase = getSupabaseClient();
-
-      // Vérifier que le devis appartient à l'utilisateur authentifié
-      const { data: { user: authUser } } = await supabase.auth.getUser(token);
-      if (!authUser?.id) {
-        res.status(401).json({ message: "Authentification invalide." });
-        return;
-      }
-
-      const { data: quote } = await supabase
-        .from("quotes")
-        .select("id, user_id")
-        .eq("id", quoteId)
-        .single();
-
-      if (!quote || quote.user_id !== authUser.id) {
-        res.status(403).json({ message: "Accès refusé. Ce devis ne vous appartient pas." });
-        return;
+      let userId: string | null = null;
+      
+      if (token) {
+        const { data: { user: authUser } } = await supabase.auth.getUser(token);
+        userId = authUser?.id || null;
+        console.log("👤 [generate-quote-signature-link] userId:", userId)
       }
 
       // Générer un token unique
-      const signatureToken = randomBytes(32).toString('hex');
+      const signatureToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      const expiresAt = new Date(Date.now() + (expirationDays || 30) * 24 * 60 * 60 * 1000).toISOString();
 
-      const expirationDaysValue = expirationDays ?? 30;
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + expirationDaysValue);
+      console.log("🔐 [generate-quote-signature-link] Token généré:", signatureToken)
 
       // Insérer dans quote_signature_links
       const { error: insertError } = await supabase
@@ -1237,421 +1048,30 @@ JSON:
         .insert({
           quote_id: quoteId,
           token: signatureToken,
-          user_id: authUser.id,
-          expires_at: expiresAt.toISOString(),
+          expires_at: expiresAt,
+          user_id: userId,
         });
 
       if (insertError) {
-        res.status(500).json({ message: "Erreur lors de la création du lien de signature." });
+        console.error("❌ [generate-quote-signature-link] Erreur insertion:", insertError);
+        res.status(500).json({ message: "Erreur lors de la génération du lien de signature." });
         return;
       }
 
-      // Retourner le lien public pour le client
-      const baseUrl = process.env.PUBLIC_URL || "https://titan-btp.vercel.app";
-      const signatureLink = `${baseUrl}/sign-quote/${signatureToken}`;
+      const origin = process.env.VITE_APP_URL || "http://localhost:5000";
+      const signatureLink = `${origin}/sign-quote/${signatureToken}`;
+
+      console.log("✅ [generate-quote-signature-link] Lien créé:", signatureLink)
 
       res.status(200).json({
         ok: true,
         signatureToken,
         signatureLink,
-        expiresAt: expiresAt.toISOString(),
+        expiresAt,
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Erreur lors de la génération du lien de signature.";
-      res.status(500).json({ message });
-    }
-  });
-
-  // GET /api/signature-link-info/:token - Récupérer les informations d'un lien de signature
-  app.get("/api/signature-link-info/:token", async (req: Request, res: Response) => {
-    const { token } = req.params;
-
-    if (!token || typeof token !== "string") {
-      res.status(400).json({ message: "token requis." });
-      return;
-    }
-
-    try {
-      const supabase = getSupabaseClient();
-
-      const { data: signatureLink } = await supabase
-        .from("quote_signature_links")
-        .select("quote_id, prospect_email, expires_at")
-        .eq("token", token)
-        .single();
-
-      if (!signatureLink) {
-        res.status(404).json({ message: "Lien de signature invalide." });
-        return;
-      }
-
-      const expiresAt = new Date(signatureLink.expires_at);
-      if (expiresAt < new Date()) {
-        res.status(410).json({ message: "Ce lien de signature a expiré." });
-        return;
-      }
-
-      res.status(200).json({
-        prospect_email: signatureLink.prospect_email || null,
-        quote_id: signatureLink.quote_id || null,
-      });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Erreur lors de la récupération du lien.";
-      res.status(500).json({ message });
-    }
-  });
-
-  // POST /api/submit-quote-signature - Soumettre une signature pour un devis
-  app.post("/api/submit-quote-signature", async (req: Request, res: Response) => {
-    const { signatureToken, firstName, lastName, email, signatureDataBase64 } = req.body as {
-      signatureToken?: string;
-      firstName?: string;
-      lastName?: string;
-      email?: string;
-      signatureDataBase64?: string;
-    };
-
-    if (!signatureToken || typeof signatureToken !== "string") {
-      res.status(400).json({ message: "signatureToken requis." });
-      return;
-    }
-
-    if (!firstName || typeof firstName !== "string" || !firstName.trim()) {
-      res.status(400).json({ message: "firstName requis." });
-      return;
-    }
-
-    if (!lastName || typeof lastName !== "string" || !lastName.trim()) {
-      res.status(400).json({ message: "lastName requis." });
-      return;
-    }
-
-    try {
-      const supabase = getSupabaseClient();
-
-      // Récupérer le lien de signature et vérifier qu'il n'est pas expiré
-      const { data: signatureLink } = await supabase
-        .from("quote_signature_links")
-        .select("id, quote_id, expires_at, prospect_email, user_id")
-        .eq("token", signatureToken)
-        .single();
-
-      if (!signatureLink) {
-        res.status(404).json({ message: "Lien de signature invalide ou expiré." });
-        return;
-      }
-
-      const expiresAt = new Date(signatureLink.expires_at);
-      if (expiresAt < new Date()) {
-        res.status(410).json({ message: "Ce lien de signature a expiré." });
-        return;
-      }
-
-      // Vérifier si une signature existe déjà pour ce devis (seulement si quoteId existe)
-      if (signatureLink.quote_id) {
-        const { data: existingSignature } = await supabase
-          .from("quote_signatures")
-          .select("id")
-          .eq("quote_id", signatureLink.quote_id)
-          .single();
-
-        if (existingSignature) {
-          res.status(409).json({ message: "Ce devis a déjà été signé." });
-          return;
-        }
-      }
-
-      // Insérer la signature
-      let ipAddress = "unknown";
-      try {
-        ipAddress = req.ip || req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() || "unknown";
-      } catch {
-        // Si req.ip échoue, utiliser "unknown"
-      }
-      const userAgent = req.headers["user-agent"] || "unknown";
-
-      // Utiliser le mail du formulaire s'il est fourni, sinon utiliser celui du lien
-      const clientEmail = (email && typeof email === "string" && email.trim()) 
-        ? email.trim() 
-        : (signatureLink.prospect_email || null);
-
-      const { error: insertError } = await supabase
-        .from("quote_signatures")
-        .insert({
-          quote_id: signatureLink.quote_id ?? null,
-          signature_token: signatureToken,
-          client_firstname: firstName.trim(),
-          client_lastname: lastName.trim(),
-          client_email: clientEmail,
-          signature_data: signatureDataBase64 ?? null,
-          ip_address: ipAddress,
-          user_agent: userAgent,
-          prospect_email: clientEmail,
-        });
-
-      if (insertError) {
-        res.status(500).json({ message: "Erreur lors de l'enregistrement de la signature." });
-        return;
-      }
-
-      // Mettre à jour le statut du devis à "signé" (seulement si quoteId existe)
-      if (signatureLink.quote_id) {
-        const { error: updateError } = await supabase
-          .from("quotes")
-          .update({
-            status: "signé",
-            accepted_at: new Date().toISOString(),
-          })
-          .eq("id", signatureLink.quote_id);
-
-        if (updateError) {
-          console.error("[QUOTE SIGNATURE] Erreur lors de la mise à jour du devis:", updateError);
-        }
-      }
-
-      // Envoyer un email de confirmation avec le devis signé en pièce jointe
-      if (clientEmail && signatureLink.quote_id) {
-        try {
-          // Requête sans les colonnes PDF optionnelles (peuvent ne pas exister en base)
-          const { data: quote, error: quoteError } = await supabase
-            .from("quotes")
-            .select(
-              "id, project_description, total_ht, total_ttc, client_name, validity_days, items, user_id, status"
-            )
-            .eq("id", signatureLink.quote_id)
-            .single();
-
-          if (quoteError) {
-            console.error("[QUOTE SIGNATURE] Erreur récupération devis:", quoteError);
-          }
-
-          // Essayer de récupérer les colonnes PDF séparément (peuvent ne pas exister)
-          let quotePdfBase64: string | null = null;
-          let quoteSignatureRectCoords: string | null = null;
-          try {
-            const { data: pdfData } = await supabase
-              .from("quotes")
-              .select("quote_pdf_base64, quote_signature_rect_coords")
-              .eq("id", signatureLink.quote_id)
-              .single();
-            if (pdfData) {
-              quotePdfBase64 = (pdfData as any).quote_pdf_base64 || null;
-              quoteSignatureRectCoords = (pdfData as any).quote_signature_rect_coords || null;
-            }
-          } catch (pdfColErr) {
-            console.log("[QUOTE SIGNATURE] Colonnes PDF non disponibles");
-          }
-
-          if (quote && signatureLink.user_id) {
-            // Récupérer le profil utilisateur pour les infos de l'entreprise
-            const { data: profile } = await supabase
-              .from("user_profiles")
-              .select(
-                "company_name, company_email, company_phone, company_address, company_city_postal, company_siret, default_tva_rate"
-              )
-              .eq("id", signatureLink.user_id)
-              .single();
-
-            const resendApiKey = process.env.RESEND_API_KEY;
-            if (resendApiKey) {
-              try {
-                // Calculer tva
-                const subtotalHt = quote.total_ht ?? 0;
-                const totalTtc = quote.total_ttc ?? 0;
-                const tvaAmount = totalTtc - subtotalHt;
-
-                // IMPORTANT: Toujours envoyer l'email avec le PDF signé
-                let pdfBuffer: Buffer | null = null;
-                let pdfError: string | null = null;
-
-                // Méthode 1: Essayer d'ajouter la signature au PDF stocké (si disponible)
-                if (quotePdfBase64 && signatureDataBase64) {
-                  try {
-                    // Récupérer et parser les coordonnées du rectangle (JSONB peut déjà être un objet)
-                    let rectCoords: { x: number; y: number; width: number; height: number } | undefined;
-                    if (quoteSignatureRectCoords) {
-                      if (typeof quoteSignatureRectCoords === "string") {
-                        try {
-                          rectCoords = JSON.parse(quoteSignatureRectCoords) as { x: number; y: number; width: number; height: number };
-                        } catch (parseErr) {
-                          console.error("[QUOTE SIGNATURE] Erreur parsing coordonnées:", parseErr);
-                          rectCoords = undefined;
-                        }
-                      } else if (typeof quoteSignatureRectCoords === "object") {
-                        const coords = quoteSignatureRectCoords as { x?: number; y?: number; width?: number; height?: number };
-                        if (
-                          typeof coords.x === "number" &&
-                          typeof coords.y === "number" &&
-                          typeof coords.width === "number" &&
-                          typeof coords.height === "number"
-                        ) {
-                          rectCoords = { x: coords.x, y: coords.y, width: coords.width, height: coords.height };
-                        }
-                      }
-                    }
-                    
-                    // Utiliser le PDF stocké et ajouter la signature dessus
-                    pdfBuffer = await addSignatureToPdf(
-                      quotePdfBase64,
-                      signatureDataBase64,
-                      firstName,
-                      lastName,
-                      new Date(),
-                      rectCoords
-                    );
-                    console.log(`[QUOTE SIGNATURE] PDF signé généré à partir du PDF stocké`);
-                  } catch (pdfGenErr) {
-                    pdfError = pdfGenErr instanceof Error ? pdfGenErr.message : "Erreur lors de la génération du PDF";
-                    console.error("[QUOTE SIGNATURE PDF FROM STORED]", pdfError);
-                    // Fallback: générer le PDF à partir des données du devis
-                  }
-                }
-                
-                // Méthode 2 (fallback): Générer le PDF à partir des données du devis
-                if (!pdfBuffer && signatureDataBase64) {
-                  try {
-                    const { generateQuotePdfWithSignature } = await import("./lib/quotePdfServer");
-                    
-                    // Parser les items du devis
-                    let quoteItems: Array<{ description?: string | null; quantity?: number; unitPrice?: number; total?: number }> = [];
-                    if (quote.items) {
-                      if (typeof quote.items === 'string') {
-                        try {
-                          quoteItems = JSON.parse(quote.items);
-                        } catch (e) {
-                          console.error("[QUOTE SIGNATURE] Erreur parsing items:", e);
-                        }
-                      } else if (Array.isArray(quote.items)) {
-                        quoteItems = quote.items;
-                      }
-                    }
-                    
-                    pdfBuffer = await generateQuotePdfWithSignature({
-                      projectDescription: quote.project_description,
-                      clientName: quote.client_name,
-                      items: quoteItems,
-                      subtotalHt: subtotalHt,
-                      tva: tvaAmount,
-                      totalTtc: totalTtc,
-                      companyName: profile?.company_name,
-                      companyEmail: profile?.company_email,
-                      companyPhone: profile?.company_phone,
-                      companyAddress: profile?.company_address,
-                      companySiret: profile?.company_siret,
-                      validityDays: String(quote.validity_days ?? 30),
-                      signatureData: signatureDataBase64,
-                      signerFirstName: firstName,
-                      signerLastName: lastName,
-                      signedAt: new Date().toISOString(),
-                    });
-                    console.log(`[QUOTE SIGNATURE] PDF signé généré à partir des données du devis`);
-                  } catch (pdfGenErr) {
-                    pdfError = pdfGenErr instanceof Error ? pdfGenErr.message : "Erreur lors de la génération du PDF";
-                    console.error("[QUOTE SIGNATURE PDF GENERATION FROM DATA]", pdfError);
-                  }
-                }
-
-                // Stocker le PDF signé pour téléchargement futur
-                if (pdfBuffer) {
-                  try {
-                    const signedPdfBase64 = pdfBuffer.toString("base64");
-                    await supabase
-                      .from("quotes")
-                      .update({ quote_pdf_base64: signedPdfBase64 })
-                      .eq("id", signatureLink.quote_id);
-                    console.log("[QUOTE SIGNATURE] PDF signé stocké en base");
-                  } catch (storeErr) {
-                    console.error("[QUOTE SIGNATURE] Erreur stockage PDF signé:", storeErr);
-                  }
-                }
-
-                const resend = new Resend(resendApiKey);
-                const fromEmail = process.env.SENDER_EMAIL || process.env.RESEND_FROM || "onboarding@resend.dev";
-
-                let htmlContent = `
-                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <div style="background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%); color: white; padding: 24px; border-radius: 8px 8px 0 0; text-align: center;">
-                      <h1 style="margin: 0; font-size: 24px;">✓ Signature confirmée</h1>
-                    </div>
-                    <div style="padding: 24px; background-color: #f9fafb;">
-                      <p style="margin: 0 0 16px 0; color: #1f2937;">Bonjour ${escapeHtml(quote.client_name || "")},</p>
-                      <p style="margin: 0 0 24px 0; color: #4b5563;">Merci d'avoir signé le devis. `;
-                
-                if (pdfBuffer) {
-                  htmlContent += `Vous trouverez ci-joint le devis signé et numéroté pour votre dossier.</p>`;
-                } else {
-                  htmlContent += `Votre signature a bien été enregistrée.</p>
-                    <p style="margin: 0 0 16px 0; color: #f59e0b; background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px; border-radius: 4px;">
-                      <strong>Note:</strong> Le PDF du devis signé sera envoyé dans un prochain email.
-                    </p>`;
-                }
-
-                htmlContent += `
-                      <div style="background-color: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 20px 0;">
-                        <h3 style="margin: 0 0 12px 0; color: #1f2937; font-size: 16px;">Résumé du devis</h3>
-                        <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 14px;">Projet : ${escapeHtml(quote.project_description || 'N/A')}</p>
-                        <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 14px;">Montant HT : ${(subtotalHt).toFixed(2)} €</p>
-                        ${tvaAmount > 0 ? `<p style="margin: 0 0 8px 0; color: #6b7280; font-size: 14px;">TVA : ${(tvaAmount).toFixed(2)} €</p>` : ''}
-                        <p style="margin: 0; color: #1f2937; font-weight: 600; font-size: 16px;">Total TTC : ${(totalTtc).toFixed(2)} €</p>
-                      </div>
-                      <p style="margin: 16px 0 0 0; color: #6b7280; font-size: 13px;">Les étapes suivantes du projet seront communiquées par email. Si vous avez des questions, n'hésitez pas à nous contacter.</p>
-                    </div>
-                    <div style="padding: 16px; background-color: #f3f4f6; border-radius: 0 0 8px 8px; text-align: center; font-size: 12px; color: #9ca3af;">
-                      <p style="margin: 0;">— ${escapeHtml(profile?.company_name || 'TitanBtp')}</p>
-                    </div>
-                  </div>
-                `;
-
-                const fileName = `devis-signe-${signatureLink.quote_id?.substring(0, 8)}.pdf`;
-                
-                // Préparer l'email avec ou sans pièce jointe
-                const emailPayload: any = {
-                  from: fromEmail,
-                  to: clientEmail,
-                  subject: "✓ Votre devis signé",
-                  html: htmlContent,
-                };
-
-                if (pdfBuffer) {
-                  emailPayload.attachments = [
-                    {
-                      filename: fileName,
-                      content: pdfBuffer,
-                    },
-                  ];
-                }
-
-                const emailResult = await resend.emails.send(emailPayload);
-                console.log(`[QUOTE SIGNATURE] Email envoyé à ${clientEmail}${pdfBuffer ? ' avec PDF signé' : ' sans PDF'}`);
-                
-                if (emailResult.error) {
-                  console.error("[QUOTE SIGNATURE RESEND ERROR]", emailResult.error);
-                }
-              } catch (emailSendErr) {
-                console.error("[QUOTE SIGNATURE EMAIL SEND]", emailSendErr);
-                throw emailSendErr; // Relancer pour que l'erreur soit bien loggée
-              }
-            } else {
-              console.warn("[QUOTE SIGNATURE] RESEND_API_KEY non configurée, impossible d'envoyer l'email");
-            }
-          } else {
-            console.warn("[QUOTE SIGNATURE] Quote ou user_id manquant");
-          }
-        } catch (emailErr) {
-          console.error("[QUOTE SIGNATURE EMAIL CRITICAL]", emailErr);
-          // Continuer quand même - la signature est sauvegardée
-        }
-      } else {
-        console.warn("[QUOTE SIGNATURE] clientEmail ou quote_id manquant, pas d'email envoyé", { clientEmail, quoteId: signatureLink.quote_id });
-      }
-
-      res.status(200).json({
-        ok: true,
-        message: "Signature enregistrée avec succès.",
-        quoteId: signatureLink.quote_id ?? null,
-      });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Erreur lors de l'enregistrement de la signature.";
+      console.error("❌ [generate-quote-signature-link] Exception:", err);
       res.status(500).json({ message });
     }
   });

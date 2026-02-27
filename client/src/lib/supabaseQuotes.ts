@@ -24,6 +24,7 @@ export interface QuoteItem {
 export interface SupabaseQuote {
   id: string;
   user_id: string;
+  contact_id?: string | null;
   chantier_id: string | null;
   client_name: string | null;
   client_email: string | null;
@@ -44,6 +45,7 @@ export interface SupabaseQuote {
 }
 
 export type NewQuotePayload = {
+  contact_id?: string | null;
   chantier_id?: string | null;
   client_name: string;
   client_email: string;
@@ -201,6 +203,7 @@ export async function insertQuote(
 ): Promise<SupabaseQuote> {
   const insertData: any = {
     user_id: userId,
+    contact_id: payload.contact_id ?? null,
     chantier_id: payload.chantier_id ?? null,
     client_name: payload.client_name,
     client_email: payload.client_email,
@@ -319,5 +322,65 @@ export async function deleteQuote(
   if (error) {
     console.error("Error deleting quote:", error);
     throw error;
+  }
+}
+
+/**
+ * Vérifie si un devis a été signé en cherchant une signature dans quote_signatures
+ */
+export async function hasQuoteBeenSigned(quoteId: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from("quote_signatures")
+      .select("id")
+      .eq("quote_id", quoteId)
+      .limit(1);
+
+    if (error && !isSupabaseTableMissing(error)) {
+      console.error("Error checking quote signature:", error);
+    }
+    return data && data.length > 0;
+  } catch (err) {
+    console.error("Error in hasQuoteBeenSigned:", err);
+    return false;
+  }
+}
+
+/**
+ * Calcule si la validité d'un devis a dépassé
+ */
+export function isQuoteValidityExpired(quote: SupabaseQuote): boolean {
+  if (!quote.created_at || !quote.validity_days) return false;
+  const createdDate = new Date(quote.created_at);
+  const expiryDate = new Date(createdDate.getTime() + quote.validity_days * 24 * 60 * 60 * 1000);
+  return new Date() > expiryDate;
+}
+
+/**
+ * Récupère le lien de signature d'un devis
+ */
+export async function getQuoteSignatureLink(quoteId: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from("quote_signature_links")
+      .select("token")
+      .eq("quote_id", quoteId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error && !isSupabaseTableMissing(error)) {
+      console.error("Error fetching quote signature link:", error);
+      return null;
+    }
+
+    if (!data?.token) return null;
+
+    // Construire l'URL complète
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    return `${origin}/sign-quote/${data.token}`;
+  } catch (err) {
+    console.error("Error in getQuoteSignatureLink:", err);
+    return null;
   }
 }

@@ -33,8 +33,8 @@ import {
   ArrowRight,
 } from "lucide-react"
 import { motion } from "framer-motion"
-import type { Prospect, ProspectStage } from "@/lib/supabaseProspects"
-import { STAGE_LABELS } from "@/lib/supabaseProspects"
+import type { Prospect, ProspectStage } from "@/lib/supabaseClients"
+import { STAGE_LABELS } from "@/lib/supabaseClients"
 
 interface ProspectCardProps {
   prospect: Prospect
@@ -44,11 +44,16 @@ interface ProspectCardProps {
   onOpenDetail: () => void
   onMoveToStage: (stage: ProspectStage) => void
   removing: boolean
+  isSigned: boolean
+  isExpired: boolean
+  showRelanceButton?: boolean
+  onRelance?: () => void
+  quoteNumber?: string
+  quoteAmount?: number
 }
 
 const STAGE_ORDER: ProspectStage[] = [
   'all', 'quote', 'quote_followup1', 'quote_followup2',
-  'invoice', 'invoice_followup1', 'invoice_followup2',
   'won', 'lost',
 ]
 
@@ -73,6 +78,12 @@ export function ProspectCard({
   onOpenDetail,
   onMoveToStage,
   removing,
+  isSigned,
+  isExpired,
+  showRelanceButton,
+  onRelance,
+  quoteNumber,
+  quoteAmount,
 }: ProspectCardProps) {
   const daysInStage = useMemo(() => getDaysInStage(prospect), [prospect])
   const stagnation = getStagnationLevel(daysInStage)
@@ -137,7 +148,17 @@ export function ProspectCard({
       </DropdownMenu>
 
       <div className="space-y-1.5 min-w-0 break-words" onClick={onOpenDetail} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onOpenDetail()}>
-        <p className="font-semibold text-sm text-white break-words leading-tight">{prospect.name}</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="font-semibold text-sm text-white break-words leading-tight">{prospect.name}</p>
+          {quoteAmount !== undefined && (
+            <span className="text-sm font-bold text-emerald-400 whitespace-nowrap">
+              {quoteAmount.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+            </span>
+          )}
+        </div>
+        {quoteNumber && (
+          <div className="text-[11px] font-medium text-violet-300">Devis #{quoteNumber}</div>
+        )}
 
         <div className="flex items-start gap-1.5 text-xs text-white/70 min-w-0">
           <Mail className="h-3 w-3 shrink-0 mt-0.5" />
@@ -153,7 +174,22 @@ export function ProspectCard({
 
         {/* Visual indicators */}
         <div className="flex flex-wrap items-center gap-1.5 pt-1">
-          {prospect.linkedQuoteId && (
+          {isSigned && (
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-green-500/20 text-green-300 border-green-400/30">
+              ✓ Signé
+            </Badge>
+          )}
+          {isExpired && !isSigned && (
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-red-500/20 text-red-300 border-red-400/30">
+              ⏰ Expiré
+            </Badge>
+          )}
+          {(prospect.relanceCount ?? 0) > 0 && (
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-orange-500/20 text-orange-300 border-orange-400/30">
+              📢 Rel.{prospect.relanceCount}
+            </Badge>
+          )}
+          {prospect.linkedQuoteId && !quoteNumber && (
             <TooltipProvider delayDuration={200}>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -220,6 +256,20 @@ export function ProspectCard({
             </TooltipProvider>
           )}
         </div>
+
+        {/* Bouton Relancer */}
+        {showRelanceButton && onRelance && (
+          <Button
+            size="sm"
+            className="w-full mt-3 bg-purple-600 hover:bg-purple-700 text-white"
+            onClick={(e) => {
+              e.stopPropagation()
+              onRelance()
+            }}
+          >
+            📧 Relancer
+          </Button>
+        )}
       </div>
     </motion.div>
   )

@@ -128,10 +128,10 @@ function ClientFormModal({ open, onOpenChange, client, onSave, isSaving }: Clien
       <DialogContent className="max-w-[400px] bg-black/20 backdrop-blur-xl border border-white/10 text-white rounded-xl p-6">
         <DialogHeader>
           <DialogTitle className="text-white">
-            {isEdit ? `Modifier : ${client.name}` : 'Ajouter un nouveau client'}
+            {isEdit ? `Modifier : ${client.name}` : 'Ajouter un nouveau contact'}
           </DialogTitle>
           <DialogDescription className="text-white/70">
-            {isEdit ? 'Modifiez les informations du client.' : 'Remplissez les champs pour créer un client.'}
+            {isEdit ? 'Modifiez les informations du contact.' : 'Remplissez les champs pour créer un contact.'}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 mt-4">
@@ -289,10 +289,10 @@ export default function ClientsPage() {
       try {
         if (editingClient) {
           await updateClient(editingClient.id, payload);
-          toast({ title: 'Client modifié avec succès' });
+          toast({ title: 'Contact modifié avec succès' });
         } else {
           await addClient(payload);
-          toast({ title: 'Client créé avec succès' });
+          toast({ title: 'Contact créé avec succès' });
         }
         setIsModalOpen(false);
         setEditingClient(null);
@@ -310,7 +310,7 @@ export default function ClientsPage() {
     setIsDeleting(true);
     try {
       await deleteClient(deleteTarget.id);
-      toast({ title: 'Client supprimé' });
+      toast({ title: 'Contact supprimé' });
       setDeleteTarget(null);
       return true;
     } catch (e) {
@@ -326,8 +326,8 @@ export default function ClientsPage() {
       <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
           <div className="min-w-0 w-full sm:flex-1 pl-20">
-            <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">Gestion des clients</h1>
-            <p className="text-xs sm:text-sm text-white/70 sm:truncate">Recherchez, éditez et gérez vos clients</p>
+            <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">Gestion des contacts</h1>
+            <p className="text-xs sm:text-sm text-white/70 sm:truncate">Recherchez, éditez et gérez vos contacts</p>
           </div>
           <div className="flex-shrink-0 w-full sm:w-auto">
             <UserAccountButton variant="inline" />
@@ -365,7 +365,7 @@ export default function ClientsPage() {
               className="h-9 max-md:h-[44px] bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30"
             >
               <Plus className="h-4 w-4 mr-2" />
-              Ajouter client
+              Ajouter contact
             </Button>
             <Button
               onClick={handleCreateShareLink}
@@ -381,10 +381,10 @@ export default function ClientsPage() {
 
         {filteredClients.length === 0 ? (
           <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white p-12 text-center">
-            <p className="text-white/70">Aucun client trouvé.</p>
+            <p className="text-white/70">Aucun contact trouvé.</p>
             <Button className="mt-4 min-h-[44px] max-md:min-h-[44px] bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30" onClick={() => setIsModalOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              Ajouter un client
+              Ajouter un contact
             </Button>
           </Card>
         ) : (
@@ -452,9 +452,9 @@ export default function ClientsPage() {
       <Dialog open={shareLinkOpen} onOpenChange={setShareLinkOpen}>
         <DialogContent className="max-w-[480px] bg-black/20 backdrop-blur-xl border border-white/10 text-white">
           <DialogHeader>
-            <DialogTitle className="text-white">Lien formulaire client</DialogTitle>
+            <DialogTitle className="text-white">Lien formulaire contact</DialogTitle>
             <DialogDescription className="text-white/70">
-              Partagez ce lien pour permettre à quelqu&apos;un de remplir un formulaire et créer une fiche client dans votre compte.
+              Partagez ce lien pour permettre à quelqu&apos;un de remplir un formulaire et créer une fiche contact dans votre compte.
             </DialogDescription>
           </DialogHeader>
           {shareLink && (
@@ -480,7 +480,7 @@ export default function ClientsPage() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent className="max-w-[380px] bg-black/20 backdrop-blur-xl border border-white/10 text-white">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white">Supprimer ce client ?</AlertDialogTitle>
+            <AlertDialogTitle className="text-white">Supprimer ce contact ?</AlertDialogTitle>
             <AlertDialogDescription className="text-white/70">
               Êtes-vous sûr de supprimer &quot;{deleteTarget?.name}&quot; ? Cette action est définitive.
             </AlertDialogDescription>

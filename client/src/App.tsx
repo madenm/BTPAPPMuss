@@ -28,6 +28,7 @@ const TarifsPage = lazy(() => import("@/pages/TarifsPage"));
 const AIVisualizationPage = lazy(() => import("@/pages/AIVisualizationPage"));
 const ProspectsPage = lazy(() => import("@/pages/ProspectsPage"));
 const ProjectsPage = lazy(() => import("@/pages/ProjectsPage"));
+const ProjectDetailPage = lazy(() => import("@/pages/ProjectDetailPage"));
 const PlanningPage = lazy(() => import("@/pages/PlanningPage"));
 const ClientsPage = lazy(() => import("@/pages/ClientsPage"));
 const InvoicesPage = lazy(() => import("@/pages/InvoicesPage"));
@@ -82,6 +83,11 @@ function Router() {
     }
     if (pathname.startsWith('/sign-quote/')) {
       return <SignQuotePage />;
+    }
+
+    // Routes privées dynamiques
+    if (pathname.startsWith('/dashboard/projects/') && pathname !== '/dashboard/projects') {
+      return <ProtectedRoute><Suspense fallback={<PageFallback />}><ProjectDetailPage /></Suspense></ProtectedRoute>;
     }
 
     switch (pathname) {

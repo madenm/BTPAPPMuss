@@ -30,7 +30,7 @@ import { QUOTE_STATUS_LABELS } from "@/lib/quoteConstants";
 import type { SupabaseQuote } from "@/lib/supabaseQuotes";
 import {
   FileText, Plus, Loader2, Download, Pencil, ExternalLink, Search,
-  MoreVertical, Copy, Building, Trash2, RefreshCw, Clock,
+  MoreVertical, Copy, Building, Trash2, RefreshCw, Clock, Mail,
 } from "lucide-react";
 
 export interface QuoteListChantier {
@@ -58,7 +58,8 @@ export interface QuoteListProps {
   onDuplicateQuote: (quote: SupabaseQuote) => void;
   onDeleteQuote: (quoteId: string) => void;
   onChangeStatus: (quoteId: string, status: QuoteStatus) => void;
-  onGoToProjects: () => void;
+  onGoToProjects: (chantierId: string) => void;
+  onSendEmail: (quote: SupabaseQuote) => void;
 }
 
 function getExpirationDate(quote: SupabaseQuote): Date {
@@ -79,6 +80,7 @@ const STATUS_TRANSITIONS: Record<string, QuoteStatus[]> = {
   refusé: ["brouillon"],
   expiré: ["brouillon"],
   validé: [],
+  signé: [],
 };
 
 export function QuoteList({
@@ -100,6 +102,7 @@ export function QuoteList({
   onDeleteQuote,
   onChangeStatus,
   onGoToProjects,
+  onSendEmail,
 }: QuoteListProps) {
   const chantierMap = new Map(chantiers.map((c) => [c.id, c.nom]));
   const [deleteTarget, setDeleteTarget] = useState<SupabaseQuote | null>(null);
@@ -197,130 +200,117 @@ export function QuoteList({
                   </Button>
                 </div>
               ) : (
-                <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-gray-50 dark:bg-gray-900/50">
-                        <TableHead className="rounded-tl-xl">N°</TableHead>
-                        <TableHead>Client</TableHead>
-                        <TableHead>Projet</TableHead>
-                        <TableHead className="text-right">Montant TTC</TableHead>
-                        <TableHead>Statut</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Expiration</TableHead>
-                        <TableHead className="text-right rounded-tr-xl">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredQuotes.map((q) => {
-                        const expDate = getExpirationDate(q);
-                        const expired = isExpired(q);
-                        const transitions = STATUS_TRANSITIONS[q.status] ?? [];
-                        return (
-                          <TableRow
-                            key={q.id}
-                            className="hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer"
-                            onClick={() => {
-                              if (q.status !== "validé" && q.status !== "accepté") {
-                                onEditQuote(q.id);
+                <>
+                  {/* Vue Mobile Simple - Liste */}
+                  <div className="md:hidden space-y-2">
+                    {filteredQuotes.map((q) => {
+                      const expDate = getExpirationDate(q);
+                      const expired = isExpired(q);
+                      const transitions = STATUS_TRANSITIONS[q.status] ?? [];
+                      return (
+                        <div
+                          key={q.id}
+                          className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3"
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-mono text-gray-500 dark:text-gray-400">
+                                N° {getQuoteDisplayNumber(quotes, q.id) || "—"}
+                              </p>
+                              <p className="font-medium text-sm text-gray-900 dark:text-white truncate">
+                                {q.client_name || "—"}
+                              </p>
+                            </div>
+                            <Badge
+                              variant="secondary"
+                              className={
+                                q.status === "validé" || q.status === "accepté" || q.status === "signé"
+                                  ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-xs shrink-0"
+                                  : q.status === "refusé" || q.status === "expiré"
+                                    ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 text-xs shrink-0"
+                                    : q.status === "envoyé"
+                                      ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 text-xs shrink-0"
+                                      : "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 text-xs shrink-0"
                               }
-                            }}
-                          >
-                            <TableCell className="font-mono text-sm">
-                              {getQuoteDisplayNumber(quotes, q.id) || "—"}
-                            </TableCell>
-                            <TableCell className="font-medium text-gray-900 dark:text-white">
-                              {q.client_name || "—"}
-                            </TableCell>
-                            <TableCell className="text-sm text-gray-600 dark:text-gray-400">
-                              {q.chantier_id ? (
-                                <span className="inline-flex items-center gap-1">
-                                  <Building className="h-3.5 w-3.5 text-violet-400 flex-shrink-0" />
-                                  <span className="truncate max-w-[150px]">{chantierMap.get(q.chantier_id) || "—"}</span>
-                                </span>
-                              ) : (
-                                <span className="text-gray-400 dark:text-gray-500">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right font-medium">
+                            >
+                              {QUOTE_STATUS_LABELS[q.status] ?? q.status}
+                            </Badge>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2 text-xs mb-2">
+                            <span className="text-gray-600 dark:text-gray-400">
+                              {q.chantier_id ? chantierMap.get(q.chantier_id) || "—" : "—"}
+                            </span>
+                            <span className="font-semibold text-gray-900 dark:text-white">
                               {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(q.total_ttc)}
-                            </TableCell>
-                            <TableCell>
-                              <Badge
-                                variant="secondary"
-                                className={
-                                  q.status === "validé" || q.status === "accepté"
-                                    ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
-                                    : q.status === "refusé" || q.status === "expiré"
-                                      ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
-                                      : q.status === "envoyé"
-                                        ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-                                        : "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
-                                }
-                              >
-                                {QUOTE_STATUS_LABELS[q.status] ?? q.status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-gray-500 dark:text-gray-400 text-sm">
-                              {new Date(q.created_at).toLocaleDateString("fr-FR", {
-                                day: "2-digit",
-                                month: "2-digit",
-                                year: "numeric",
-                              })}
-                            </TableCell>
-                            <TableCell className="text-sm">
-                              {q.status === "accepté" || q.status === "validé" ? (
-                                <span className="text-green-600 dark:text-green-400">—</span>
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {q.status === "accepté" || q.status === "validé" || q.status === "signé" ? (
+                                <span>—</span>
                               ) : expired ? (
-                                <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">
-                                  <Clock className="h-3 w-3 mr-1" />
-                                  Expiré
-                                </Badge>
+                                <span className="text-red-600">Expiré</span>
                               ) : (
-                                <span className="text-gray-500 dark:text-gray-400">
-                                  {expDate.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })}
-                                </span>
+                                <span>{expDate.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })}</span>
                               )}
-                            </TableCell>
-                            <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                            </span>
+                            <div className="flex gap-1">
+                              {q.status !== "validé" && q.status !== "accepté" && q.status !== "signé" && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0 text-violet-500 hover:bg-violet-500/10"
+                                  onClick={() => onEditQuote(q.id)}
+                                  title="Modifier"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              )}
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-violet-500 hover:bg-violet-500/10"
+                                onClick={() => onDownloadPdf(q)}
+                                title="Télécharger"
+                              >
+                                <Download className="h-4 w-4" />
+                              </Button>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
                                     <MoreVertical className="h-4 w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-52">
-                                  {q.status !== "validé" && q.status !== "accepté" && (
-                                    <DropdownMenuItem onClick={() => onEditQuote(q.id)}>
-                                      <Pencil className="h-4 w-4 mr-2" />
-                                      Modifier
-                                    </DropdownMenuItem>
-                                  )}
+                                <DropdownMenuContent align="end" className="w-40">
                                   <DropdownMenuItem onClick={() => onDuplicateQuote(q)}>
-                                    <Copy className="h-4 w-4 mr-2" />
-                                    Dupliquer
+                                    <Copy className="h-3 w-3 mr-2" />
+                                    <span className="text-xs">Dupliquer</span>
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => onDownloadPdf(q)}>
-                                    <Download className="h-4 w-4 mr-2" />
-                                    Télécharger le PDF
+                                  <DropdownMenuItem onClick={() => onSendEmail(q)}>
+                                    <Mail className="h-3 w-3 mr-2" />
+                                    <span className="text-xs">Envoyer</span>
                                   </DropdownMenuItem>
                                   {q.chantier_id && (
-                                    <DropdownMenuItem onClick={onGoToProjects}>
-                                      <ExternalLink className="h-4 w-4 mr-2" />
-                                      Voir le projet
+                                    <DropdownMenuItem onClick={() => onGoToProjects(q.chantier_id!)}>
+                                      <ExternalLink className="h-3 w-3 mr-2" />
+                                      <span className="text-xs">Projet</span>
                                     </DropdownMenuItem>
                                   )}
                                   {transitions.length > 0 && (
                                     <>
                                       <DropdownMenuSeparator />
                                       <DropdownMenuSub>
-                                        <DropdownMenuSubTrigger>
-                                          <RefreshCw className="h-4 w-4 mr-2" />
-                                          Changer le statut
+                                        <DropdownMenuSubTrigger className="text-xs">
+                                          <RefreshCw className="h-3 w-3 mr-2" />
+                                          Statut
                                         </DropdownMenuSubTrigger>
                                         <DropdownMenuSubContent>
                                           {transitions.map((s) => (
-                                            <DropdownMenuItem key={s} onClick={() => onChangeStatus(q.id, s)}>
+                                            <DropdownMenuItem key={s} className="text-xs" onClick={() => onChangeStatus(q.id, s)}>
                                               {QUOTE_STATUS_LABELS[s] ?? s}
                                             </DropdownMenuItem>
                                           ))}
@@ -330,21 +320,175 @@ export function QuoteList({
                                   )}
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
-                                    className="text-red-600 focus:text-red-600"
+                                    className="text-red-600 text-xs"
                                     onClick={() => setDeleteTarget(q)}
                                   >
-                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    <Trash2 className="h-3 w-3 mr-2" />
                                     Supprimer
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Vue Desktop - Tableau */}
+                  <div className="hidden md:block rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50 dark:bg-gray-900/50">
+                          <TableHead className="rounded-tl-xl">N°</TableHead>
+                          <TableHead>Client</TableHead>
+                          <TableHead>Projet</TableHead>
+                          <TableHead className="text-right">Montant TTC</TableHead>
+                          <TableHead>Statut</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Expiration</TableHead>
+                          <TableHead className="text-right rounded-tr-xl">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredQuotes.map((q) => {
+                          const expDate = getExpirationDate(q);
+                          const expired = isExpired(q);
+                          const transitions = STATUS_TRANSITIONS[q.status] ?? [];
+                          return (
+                            <TableRow
+                              key={q.id}
+                              className="hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer"
+                              onClick={() => {
+                                if (q.status !== "validé" && q.status !== "accepté" && q.status !== "signé") {
+                                  onEditQuote(q.id);
+                                }
+                              }}
+                            >
+                              <TableCell className="font-mono text-sm">
+                                {getQuoteDisplayNumber(quotes, q.id) || "—"}
+                              </TableCell>
+                              <TableCell className="font-medium text-gray-900 dark:text-white">
+                                {q.client_name || "—"}
+                              </TableCell>
+                              <TableCell className="text-sm text-gray-600 dark:text-gray-400">
+                                {q.chantier_id ? (
+                                  <span className="inline-flex items-center gap-1">
+                                    <Building className="h-3.5 w-3.5 text-violet-400 flex-shrink-0" />
+                                    <span className="truncate max-w-[150px]">{chantierMap.get(q.chantier_id) || "—"}</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400 dark:text-gray-500">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right font-medium">
+                                {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(q.total_ttc)}
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant="secondary"
+                                  className={
+                                    q.status === "validé" || q.status === "accepté" || q.status === "signé"
+                                      ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                                      : q.status === "refusé" || q.status === "expiré"
+                                        ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+                                        : q.status === "envoyé"
+                                          ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                                          : "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
+                                  }
+                                >
+                                  {QUOTE_STATUS_LABELS[q.status] ?? q.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-gray-500 dark:text-gray-400 text-sm">
+                                {new Date(q.created_at).toLocaleDateString("fr-FR", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                })}
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {q.status === "accepté" || q.status === "validé" || q.status === "signé" ? (
+                                  <span className="text-green-600 dark:text-green-400">—</span>
+                                ) : expired ? (
+                                  <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                                    <Clock className="h-3 w-3 mr-1" />
+                                    Expiré
+                                  </Badge>
+                                ) : (
+                                  <span className="text-gray-500 dark:text-gray-400">
+                                    {expDate.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-52">
+                                    {q.status !== "validé" && q.status !== "accepté" && q.status !== "signé" && (
+                                      <DropdownMenuItem onClick={() => onEditQuote(q.id)}>
+                                        <Pencil className="h-4 w-4 mr-2" />
+                                        Modifier
+                                      </DropdownMenuItem>
+                                    )}
+                                    <DropdownMenuItem onClick={() => onDuplicateQuote(q)}>
+                                      <Copy className="h-4 w-4 mr-2" />
+                                      Dupliquer
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => onDownloadPdf(q)}>
+                                      <Download className="h-4 w-4 mr-2" />
+                                      Télécharger le PDF
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => onSendEmail(q)}>
+                                      <Mail className="h-4 w-4 mr-2" />
+                                      Envoyer par email
+                                    </DropdownMenuItem>
+                                    {q.chantier_id && (
+                                      <DropdownMenuItem onClick={() => onGoToProjects(q.chantier_id!)}>
+                                        <ExternalLink className="h-4 w-4 mr-2" />
+                                        Voir le projet
+                                      </DropdownMenuItem>
+                                    )}
+                                    {transitions.length > 0 && (
+                                      <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuSub>
+                                          <DropdownMenuSubTrigger>
+                                            <RefreshCw className="h-4 w-4 mr-2" />
+                                            Changer le statut
+                                          </DropdownMenuSubTrigger>
+                                          <DropdownMenuSubContent>
+                                            {transitions.map((s) => (
+                                              <DropdownMenuItem key={s} onClick={() => onChangeStatus(q.id, s)}>
+                                                {QUOTE_STATUS_LABELS[s] ?? s}
+                                              </DropdownMenuItem>
+                                            ))}
+                                          </DropdownMenuSubContent>
+                                        </DropdownMenuSub>
+                                      </>
+                                    )}
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      className="text-red-600 focus:text-red-600"
+                                      onClick={() => setDeleteTarget(q)}
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" />
+                                      Supprimer
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>

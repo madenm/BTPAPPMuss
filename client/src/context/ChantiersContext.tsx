@@ -111,19 +111,7 @@ export function ChantiersProvider({ children }: { children: ReactNode }) {
           if (isTeamMember) {
             try {
               const teamMember = JSON.parse(teamMemberJson!) as { id: string; can_view_all_chantiers?: boolean };
-              
-              // Charger les permissions depuis localStorage si elles n'existent pas
-              let permissionsFromStorage: { can_view_all_chantiers?: boolean } = {};
-              try {
-                const storedPermissions = localStorage.getItem(`team_member_permissions_${teamMember.id}`);
-                if (storedPermissions) {
-                  permissionsFromStorage = JSON.parse(storedPermissions);
-                }
-              } catch (e) {
-                console.warn('Could not load permissions from localStorage:', e);
-              }
-              
-              const canViewAll = teamMember.can_view_all_chantiers ?? permissionsFromStorage.can_view_all_chantiers ?? false;
+              const canViewAll = teamMember.can_view_all_chantiers ?? false;
               
               // Si le membre a la permission de voir tous les chantiers, afficher tous les chantiers
               // Sinon, filtrer pour ne montrer que les chantiers assignés
@@ -142,19 +130,7 @@ export function ChantiersProvider({ children }: { children: ReactNode }) {
           }
         } else {
           const teamMember = JSON.parse(teamMemberJson!) as { id: string; can_view_all_chantiers?: boolean; user_id?: string | null };
-          
-          // Charger les permissions depuis localStorage si elles n'existent pas
-          let permissionsFromStorage: { can_view_all_chantiers?: boolean } = {};
-          try {
-            const storedPermissions = localStorage.getItem(`team_member_permissions_${teamMember.id}`);
-            if (storedPermissions) {
-              permissionsFromStorage = JSON.parse(storedPermissions);
-            }
-          } catch (e) {
-            console.warn('Could not load permissions from localStorage:', e);
-          }
-          
-          const canViewAll = teamMember.can_view_all_chantiers ?? permissionsFromStorage.can_view_all_chantiers ?? false;
+          const canViewAll = teamMember.can_view_all_chantiers ?? false;
           
           // Si le membre a la permission de voir tous les chantiers ET qu'il a un user_id,
           // charger tous les chantiers de l'utilisateur propriétaire

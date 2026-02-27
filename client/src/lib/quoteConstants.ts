@@ -9,6 +9,7 @@ export const QUOTE_STATUS_LABELS: Record<string, string> = {
   refusé: "Refusé",
   expiré: "Expiré",
   validé: "Validé",
+  signé: "Signé",
 };
 
 /** Valeur sentinelle pour "aucune unité" (Radix Select n'accepte pas value=""). */
