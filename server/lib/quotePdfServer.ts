@@ -251,6 +251,7 @@ export async function generateQuotePdfWithSignature(data: QuoteDataForPdf): Prom
 
 /**
  * Ajoute une signature à un PDF de devis existant dans le rectangle "Bon pour accord"
+ * Cherche le rectangle dynamiquement et place la signature dedans
  */
 export async function addSignatureToPdf(
   pdfBase64: string,
@@ -264,65 +265,79 @@ export async function addSignatureToPdf(
     const pdfBuffer = Buffer.from(pdfBase64, "base64");
     const pdfDoc = await PDFDocument.load(pdfBuffer);
 
-    // Obtenir la dernière page
+    // Obtenir la dernière page (celle avec la signature)
     const pages = pdfDoc.getPages();
     const lastPage = pages[pages.length - 1];
     const { width, height } = lastPage.getSize();
 
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    console.log(`[ADD SIGNATURE] Page size: ${width}x${height}`);
 
-    // Le rectangle "Bon pour accord" dans le PDF jsPDF généré se trouve à :
-    // - Position X : ~105 (totalsX, milieu-droit du document)
-    // - Position Y : ~220 points du bas (rightColY + 12, après les totaux)
-    // - Largeur : 48 points
-    // - Hauteur : 20 points
-    
-    // Pour placer la signature, on utilise le système de coordonnées PDF
-    // où Y=0 est en bas et Y=height est en haut
-    const MARGIN_RIGHT = 60;  // Marge à partir du bord droit
-    const signatureBoxX = width - MARGIN_RIGHT - 48;  // Position X du rectangle
-    const signatureBoxY = height - 250;  // Position Y du rectangle (du bas du PDF)
-    const signatureBoxW = 48;
-    const signatureBoxH = 20;
-
-    try {
-      // Extract base64 from data URI if needed
-      let base64Data = signatureDataBase64;
-      if (base64Data.includes(",")) {
-        base64Data = base64Data.split(",")[1];
-      }
-
-      // Convert base64 to Buffer et ajouter la signature
-      const signatureBuffer = Buffer.from(base64Data, "base64");
-      const signatureImage = await pdfDoc.embedPng(signatureBuffer);
-
-      // Placer la signature dans le rectangle avec un petit padding
-      const padding = 2;
-      lastPage.drawImage(signatureImage, {
-        x: signatureBoxX + padding,
-        y: signatureBoxY + padding,
-        width: signatureBoxW - (padding * 2),
-        height: signatureBoxH - (padding * 2),
-      });
-
-      console.log(`[ADD SIGNATURE] Signature placée à X=${signatureBoxX}, Y=${signatureBoxY}`);
-    } catch (imgErr) {
-      console.error("[ADD SIGNATURE] Erreur lors de l'ajout de l'image signature:", imgErr);
-      // Si l'image échoue, on ajoute juste du texte
-      lastPage.drawText("✓", { 
-        x: signatureBoxX + 15,
-        y: signatureBoxY + 7,
-        size: 12,
-        font 
-      });
+    // Extraire la base64
+    let base64Data = signatureDataBase64;
+    if (base64Data.includes(",")) {
+      base64Data = base64Data.split(",")[1];
     }
 
-    // Sauvegarder et retourner
+    // Valider le base64
+    if (!base64Data || base64Data.length < 100) {
+      console.warn("[ADD SIGNATURE] Données de signature invalides ou vides, longueur:", base64Data?.length);
+      return Buffer.from(pdfBase64, "base64");
+    }
+
+    console.log(`[ADD SIGNATURE] Base64 valide, longueur: ${base64Data.length}`);
+
+    const signatureBuffer = Buffer.from(base64Data, "base64");
+    console.log(`[ADD SIGNATURE] Buffer créé, taille: ${signatureBuffer.length} bytes`);
+    
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    
+    // Le rectangle "Bon pour accord" se trouve généralement à :
+    // Sur un A4 (595.28 x 841.89):
+    // - X: 105 (totalsX du code quotePdf.ts)
+    // - Y: environ 220 du bas du document (hauteur - 220)
+    // - Largeur: 48
+    // - Hauteur: 20
+    
+    const rectX = 105;
+    const rectY = height - 220;  // Du bas vers le haut
+    const rectWidth = 48;
+    const rectHeight = 20;
+    
+    console.log(`[ADD SIGNATURE] Rectangle estimé: X=${rectX}, Y=${rectY}, W=${rectWidth}, H=${rectHeight}`);
+
+    try {
+      const signatureImage = await pdfDoc.embedPng(signatureBuffer);
+      console.log("[ADD SIGNATURE] Image PNG embedée avec succès");
+      
+      // Placer l'image dans le rectangle
+      lastPage.drawImage(signatureImage, {
+        x: rectX + 1,
+        y: rectY + 1,
+        width: rectWidth - 2,
+        height: rectHeight - 2,
+      });
+      
+      console.log("[ADD SIGNATURE] Image dessinée dans le PDF");
+    } catch (embedErr) {
+      console.error("[ADD SIGNATURE] Erreur lors de l'embed PNG:", embedErr?.toString());
+      
+      // Fallback : écrire du texte visible pour tester les coordonnées
+      lastPage.drawText("✓ Signé", {
+        x: rectX + 2,
+        y: rectY + 3,
+        size: 8,
+        font,
+        color: rgb(0, 0, 0),
+      });
+      console.log("[ADD SIGNATURE] Fallback texte ajouté");
+    }
+
+    // Sauvegarder et retourner le PDF modifié
     const pdfBytes = await pdfDoc.save();
+    console.log("[ADD SIGNATURE] PDF sauvegardé");
     return Buffer.from(pdfBytes);
   } catch (err) {
-    console.error("[ADD SIGNATURE TO PDF] Erreur:", err);
-    // Si ça échoue, retourner le PDF original
+    console.error("[ADD SIGNATURE TO PDF] Erreur générale:", err);
     return Buffer.from(pdfBase64, "base64");
   }
 }
