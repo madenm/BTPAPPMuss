@@ -1105,15 +1105,17 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
 
     try {
       const supabase = getSupabaseClient();
+      
+      // Sélectionner seulement les colonnes de base (prospect_email peut ne pas exister)
       const { data, error } = await supabase
         .from("quote_signature_links")
-        .select("id, quote_id, token, user_id, created_at, expires_at, prospect_email")
+        .select("id, quote_id, token, user_id, created_at, expires_at")
         .eq("token", token)
         .single();
 
       if (error || !data) {
-        console.error("❌ [signature-link-info] Lien non trouvé:", error);
-        res.status(404).json({ message: "Lien de signature introuvable ou expiré." });
+        console.error("❌ [signature-link-info] Lien non trouvé:", error?.message || "no data");
+        res.status(404).json({ message: "Lien de signature introuvable." });
         return;
       }
 
@@ -1123,16 +1125,20 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
         return;
       }
 
-      // Vérifier si déjà signé
-      const { data: existingSig } = await supabase
-        .from("quote_signatures")
-        .select("id")
-        .eq("signature_token", token)
-        .limit(1);
+      // Vérifier si déjà signé (la table peut ne pas exister)
+      try {
+        const { data: existingSig } = await supabase
+          .from("quote_signatures")
+          .select("id")
+          .eq("signature_token", token)
+          .limit(1);
 
-      if (existingSig && existingSig.length > 0) {
-        res.status(410).json({ message: "Ce devis a déjà été signé." });
-        return;
+        if (existingSig && existingSig.length > 0) {
+          res.status(410).json({ message: "Ce devis a déjà été signé." });
+          return;
+        }
+      } catch (sigCheckErr) {
+        console.warn("⚠️ [signature-link-info] Table quote_signatures inaccessible:", sigCheckErr);
       }
 
       // Récupérer les infos du devis si disponible
@@ -1149,7 +1155,7 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
       res.status(200).json({
         ok: true,
         quote_id: data.quote_id,
-        prospect_email: data.prospect_email,
+        prospect_email: (data as any).prospect_email || null,
         expires_at: data.expires_at,
         quote: quoteInfo,
       });
