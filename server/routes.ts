@@ -718,7 +718,7 @@ JSON:
       type OutilLouer = { nom?: string; duree?: string; coutLocation?: number };
       type TempsRaw = string | { dureeEstimee?: string; decomposition?: { preparation?: string; travauxPrincipaux?: string; finitions?: string; imprevu?: string } };
       type OutilsRaw = string[] | { aLouer?: OutilLouer[]; fourniParArtisan?: string[]; estimationLocationTotal?: number };
-      type CoutsRaw = { materiaux?: number; mainOeuvre?: number; transportLivraison?: number; locationEquipements?: number; sousTotal?: number; imprevu?: number; coutDeBase?: number; fraisGeneraux?: number; margeBrute?: number; prixTTC?: number };
+      type CoutsRaw = { materiaux?: number; mainOeuvre?: number; transportLivraison?: number; locationEquipements?: number; sousTotal?: number; imprevu?: number; coutDeBase?: number; fraisGeneraux?: number; margeBrute?: number; prixTTC?: number; fourchetteBasse?: number; fourchetteHaute?: number };
       type EstimateRaw = {
         tempsRealisation?: TempsRaw;
         materiaux?: MatRaw[];
@@ -1460,11 +1460,11 @@ JSON:
                 const totalTtc = quote.total_ttc ?? 0;
                 const tvaAmount = totalTtc - subtotalHt;
 
-                // IMPORTANT: Toujours envoyer l'email, même si le PDF échoue
+                // IMPORTANT: Toujours envoyer l'email avec le PDF signé
                 let pdfBuffer: Buffer | null = null;
                 let pdfError: string | null = null;
 
-                // Essayer d'ajouter la signature au PDF existant
+                // Méthode 1: Essayer d'ajouter la signature au PDF stocké (si disponible)
                 if (quotePdfBase64 && signatureDataBase64) {
                   try {
                     // Récupérer et parser les coordonnées du rectangle
@@ -1487,15 +1487,56 @@ JSON:
                       new Date(),
                       rectCoords
                     );
-                    console.log(`[QUOTE SIGNATURE] PDF signé généré avec succès`);
+                    console.log(`[QUOTE SIGNATURE] PDF signé généré à partir du PDF stocké`);
                   } catch (pdfGenErr) {
                     pdfError = pdfGenErr instanceof Error ? pdfGenErr.message : "Erreur lors de la génération du PDF";
-                    console.error("[QUOTE SIGNATURE PDF GENERATION]", pdfError);
-                    // Continuer quand même - on enverra l'email sans PDF
+                    console.error("[QUOTE SIGNATURE PDF FROM STORED]", pdfError);
+                    // Fallback: générer le PDF à partir des données du devis
                   }
-                } else {
-                  pdfError = "PDF ou signature non disponible pour la génération";
-                  console.warn("[QUOTE SIGNATURE]", pdfError);
+                }
+                
+                // Méthode 2 (fallback): Générer le PDF à partir des données du devis
+                if (!pdfBuffer && signatureDataBase64) {
+                  try {
+                    const { generateQuotePdfWithSignature } = await import("./lib/quotePdfServer");
+                    
+                    // Parser les items du devis
+                    let quoteItems: Array<{ description?: string | null; quantity?: number; unitPrice?: number; total?: number }> = [];
+                    if (quote.items) {
+                      if (typeof quote.items === 'string') {
+                        try {
+                          quoteItems = JSON.parse(quote.items);
+                        } catch (e) {
+                          console.error("[QUOTE SIGNATURE] Erreur parsing items:", e);
+                        }
+                      } else if (Array.isArray(quote.items)) {
+                        quoteItems = quote.items;
+                      }
+                    }
+                    
+                    pdfBuffer = await generateQuotePdfWithSignature({
+                      projectDescription: quote.project_description,
+                      clientName: quote.client_name,
+                      items: quoteItems,
+                      subtotalHt: subtotalHt,
+                      tva: tvaAmount,
+                      totalTtc: totalTtc,
+                      companyName: profile?.company_name,
+                      companyEmail: profile?.company_email,
+                      companyPhone: profile?.company_phone,
+                      companyAddress: profile?.company_address,
+                      companySiret: profile?.company_siret,
+                      validityDays: String(quote.validity_days ?? 30),
+                      signatureData: signatureDataBase64,
+                      signerFirstName: firstName,
+                      signerLastName: lastName,
+                      signedAt: new Date().toISOString(),
+                    });
+                    console.log(`[QUOTE SIGNATURE] PDF signé généré à partir des données du devis`);
+                  } catch (pdfGenErr) {
+                    pdfError = pdfGenErr instanceof Error ? pdfGenErr.message : "Erreur lors de la génération du PDF";
+                    console.error("[QUOTE SIGNATURE PDF GENERATION FROM DATA]", pdfError);
+                  }
                 }
 
                 const resend = new Resend(resendApiKey);
