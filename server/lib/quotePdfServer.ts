@@ -250,7 +250,7 @@ export async function generateQuotePdfWithSignature(data: QuoteDataForPdf): Prom
 }
 
 /**
- * Ajoute une signature à un PDF de devis existant (dernière page)
+ * Ajoute une signature à un PDF de devis existant dans le rectangle "Bon pour accord"
  */
 export async function addSignatureToPdf(
   pdfBase64: string,
@@ -267,17 +267,21 @@ export async function addSignatureToPdf(
     // Obtenir la dernière page
     const pages = pdfDoc.getPages();
     const lastPage = pages[pages.length - 1];
-    const { height } = lastPage.getSize();
+    const { width, height } = lastPage.getSize();
 
-    // Ajouter la signature en bas de la dernière page 
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    let y = 100;
-    const MARGIN_BOTTOM = 40;
-
-    lastPage.drawText("Signature du client:", { x: MARGIN_BOTTOM, y, size: 10, font: fontBold });
-    y -= 14;
+    // Estimation de la position du rectangle "Bon pour accord"
+    // Le rectangle est généralement au milieu-droit du document
+    // Pour un A4 standard (595.28 x 841.89) :
+    // - Position X : environ 105 points (après les marges)
+    // - Position Y : environ 200-250 points du bas (rectangle de 48x20)
+    
+    const signatureBoxX = 105; // Aligné avec le texte "Bon pour accord"
+    const signatureBoxY = 220; // Position Y estimée du rectangle (depuis le bas)
+    const signatureBoxW = 48;  // Largeur du rectangle "Bon pour accord"
+    const signatureBoxH = 20;  // Hauteur du rectangle "Bon pour accord"
 
     try {
       // Extract base64 from data URI if needed
@@ -290,34 +294,27 @@ export async function addSignatureToPdf(
       const signatureBuffer = Buffer.from(base64Data, "base64");
       const signatureImage = await pdfDoc.embedPng(signatureBuffer);
 
-      // Draw signature
-      const signW = 100;
-      const signH = 40;
+      // Placer la signature dans le rectangle
+      // Adapter la taille de la signature pour tenir dans le rectangle
+      const signatureWidth = signatureBoxW - 4;  // Marges internes
+      const signatureHeight = signatureBoxH - 4;
+      
       lastPage.drawImage(signatureImage, {
-        x: MARGIN_BOTTOM,
-        y: y - signH,
-        width: signW,
-        height: signH,
+        x: signatureBoxX + 2,
+        y: signatureBoxY + 2,
+        width: signatureWidth,
+        height: signatureHeight,
       });
-
-      y -= signH + 14;
     } catch (imgErr) {
       console.error("[ADD SIGNATURE] Erreur lors de l'ajout de l'image signature:", imgErr);
+      // Fallback : ajouter juste du texte
+      lastPage.drawText("Signé", { 
+        x: signatureBoxX + 5,
+        y: signatureBoxY + 8,
+        size: 8,
+        font 
+      });
     }
-
-    // Ajouter le nom et la date
-    const signerName = `${signerFirstName} ${signerLastName}`.trim();
-    if (signerName) {
-      lastPage.drawText(signerName, { x: MARGIN_BOTTOM, y, size: 10, font });
-      y -= 14;
-    }
-
-    const signedDate = signedAt.toLocaleDateString("fr-FR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
-    lastPage.drawText(`Signé le ${signedDate}`, { x: MARGIN_BOTTOM, y, size: 9, font });
 
     // Sauvegarder et retourner
     const pdfBytes = await pdfDoc.save();
