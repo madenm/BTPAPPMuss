@@ -434,6 +434,7 @@ export function CRMPipeline() {
     try {
       let pdfBase64: string
       let fileName = "devis.pdf"
+      let rectCoords: { x: number; y: number; width: number; height: number } | undefined = undefined
       if (hasQuote && quoteModalSelectedQuote) {
         const params = quoteToPdfParams(quoteModalSelectedQuote)
         params.themeColor = accentColor
@@ -448,7 +449,7 @@ export function CRMPipeline() {
           if (logoDataUrl) params.logoDataUrl = logoDataUrl
         }
         pdfBase64 = getQuotePdfBase64(params)
-        const rectCoords = getSignatureRectangleCoordinates(params)
+        rectCoords = getSignatureRectangleCoordinates(params)
         const safeName = (quoteModalSelectedQuote.client_name || "devis").replace(/\s+/g, "-").replace(/[^a-zA-Z0-9-]/g, "")
         fileName = `devis-${safeName}.pdf`
       } else if (hasPdf && quoteModalPdfFile) {
@@ -497,7 +498,7 @@ export function CRMPipeline() {
       }
       
       // Ajouter les coordonnées du rectangle si c'est un devis (pour la signature)
-      if (hasQuote && quoteModalSelectedQuote && typeof rectCoords !== 'undefined') {
+      if (hasQuote && quoteModalSelectedQuote && rectCoords) {
         apiBody.signatureRectCoords = rectCoords
       }
 

@@ -310,7 +310,21 @@ function buildQuoteDoc(params: QuotePdfParams): jsPDF {
   doc.setFontSize(9);
   doc.text("Bon pour accord", totalsX, rightColY + 10);
   doc.setDrawColor(BORDER_GRAY[0], BORDER_GRAY[1], BORDER_GRAY[2]);
-  doc.rect(totalsX, rightColY + 12, 48, 20);
+  
+  // Rectangle "Bon pour accord" - stocker les coordonnées pour la signature
+  const signatureRectX = totalsX;
+  const signatureRectY = rightColY + 12;
+  const signatureRectW = 48;
+  const signatureRectH = 20;
+  doc.rect(signatureRectX, signatureRectY, signatureRectW, signatureRectH);
+  
+  // Stocker les coordonnées dans la variable globale pour getSignatureRectangleCoordinates
+  setLastSignatureRectCoords({
+    x: signatureRectX,
+    y: signatureRectY,
+    width: signatureRectW,
+    height: signatureRectH,
+  });
 
   // ----- Footer -----
   const footerY = doc.getPageHeight() - 10;
@@ -341,7 +355,30 @@ export function getQuotePdfBase64(params: QuotePdfParams): string {
 }
 
 /**
+ * Variable interne pour stocker les dernières coordonnées du rectangle de signature
+ * calculées lors de la génération du PDF
+ */
+let lastSignatureRectCoords: { x: number; y: number; width: number; height: number } | null = null;
+
+/**
+ * Définit les coordonnées du rectangle de signature (appelé par buildQuoteDoc)
+ */
+function setLastSignatureRectCoords(coords: { x: number; y: number; width: number; height: number }): void {
+  lastSignatureRectCoords = coords;
+}
+
+/**
+ * Récupère les coordonnées du rectangle de signature calculées lors du dernier appel à buildQuoteDoc
+ * @returns Coordonnées {x, y, width, height} en mm, ou null si non disponible
+ */
+export function getLastSignatureRectCoords(): { x: number; y: number; width: number; height: number } | null {
+  return lastSignatureRectCoords;
+}
+
+/**
  * Calcule les coordonnées du rectangle "Bon pour accord" dans le PDF jsPDF
+ * IMPORTANT: Pour des résultats précis, appeler getQuotePdfBase64 d'abord puis getLastSignatureRectCoords
+ * Cette fonction construit le PDF temporairement pour obtenir les coordonnées exactes
  * Retourne les coordonnées en millimètres (système jsPDF)
  * @returns Coordonnées {x, y, width, height} en mm
  */
@@ -351,24 +388,28 @@ export function getSignatureRectangleCoordinates(params: QuotePdfParams): {
   width: number;
   height: number;
 } {
-  // Ces valeurs sont calculées en fonction de la structure du PDF
-  // (voir buildQuoteDoc pour les détails)
+  // Si on a les coordonnées du dernier PDF généré, les utiliser
+  if (lastSignatureRectCoords) {
+    return lastSignatureRectCoords;
+  }
+  
+  // Sinon, construire le PDF pour obtenir les coordonnées exactes
+  try {
+    buildQuoteDoc(params);
+    if (lastSignatureRectCoords) {
+      return lastSignatureRectCoords;
+    }
+  } catch (e) {
+    console.error("[getSignatureRectangleCoordinates] Erreur lors du calcul:", e);
+  }
+  
+  // Fallback avec valeurs estimées (ne devrait pas arriver)
   const MARGIN = 10;
   const PAGE_W = 210;
-  
-  // totalsX en mm
-  const totalsX = MARGIN + (PAGE_W - 2 * MARGIN) / 2; // = 105 mm
-  
-  // Estimation de rightColY (varie selon la longueur du contenu)
-  // On utilise une hauteur moyenne estimée pour les boîtes
-  const estimatedFinalY = 140; // Approximation, en mm
-  const totalsBoxHeight = 30; // Hauteur estimée de la boîte des totaux, en mm
-  const rightColY = estimatedFinalY + 6 + totalsBoxHeight + 6;
-  
-  // Le rectangle "Bon pour accord" commence à (totalsX, rightColY + 12) avec (48, 20) en mm
+  const totalsX = MARGIN + (PAGE_W - 2 * MARGIN) / 2;
   return {
     x: totalsX,
-    y: rightColY + 12,
+    y: 194, // Valeur par défaut
     width: 48,
     height: 20,
   };
