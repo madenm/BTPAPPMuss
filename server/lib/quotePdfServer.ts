@@ -248,3 +248,84 @@ export async function generateQuotePdfWithSignature(data: QuoteDataForPdf): Prom
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);
 }
+
+/**
+ * Ajoute une signature à un PDF de devis existant (dernière page)
+ */
+export async function addSignatureToPdf(
+  pdfBase64: string,
+  signatureDataBase64: string,
+  signerFirstName: string,
+  signerLastName: string,
+  signedAt: Date
+): Promise<Buffer> {
+  try {
+    // Charger le PDF existant
+    const pdfBuffer = Buffer.from(pdfBase64, "base64");
+    const pdfDoc = await PDFDocument.load(pdfBuffer);
+
+    // Obtenir la dernière page
+    const pages = pdfDoc.getPages();
+    const lastPage = pages[pages.length - 1];
+    const { height } = lastPage.getSize();
+
+    // Ajouter la signature en bas de la dernière page 
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    let y = 100;
+    const MARGIN_BOTTOM = 40;
+
+    lastPage.drawText("Signature du client:", { x: MARGIN_BOTTOM, y, size: 10, font: fontBold });
+    y -= 14;
+
+    try {
+      // Extract base64 from data URI if needed
+      let base64Data = signatureDataBase64;
+      if (base64Data.includes(",")) {
+        base64Data = base64Data.split(",")[1];
+      }
+
+      // Convert base64 to Buffer
+      const signatureBuffer = Buffer.from(base64Data, "base64");
+      const signatureImage = await pdfDoc.embedPng(signatureBuffer);
+
+      // Draw signature
+      const signW = 100;
+      const signH = 40;
+      lastPage.drawImage(signatureImage, {
+        x: MARGIN_BOTTOM,
+        y: y - signH,
+        width: signW,
+        height: signH,
+      });
+
+      y -= signH + 14;
+    } catch (imgErr) {
+      console.error("[ADD SIGNATURE] Erreur lors de l'ajout de l'image signature:", imgErr);
+    }
+
+    // Ajouter le nom et la date
+    const signerName = `${signerFirstName} ${signerLastName}`.trim();
+    if (signerName) {
+      lastPage.drawText(signerName, { x: MARGIN_BOTTOM, y, size: 10, font });
+      y -= 14;
+    }
+
+    const signedDate = signedAt.toLocaleDateString("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+    lastPage.drawText(`Signé le ${signedDate}`, { x: MARGIN_BOTTOM, y, size: 9, font });
+
+    // Sauvegarder et retourner
+    const pdfBytes = await pdfDoc.save();
+    return Buffer.from(pdfBytes);
+  } catch (err) {
+    console.error("[ADD SIGNATURE TO PDF] Erreur:", err);
+    // Si ça échoue, retourner le PDF original
+    return Buffer.from(pdfBase64, "base64");
+  }
+}
+

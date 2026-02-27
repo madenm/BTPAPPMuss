@@ -7,7 +7,7 @@ import { randomBytes } from "crypto";
 import { storage } from "./storage";
 
 import { generateInvoicePdfBuffer } from "./lib/invoicePdfServer";
-import { generateQuotePdfWithSignature } from "./lib/quotePdfServer";
+import { addSignatureToPdf } from "./lib/quotePdfServer";
 import { getArtiprixForMetier } from "./lib/artiprixCatalog";
 
 import { Resend } from "resend";
@@ -1070,6 +1070,28 @@ JSON:
           res.status(500).json({ message: errMsg || "Erreur lors de l'envoi de l'email." });
           return;
         }
+        
+        // Stocker le PDF en base de données pour le retrouver à la signature
+        if (quoteId) {
+          try {
+            const supabase = getSupabaseClient();
+            const { error: updateError } = await supabase
+              .from("quotes")
+              .update({
+                quote_pdf_base64: pdfBase64,
+              })
+              .eq("id", quoteId);
+            
+            if (updateError) {
+              console.error("[SEND QUOTE EMAIL] Erreur lors du stockage du PDF:", updateError);
+              // Continuer même si le stockage échoue
+            }
+          } catch (err) {
+            console.error("[SEND QUOTE EMAIL] Erreur lors du stockage du PDF:", err);
+            // Continuer même si le stockage échoue
+          }
+        }
+        
         res.status(200).json({ ok: true, id: data?.id, signatureLink });
         return;
       } catch (err: unknown) {
@@ -1391,7 +1413,7 @@ JSON:
           const { data: quote } = await supabase
             .from("quotes")
             .select(
-              "id, project_description, total_ht, total_ttc, client_name, validity_days, items, user_id, status"
+              "id, project_description, total_ht, total_ttc, client_name, validity_days, items, user_id, status, quote_pdf_base64"
             )
             .eq("id", signatureLink.quote_id)
             .single();
@@ -1414,27 +1436,21 @@ JSON:
                 const totalTtc = quote.total_ttc ?? 0;
                 const tvaAmount = totalTtc - subtotalHt;
 
-                // Générer le PDF signé
-                const pdfBuffer = await generateQuotePdfWithSignature({
-                  quoteNumber: signatureLink.quote_id?.substring(0, 8).toUpperCase(),
-                  projectDescription: quote.project_description,
-                  validityDays: String(quote.validity_days ?? 30),
-                  clientName: quote.client_name,
-                  clientEmail: clientEmail,
-                  items: (quote.items as any) ?? [],
-                  subtotalHt: subtotalHt,
-                  tva: tvaAmount,
-                  totalTtc: totalTtc,
-                  companyName: profile?.company_name,
-                  companyEmail: profile?.company_email,
-                  companyPhone: profile?.company_phone,
-                  companyAddress: profile?.company_address,
-                  companySiret: profile?.company_siret,
-                  signatureData: signatureDataBase64,
-                  signerFirstName: firstName,
-                  signerLastName: lastName,
-                  signedAt: new Date().toISOString(),
-                });
+                // Ajouter la signature au PDF existant
+                let pdfBuffer: Buffer;
+                if (quote.quote_pdf_base64) {
+                  // Utiliser le PDF stocké et ajouter la signature dessus
+                  pdfBuffer = await addSignatureToPdf(
+                    quote.quote_pdf_base64,
+                    signatureDataBase64,
+                    firstName,
+                    lastName,
+                    new Date()
+                  );
+                } else {
+                  // Fallback : si le PDF n'est pas stocké, retourner une erreur
+                  throw new Error("Le PDF du devis n'a pas pu être récupéré. Veuillez renvoyer le devis.");
+                }
 
                 const resend = new Resend(resendApiKey);
                 const fromEmail = process.env.SENDER_EMAIL || process.env.RESEND_FROM || "onboarding@resend.dev";
@@ -1476,7 +1492,6 @@ JSON:
                     },
                   ],
                 });
-
                 console.log(`[QUOTE SIGNATURE] Email envoyé à ${clientEmail} avec PDF signé`);
               } catch (pdfErr) {
                 console.error("[QUOTE SIGNATURE PDF]", pdfErr);
