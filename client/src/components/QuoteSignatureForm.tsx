@@ -6,18 +6,20 @@ import { motion } from "framer-motion";
 interface QuoteSignatureFormProps {
   quoteId: string;
   signatureToken: string;
+  clientEmail?: string | null;
   onSignatureSubmitted?: () => void;
 }
 
 export const QuoteSignatureForm: React.FC<QuoteSignatureFormProps> = ({
   quoteId,
   signatureToken,
+  clientEmail,
   onSignatureSubmitted,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
+  const email = clientEmail || "";
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -138,7 +140,6 @@ export const QuoteSignatureForm: React.FC<QuoteSignatureFormProps> = ({
       setSuccess(true);
       setFirstName("");
       setLastName("");
-      setEmail("");
       clearSignature();
 
       if (onSignatureSubmitted) {
@@ -213,19 +214,6 @@ export const QuoteSignatureForm: React.FC<QuoteSignatureFormProps> = ({
         </div>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Email (optionnel)
-        </label>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="example@domain.com"
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-          disabled={isSubmitting}
-        />
-      </div>
 
       {/* Zone de signature */}
       <div>

@@ -7,6 +7,7 @@ import { randomBytes } from "crypto";
 import { storage } from "./storage";
 
 import { generateInvoicePdfBuffer } from "./lib/invoicePdfServer";
+import { generateQuotePdfWithSignature } from "./lib/quotePdfServer";
 import { getArtiprixForMetier } from "./lib/artiprixCatalog";
 
 import { Resend } from "resend";
@@ -57,6 +58,17 @@ function extractJsonFromResponse(text: string): string {
   const codeBlockMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (codeBlockMatch?.[1]) return codeBlockMatch[1].trim();
   return trimmed;
+}
+
+/** Escape HTML special characters for safe display in HTML content. */
+function escapeHtml(text: string | null | undefined): string {
+  if (!text) return "";
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -1226,6 +1238,45 @@ JSON:
     }
   });
 
+  // GET /api/signature-link-info/:token - Récupérer les informations d'un lien de signature
+  app.get("/api/signature-link-info/:token", async (req: Request, res: Response) => {
+    const { token } = req.params;
+
+    if (!token || typeof token !== "string") {
+      res.status(400).json({ message: "token requis." });
+      return;
+    }
+
+    try {
+      const supabase = getSupabaseClient();
+
+      const { data: signatureLink } = await supabase
+        .from("quote_signature_links")
+        .select("quote_id, prospect_email, expires_at")
+        .eq("token", token)
+        .single();
+
+      if (!signatureLink) {
+        res.status(404).json({ message: "Lien de signature invalide." });
+        return;
+      }
+
+      const expiresAt = new Date(signatureLink.expires_at);
+      if (expiresAt < new Date()) {
+        res.status(410).json({ message: "Ce lien de signature a expiré." });
+        return;
+      }
+
+      res.status(200).json({
+        prospect_email: signatureLink.prospect_email || null,
+        quote_id: signatureLink.quote_id || null,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur lors de la récupération du lien.";
+      res.status(500).json({ message });
+    }
+  });
+
   // POST /api/submit-quote-signature - Soumettre une signature pour un devis
   app.post("/api/submit-quote-signature", async (req: Request, res: Response) => {
     const { signatureToken, firstName, lastName, email, signatureDataBase64 } = req.body as {
@@ -1257,7 +1308,7 @@ JSON:
       // Récupérer le lien de signature et vérifier qu'il n'est pas expiré
       const { data: signatureLink } = await supabase
         .from("quote_signature_links")
-        .select("id, quote_id, expires_at")
+        .select("id, quote_id, expires_at, prospect_email, user_id")
         .eq("token", signatureToken)
         .single();
 
@@ -1295,6 +1346,11 @@ JSON:
       }
       const userAgent = req.headers["user-agent"] || "unknown";
 
+      // Utiliser le mail du formulaire s'il est fourni, sinon utiliser celui du lien
+      const clientEmail = (email && typeof email === "string" && email.trim()) 
+        ? email.trim() 
+        : (signatureLink.prospect_email || null);
+
       const { error: insertError } = await supabase
         .from("quote_signatures")
         .insert({
@@ -1302,10 +1358,11 @@ JSON:
           signature_token: signatureToken,
           client_firstname: firstName.trim(),
           client_lastname: lastName.trim(),
-          client_email: email && typeof email === "string" ? email.trim() : null,
+          client_email: clientEmail,
           signature_data: signatureDataBase64 ?? null,
           ip_address: ipAddress,
           user_agent: userAgent,
+          prospect_email: clientEmail,
         });
 
       if (insertError) {
@@ -1325,6 +1382,111 @@ JSON:
 
         if (updateError) {
           console.error("[QUOTE SIGNATURE] Erreur lors de la mise à jour du devis:", updateError);
+        }
+      }
+
+      // Envoyer un email de confirmation avec le devis signé en pièce jointe
+      if (clientEmail && signatureLink.quote_id) {
+        try {
+          const { data: quote } = await supabase
+            .from("quotes")
+            .select(
+              "id, project_description, total_ht, total_ttc, client_name, validity_days, items, user_id, status"
+            )
+            .eq("id", signatureLink.quote_id)
+            .single();
+
+          if (quote && signatureLink.user_id) {
+            // Récupérer le profil utilisateur pour les infos de l'entreprise
+            const { data: profile } = await supabase
+              .from("user_profiles")
+              .select(
+                "company_name, company_email, company_phone, company_address, company_city_postal, company_siret, default_tva_rate"
+              )
+              .eq("id", signatureLink.user_id)
+              .single();
+
+            const resendApiKey = process.env.RESEND_API_KEY;
+            if (resendApiKey) {
+              try {
+                // Calculer tva
+                const subtotalHt = quote.total_ht ?? 0;
+                const totalTtc = quote.total_ttc ?? 0;
+                const tvaAmount = totalTtc - subtotalHt;
+
+                // Générer le PDF signé
+                const pdfBuffer = await generateQuotePdfWithSignature({
+                  quoteNumber: signatureLink.quote_id?.substring(0, 8).toUpperCase(),
+                  projectDescription: quote.project_description,
+                  validityDays: String(quote.validity_days ?? 30),
+                  clientName: quote.client_name,
+                  clientEmail: clientEmail,
+                  items: (quote.items as any) ?? [],
+                  subtotalHt: subtotalHt,
+                  tva: tvaAmount,
+                  totalTtc: totalTtc,
+                  companyName: profile?.company_name,
+                  companyEmail: profile?.company_email,
+                  companyPhone: profile?.company_phone,
+                  companyAddress: profile?.company_address,
+                  companySiret: profile?.company_siret,
+                  signatureData: signatureDataBase64,
+                  signerFirstName: firstName,
+                  signerLastName: lastName,
+                  signedAt: new Date().toISOString(),
+                });
+
+                const resend = new Resend(resendApiKey);
+                const fromEmail = process.env.SENDER_EMAIL || process.env.RESEND_FROM || "onboarding@resend.dev";
+
+                const htmlContent = `
+                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <div style="background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%); color: white; padding: 24px; border-radius: 8px 8px 0 0; text-align: center;">
+                      <h1 style="margin: 0; font-size: 24px;">✓ Signature confirmée</h1>
+                    </div>
+                    <div style="padding: 24px; background-color: #f9fafb;">
+                      <p style="margin: 0 0 16px 0; color: #1f2937;">Bonjour ${escapeHtml(quote.client_name || "")},</p>
+                      <p style="margin: 0 0 24px 0; color: #4b5563;">Merci d'avoir signé le devis. Vous trouverez ci-joint le devis signé et numéroté pour votre dossier.</p>
+                      <div style="background-color: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 20px 0;">
+                        <h3 style="margin: 0 0 12px 0; color: #1f2937; font-size: 16px;">Résumé du devis</h3>
+                        <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 14px;">Projet : ${escapeHtml(quote.project_description || 'N/A')}</p>
+                        <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 14px;">Montant HT : ${(subtotalHt).toFixed(2)} €</p>
+                        ${tvaAmount > 0 ? `<p style="margin: 0 0 8px 0; color: #6b7280; font-size: 14px;">TVA : ${(tvaAmount).toFixed(2)} €</p>` : ''}
+                        <p style="margin: 0; color: #1f2937; font-weight: 600; font-size: 16px;">Total TTC : ${(totalTtc).toFixed(2)} €</p>
+                      </div>
+                      <p style="margin: 16px 0 0 0; color: #6b7280; font-size: 13px;">Les étapes suivantes du projet seront communiquées par email. Si vous avez des questions, n'hésitez pas à nous contacter.</p>
+                    </div>
+                    <div style="padding: 16px; background-color: #f3f4f6; border-radius: 0 0 8px 8px; text-align: center; font-size: 12px; color: #9ca3af;">
+                      <p style="margin: 0;">— ${escapeHtml(profile?.company_name || 'TitanBtp')}</p>
+                    </div>
+                  </div>
+                `;
+
+                const fileName = `devis-signe-${signatureLink.quote_id?.substring(0, 8)}.pdf`;
+
+                await resend.emails.send({
+                  from: fromEmail,
+                  to: clientEmail,
+                  subject: "✓ Votre devis signé",
+                  html: htmlContent,
+                  attachments: [
+                    {
+                      filename: fileName,
+                      content: pdfBuffer,
+                    },
+                  ],
+                });
+
+                console.log(`[QUOTE SIGNATURE] Email envoyé à ${clientEmail} avec PDF signé`);
+              } catch (pdfErr) {
+                console.error("[QUOTE SIGNATURE PDF]", pdfErr);
+                // Continuer même si la génération du PDF échoue
+              }
+            }
+          }
+        } catch (emailErr) {
+          console.error("[QUOTE SIGNATURE EMAIL]", emailErr);
+          // Continuer même si l'email échoue
         }
       }
 

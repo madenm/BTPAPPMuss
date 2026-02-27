@@ -28,19 +28,36 @@ export default function SignQuotePage() {
   const signatureToken = params?.token as string || "";
   
   const [quote, setQuote] = useState<Quote | null>(null);
+    const [clientEmail, setClientEmail] = useState<string | null>(null); // Ensure clientEmail is initialized
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
 
   useEffect(() => {
-    // Cette page sera accessible sans auth, donc on ne peut pas faire de requête authentifiée
-    // On affichera justle formulaire et un aperçu du devis basique
+    // Récupérer les informations du lien de signature depuis l'API
     if (!signatureToken) {
       setError("Token de signature invalide.");
       setLoading(false);
       return;
     }
-    setLoading(false);
+
+    const fetchSignatureLink = async () => {
+      try {
+        const response = await fetch(`/api/signature-link-info/${signatureToken}`);
+        if (response.ok) {
+          const data = await response.json();
+            setClientEmail(data.prospect_email || null); // Set clientEmail from API response
+        } else {
+            setClientEmail(null); // Set clientEmail to null if response is not ok
+        }
+      } catch (err) {
+          setClientEmail(null); // Set clientEmail to null on error
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSignatureLink();
   }, [signatureToken]);
 
   if (!match) {
@@ -135,6 +152,7 @@ export default function SignQuotePage() {
             <QuoteSignatureForm
               quoteId=""
               signatureToken={signatureToken}
+              clientEmail={clientEmail}
               onSignatureSubmitted={() => setCompleted(true)}
             />
           </div>
