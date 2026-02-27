@@ -1022,30 +1022,27 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
       return;
     }
 
-    try {
-      // Récupérer le userId du token Authorization
-      const authHeader = req.headers.authorization;
-      const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
-      
-      const supabase = getSupabaseClient();
-      let userId: string | null = null;
-      
-      if (token) {
-        const { data: { user: authUser } } = await supabase.auth.getUser(token);
-        userId = authUser?.id || null;
-        console.log("👤 [generate-quote-signature-link] userId from token:", userId)
-      }
+    const normalizedQuoteId = quoteId.trim();
+    if (!normalizedQuoteId) {
+      res.status(400).json({ message: "quoteId invalide." });
+      return;
+    }
 
-      // Fallback: récupérer user_id depuis la table quotes
-      if (!userId && quoteId) {
-        const { data: quoteRow } = await supabase
-          .from("quotes")
-          .select("user_id")
-          .eq("id", quoteId)
-          .single();
-        userId = quoteRow?.user_id || null;
-        console.log("👤 [generate-quote-signature-link] userId from quote:", userId)
+    try {
+      const supabase = getSupabaseClient();
+      const { data: quoteRow, error: quoteError } = await supabase
+        .from("quotes")
+        .select("id, user_id")
+        .eq("id", normalizedQuoteId)
+        .single();
+
+      if (quoteError || !quoteRow?.user_id) {
+        console.error("❌ [generate-quote-signature-link] Devis introuvable:", quoteError?.message || "no data")
+        res.status(404).json({ message: "Devis introuvable pour générer le lien de signature." });
+        return;
       }
+      const userId = quoteRow.user_id;
+      console.log("👤 [generate-quote-signature-link] userId from quote:", userId)
 
       if (!userId) {
         console.error("❌ [generate-quote-signature-link] Impossible de déterminer le userId")
@@ -1063,7 +1060,7 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
       const { error: insertError } = await supabase
         .from("quote_signature_links")
         .insert({
-          quote_id: quoteId,
+          quote_id: normalizedQuoteId,
           token: signatureToken,
           expires_at: expiresAt,
           user_id: userId,
