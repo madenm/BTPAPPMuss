@@ -1075,7 +1075,9 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
         return;
       }
 
-      const origin = process.env.VITE_APP_URL || "http://localhost:5000";
+      const proto = req.get("x-forwarded-proto") || req.protocol || "https";
+      const host = req.get("x-forwarded-host") || req.get("host") || "app.titanbtp.com";
+      const origin = process.env.VITE_APP_URL || `${proto}://${host}`;
       const signatureLink = `${origin}/sign-quote/${signatureToken}`;
 
       console.log("✅ [generate-quote-signature-link] Lien créé:", signatureLink)
