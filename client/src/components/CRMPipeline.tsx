@@ -39,7 +39,7 @@ import {
 } from "@/lib/supabaseProspects"
 import { fetchQuotesForUser, updateQuoteStatus, type SupabaseQuote } from "@/lib/supabaseQuotes"
 import { fetchInvoicesForUser, type InvoiceWithPayments } from "@/lib/supabaseInvoices"
-import { getQuotePdfBase64, fetchLogoDataUrl, buildQuoteEmailHtml, buildContactBlockHtml, type QuotePdfParams } from "@/lib/quotePdf"
+import { getQuotePdfBase64, getSignatureRectangleCoordinates, fetchLogoDataUrl, buildQuoteEmailHtml, buildContactBlockHtml, type QuotePdfParams } from "@/lib/quotePdf"
 import { buildInvoiceEmailHtml } from "@/lib/invoicePdf"
 import { toast } from "@/hooks/use-toast"
 
@@ -448,6 +448,7 @@ export function CRMPipeline() {
           if (logoDataUrl) params.logoDataUrl = logoDataUrl
         }
         pdfBase64 = getQuotePdfBase64(params)
+        const rectCoords = getSignatureRectangleCoordinates(params)
         const safeName = (quoteModalSelectedQuote.client_name || "devis").replace(/\s+/g, "-").replace(/[^a-zA-Z0-9-]/g, "")
         fileName = `devis-${safeName}.pdf`
       } else if (hasPdf && quoteModalPdfFile) {
@@ -495,7 +496,8 @@ export function CRMPipeline() {
           htmlContent, 
           replyTo: userReplyToEmail,
           quoteId: quoteModalSelectedQuote?.id,
-          userId: userId
+          userId: userId,
+          ...(hasQuote && quoteModalSelectedQuote && { signatureRectCoords: getSignatureRectangleCoordinates(quoteToPdfParams(quoteModalSelectedQuote)) })
         }),
       })
       const data = await emailRes.json().catch(() => ({}))

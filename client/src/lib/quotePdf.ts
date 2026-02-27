@@ -340,6 +340,40 @@ export function getQuotePdfBase64(params: QuotePdfParams): string {
   return base64 ?? "";
 }
 
+/**
+ * Calcule les coordonnées du rectangle "Bon pour accord" dans le PDF jsPDF
+ * Retourne les coordonnées en millimètres (système jsPDF)
+ * @returns Coordonnées {x, y, width, height} en mm
+ */
+export function getSignatureRectangleCoordinates(params: QuotePdfParams): {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} {
+  // Ces valeurs sont calculées en fonction de la structure du PDF
+  // (voir buildQuoteDoc pour les détails)
+  const MARGIN = 10;
+  const PAGE_W = 210;
+  
+  // totalsX en mm
+  const totalsX = MARGIN + (PAGE_W - 2 * MARGIN) / 2; // = 105 mm
+  
+  // Estimation de rightColY (varie selon la longueur du contenu)
+  // On utilise une hauteur moyenne estimée pour les boîtes
+  const estimatedFinalY = 140; // Approximation, en mm
+  const totalsBoxHeight = 30; // Hauteur estimée de la boîte des totaux, en mm
+  const rightColY = estimatedFinalY + 6 + totalsBoxHeight + 6;
+  
+  // Le rectangle "Bon pour accord" commence à (totalsX, rightColY + 12) avec (48, 20) en mm
+  return {
+    x: totalsX,
+    y: rightColY + 12,
+    width: 48,
+    height: 20,
+  };
+}
+
 /** Item shape for email HTML (same as QuotePdfItem). */
 export type QuoteEmailItem = {
   description: string;

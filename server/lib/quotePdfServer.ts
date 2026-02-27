@@ -251,14 +251,20 @@ export async function generateQuotePdfWithSignature(data: QuoteDataForPdf): Prom
 
 /**
  * Ajoute une signature à un PDF de devis existant dans le rectangle "Bon pour accord"
- * Cherche le rectangle dynamiquement et place la signature dedans
+ * @param pdfBase64 PDF original en base64
+ * @param signatureDataBase64 Données de signature (image PNG en base64)
+ * @param signerFirstName Prénom du signataire
+ * @param signerLastName Nom du signataire
+ * @param signedAt Date de signature
+ * @param rectCoords Coordonnées du rectangle en mm {x, y, width, height} - optionnel
  */
 export async function addSignatureToPdf(
   pdfBase64: string,
   signatureDataBase64: string,
   signerFirstName: string,
   signerLastName: string,
-  signedAt: Date
+  signedAt: Date,
+  rectCoords?: { x: number; y: number; width: number; height: number }
 ): Promise<Buffer> {
   try {
     // Charger le PDF existant
@@ -291,19 +297,44 @@ export async function addSignatureToPdf(
     
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     
-    // Le rectangle "Bon pour accord" se trouve généralement à :
-    // Sur un A4 (595.28 x 841.89):
-    // - X: 105 (totalsX du code quotePdf.ts)
-    // - Y: environ 220 du bas du document (hauteur - 220)
-    // - Largeur: 48
-    // - Hauteur: 20
-    
-    const rectX = 105;
-    const rectY = height - 220;  // Du bas vers le haut
-    const rectWidth = 48;
-    const rectHeight = 20;
-    
-    console.log(`[ADD SIGNATURE] Rectangle estimé: X=${rectX}, Y=${rectY}, W=${rectWidth}, H=${rectHeight}`);
+    // Déterminer les coordonnées du rectangle
+    // Si rectCoords est fourni (en mm), convertir en points pdf-lib
+    // Sinon, utiliser des valeurs par défaut estimées
+    let signatureX: number;
+    let signatureY: number;
+    let signatureW: number;
+    let signatureH: number;
+
+    if (rectCoords && rectCoords.x && rectCoords.y && rectCoords.width && rectCoords.height) {
+      // Convertir de mm (jsPDF) à points (pdf-lib)
+      // 1 mm = 2.834645669 points
+      const MM_TO_POINTS = 2.834645669;
+      
+      signatureX = rectCoords.x * MM_TO_POINTS;
+      signatureW = rectCoords.width * MM_TO_POINTS;
+      signatureH = rectCoords.height * MM_TO_POINTS;
+      
+      // Y : jsPDF compte de haut en bas, pdf-lib compte de bas en haut
+      // Y_pdflib = pageHeight - (Y_jspdf + height_jspdf)
+      signatureY = height - ((rectCoords.y + rectCoords.height) * MM_TO_POINTS);
+      
+      console.log(`[ADD SIGNATURE] Coordonnées depuis base (mm): X=${rectCoords.x}, Y=${rectCoords.y}, W=${rectCoords.width}, H=${rectCoords.height}`);
+      console.log(`[ADD SIGNATURE] Coordonnées converties (points): X=${signatureX}, Y=${signatureY}, W=${signatureW}, H=${signatureH}`);
+    } else {
+      // Valeurs par défaut si pas de coordonnées fournies
+      const MM_TO_POINTS = 2.834645669;
+      const defaultRectX = 105; // mm (totalsX dans quotePdf.ts)
+      const defaultRectY = 175; // mm (estimation)
+      const defaultRectW = 48;  // mm
+      const defaultRectH = 20;  // mm
+      
+      signatureX = defaultRectX * MM_TO_POINTS;
+      signatureW = defaultRectW * MM_TO_POINTS;
+      signatureH = defaultRectH * MM_TO_POINTS;
+      signatureY = height - ((defaultRectY + defaultRectH) * MM_TO_POINTS);
+      
+      console.log(`[ADD SIGNATURE] Utilisation des coordonnées par défaut (estimées)`);
+    }
 
     try {
       const signatureImage = await pdfDoc.embedPng(signatureBuffer);
@@ -311,10 +342,10 @@ export async function addSignatureToPdf(
       
       // Placer l'image dans le rectangle
       lastPage.drawImage(signatureImage, {
-        x: rectX + 1,
-        y: rectY + 1,
-        width: rectWidth - 2,
-        height: rectHeight - 2,
+        x: signatureX + 1,
+        y: signatureY + 1,
+        width: signatureW - 2,
+        height: signatureH - 2,
       });
       
       console.log("[ADD SIGNATURE] Image dessinée dans le PDF");
@@ -323,8 +354,8 @@ export async function addSignatureToPdf(
       
       // Fallback : écrire du texte visible pour tester les coordonnées
       lastPage.drawText("✓ Signé", {
-        x: rectX + 2,
-        y: rectY + 3,
+        x: signatureX + 2,
+        y: signatureY + 3,
         size: 8,
         font,
         color: rgb(0, 0, 0),

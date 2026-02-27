@@ -941,7 +941,7 @@ JSON:
   });
 
   app.post("/api/send-quote-email", async (req: Request, res: Response) => {
-    const { to, fromEmail, replyTo, pdfBase64, fileName, htmlContent, quoteId, userId } = req.body as {
+    const { to, fromEmail, replyTo, pdfBase64, fileName, htmlContent, quoteId, userId, signatureRectCoords } = req.body as {
       to?: string;
       fromEmail?: string | null;
       replyTo?: string | null;
@@ -950,6 +950,7 @@ JSON:
       htmlContent?: string | null;
       quoteId?: string;
       userId?: string;
+      signatureRectCoords?: { x: number; y: number; width: number; height: number };
     };
 
     if (!to || typeof to !== "string" || !to.trim()) {
@@ -1079,6 +1080,7 @@ JSON:
               .from("quotes")
               .update({
                 quote_pdf_base64: pdfBase64,
+                quote_signature_rect_coords: signatureRectCoords ? JSON.stringify(signatureRectCoords) : null,
               })
               .eq("id", quoteId);
             
@@ -1413,7 +1415,7 @@ JSON:
           const { data: quote } = await supabase
             .from("quotes")
             .select(
-              "id, project_description, total_ht, total_ttc, client_name, validity_days, items, user_id, status, quote_pdf_base64"
+              "id, project_description, total_ht, total_ttc, client_name, validity_days, items, user_id, status, quote_pdf_base64, quote_signature_rect_coords"
             )
             .eq("id", signatureLink.quote_id)
             .single();
@@ -1439,13 +1441,25 @@ JSON:
                 // Ajouter la signature au PDF existant
                 let pdfBuffer: Buffer;
                 if (quote.quote_pdf_base64) {
+                  // Récupérer et parser les coordonnées du rectangle
+                  let rectCoords: { x: number; y: number; width: number; height: number } | undefined;
+                  if (quote.quote_signature_rect_coords) {
+                    try {
+                      rectCoords = JSON.parse(quote.quote_signature_rect_coords as string);
+                    } catch (parseErr) {
+                      console.error("[QUOTE SIGNATURE] Erreur parsing coordonnées:", parseErr);
+                      rectCoords = undefined;
+                    }
+                  }
+                  
                   // Utiliser le PDF stocké et ajouter la signature dessus
                   pdfBuffer = await addSignatureToPdf(
                     quote.quote_pdf_base64,
                     signatureDataBase64,
                     firstName,
                     lastName,
-                    new Date()
+                    new Date(),
+                    rectCoords
                   );
                 } else {
                   // Fallback : si le PDF n'est pas stocké, retourner une erreur
