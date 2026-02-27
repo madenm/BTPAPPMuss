@@ -380,7 +380,6 @@ export function CRMPipeline() {
 
     if (targetStage === "quote") {
       setSelectedProspect(prospect)
-      setSelectedColumn(targetStage)
       setShowQuoteModal(true)
       return
     }
@@ -491,7 +490,7 @@ export function CRMPipeline() {
           name: selectedProspect.name ?? "",
           email: selectedProspect.email ?? "",
           phone: selectedProspect.phone ?? "",
-          address: selectedProspect.address ?? ""
+          address: selectedProspect.street_address ?? ""
         }
         params.themeColor = accentColor
         params.companyName = profile?.company_name || profile?.full_name || undefined
@@ -521,7 +520,7 @@ export function CRMPipeline() {
       const builtHtml = quoteModalSelectedQuote
         ? buildQuoteEmailHtml({
             clientName: selectedProspect.name ?? "",
-            clientAddress: selectedProspect.address ?? undefined,
+            clientAddress: selectedProspect.street_address ?? undefined,
             clientPhone: selectedProspect.phone ?? undefined,
             clientEmail: selectedProspect.email ?? undefined,
             total: quoteModalSelectedQuote.total_ttc ?? 0,
@@ -808,7 +807,6 @@ export function CRMPipeline() {
             userId={userId}
             prospectStatuses={prospectStatuses}
             daysBeforeFollowup={getDaysBeforeFollowup(userId, col.id)}
-            isTerminal={isTerminal}
             onDragOver={handleDragOver}
             onDrop={() => handleDrop(col.id)}
             onDragStart={handleDragStart}

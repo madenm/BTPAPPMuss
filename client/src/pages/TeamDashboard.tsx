@@ -86,13 +86,6 @@ export default function TeamDashboard() {
     if (storedMember) {
       try {
         teamMemberForCheck = JSON.parse(storedMember) as TeamMember;
-          can_manage_team: permissionsFromStorage.can_manage_team !== undefined 
-            ? permissionsFromStorage.can_manage_team 
-            : (member.can_manage_team ?? false),
-          can_manage_clients: permissionsFromStorage.can_manage_clients !== undefined 
-            ? permissionsFromStorage.can_manage_clients 
-            : (member.can_manage_clients ?? false),
-        } as TeamMember;
       } catch (e) {
         console.error('Error parsing team member:', e);
       }
