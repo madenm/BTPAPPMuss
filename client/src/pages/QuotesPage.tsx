@@ -25,7 +25,7 @@ import { useUserSettings } from '@/context/UserSettingsContext';
 import { useToast } from '@/hooks/use-toast';
 import { UserAccountButton } from '@/components/UserAccountButton';
 import { VoiceInputButton } from '@/components/VoiceInputButton';
-import { insertQuote, updateQuote, deleteQuote, updateQuoteStatus, fetchQuoteById, fetchQuotesForUser, getQuoteDisplayNumber, type QuoteItem, type QuoteSubItem, type SupabaseQuote } from '@/lib/supabaseQuotes';
+import { insertQuote, updateQuote, deleteQuote, updateQuoteStatus, fetchQuoteById, fetchQuotesForUser, getQuoteDisplayNumber, generateSignatureLink, type QuoteItem, type QuoteSubItem, type SupabaseQuote } from '@/lib/supabaseQuotes';
 import { DEFAULT_THEME_COLOR, QUOTE_STATUS_LABELS, QUOTE_UNIT_NONE, QUOTE_UNIT_OPTIONS, inferUnitFromDescription, backfillUnitOnItems } from '@/lib/quoteConstants';
 import { downloadPdfBase64, downloadQuotePdf, fetchLogoDataUrl } from '@/lib/quotePdf';
 import { findProspectByEmail, findProspectByName, getProspectById, fetchProspectsForUser as fetchCRMClients, insertProspect, updateProspect } from '@/lib/supabaseClients';
@@ -956,12 +956,29 @@ export default function QuotesPage() {
         ...(logoDataUrl && { logoDataUrl }),
       });
 
+      let signatureLink = '';
+      try {
+        signatureLink = (await generateSignatureLink(quoteToSend.id, user.id, 30)) || '';
+      } catch (signatureErr) {
+        console.error('Erreur génération lien signature (fallback client):', signatureErr);
+      }
+
+      const signatureLinkHtml = signatureLink
+        ? `
+          <div style="margin: 24px 0; padding: 16px; background-color: #f3f4f6; border-radius: 8px; text-align: center;">
+            <p style="margin: 0 0 12px 0; font-weight: 600; color: #374151;">Pour signer votre devis en ligne :</p>
+            <a href="${signatureLink}" style="display: inline-block; padding: 12px 24px; background-color: #8b5cf6; color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">✍️ Signer le devis</a>
+          </div>
+        `
+        : '';
+
       // Créer le contenu HTML de l'email
       const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: ${accentColor || '#334155'};">Nouveau devis</h2>
           <p>Bonjour ${quoteToSend.client_name || 'Madame, Monsieur'},</p>
           <p>Veuillez trouver ci-joint votre devis ${quoteNum || ''}.</p>
+          ${signatureLinkHtml}
           <p>Cordialement,<br/>${profile?.company_name || profile?.full_name || ''}</p>
           ${profile?.company_phone ? `<p style="color: #64748b;">Tel: ${profile.company_phone}</p>` : ''}
           ${profile?.company_email ? `<p style="color: #64748b;">Email: ${profile.company_email}</p>` : ''}

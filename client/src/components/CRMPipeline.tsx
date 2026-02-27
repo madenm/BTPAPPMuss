@@ -24,7 +24,7 @@ import {
   updateProspect,
   deleteProspect,
 } from "@/lib/supabaseClients"
-import { fetchQuotesForUser, updateQuoteStatus, type SupabaseQuote, hasQuoteBeenSigned, isQuoteValidityExpired } from "@/lib/supabaseQuotes"
+import { fetchQuotesForUser, updateQuoteStatus, type SupabaseQuote, hasQuoteBeenSigned, isQuoteValidityExpired, generateSignatureLink } from "@/lib/supabaseQuotes"
 import { getQuotePdfBase64, getSignatureRectangleCoordinates, fetchLogoDataUrl, buildQuoteEmailHtml, buildContactBlockHtml, type QuotePdfParams } from "@/lib/quotePdf"
 import { toast } from "@/hooks/use-toast"
 
@@ -697,9 +697,31 @@ export function CRMPipeline() {
             console.log("✅ Lien généré:", signatureLink)
           } else {
             console.error("❌ Échec génération lien signature:", signatureData?.message || "Réponse invalide")
+
+            if (userId) {
+              console.log("🔁 Tentative fallback génération lien signature côté client...")
+              const fallbackLink = await generateSignatureLink(linkedQuoteId, userId, 30)
+              if (fallbackLink) {
+                signatureLink = fallbackLink
+                console.log("✅ Lien généré (fallback client):", signatureLink)
+              }
+            }
           }
         } catch (err) {
           console.error("❌ Erreur génération lien signature:", err)
+
+          if (userId) {
+            try {
+              console.log("🔁 Tentative fallback génération lien signature côté client...")
+              const fallbackLink = await generateSignatureLink(linkedQuoteId, userId, 30)
+              if (fallbackLink) {
+                signatureLink = fallbackLink
+                console.log("✅ Lien généré (fallback client):", signatureLink)
+              }
+            } catch (fallbackErr) {
+              console.error("❌ Erreur fallback génération lien signature:", fallbackErr)
+            }
+          }
         }
       } else {
         console.warn("⚠️ Pas de devis lié trouvé - aucun lien de signature généré")
