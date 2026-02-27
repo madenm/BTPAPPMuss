@@ -24,7 +24,7 @@ import {
   updateProspect,
   deleteProspect,
 } from "@/lib/supabaseClients"
-import { fetchQuotesForUser, updateQuoteStatus, type SupabaseQuote, hasQuoteBeenSigned, isQuoteValidityExpired, generateSignatureLink } from "@/lib/supabaseQuotes"
+import { fetchQuotesForUser, updateQuoteStatus, type SupabaseQuote, hasQuoteBeenSigned, isQuoteValidityExpired } from "@/lib/supabaseQuotes"
 import { getQuotePdfBase64, getSignatureRectangleCoordinates, fetchLogoDataUrl, buildQuoteEmailHtml, buildContactBlockHtml, type QuotePdfParams } from "@/lib/quotePdf"
 import { toast } from "@/hooks/use-toast"
 
@@ -661,21 +661,48 @@ export function CRMPipeline() {
       let signatureLink = ""
       console.log("🔗 Génération lien signature - linkedQuoteId:", linkedQuoteId)
       
-      if (linkedQuoteId && userId) {
+      if (linkedQuoteId) {
         try {
-          console.log("📤 Génération lien signature côté client...")
-          const link = await generateSignatureLink(linkedQuoteId, userId, 30)
-          if (link) {
+          console.log("📤 Génération lien signature côté serveur...")
+          const signatureRes = await fetch("/api/generate-quote-signature-link", {
+            method: "POST",
+            headers: getApiPostHeaders(session?.access_token),
+            body: JSON.stringify({ quoteId: linkedQuoteId, expirationDays: 30 }),
+          })
+
+          const signatureText = await signatureRes.text()
+          const signatureData = signatureText
+            ? (() => {
+                try {
+                  return JSON.parse(signatureText)
+                } catch {
+                  return {}
+                }
+              })()
+            : {}
+
+          const link = typeof signatureData?.signatureLink === "string" ? signatureData.signatureLink : ""
+
+          if (signatureRes.ok && link) {
             signatureLink = link
             console.log("✅ Lien généré:", signatureLink)
           } else {
-            console.error("❌ Échec génération lien signature")
+            console.error("❌ Échec génération lien signature:", signatureData?.message || "Réponse invalide")
           }
         } catch (err) {
           console.error("❌ Erreur génération lien signature:", err)
         }
       } else {
         console.warn("⚠️ Pas de devis lié trouvé - aucun lien de signature généré")
+      }
+
+      if (linkedQuoteId && !signatureLink) {
+        toast({
+          title: "Erreur lien signature",
+          description: "Impossible de générer un lien de signature valide. Réessayez dans quelques secondes.",
+          variant: "destructive",
+        })
+        return
       }
 
       const contactBlock = buildContactBlockHtml({
