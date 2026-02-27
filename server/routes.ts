@@ -1438,45 +1438,66 @@ JSON:
                 const totalTtc = quote.total_ttc ?? 0;
                 const tvaAmount = totalTtc - subtotalHt;
 
-                // Ajouter la signature au PDF existant
-                let pdfBuffer: Buffer;
-                if (quote.quote_pdf_base64) {
-                  // Récupérer et parser les coordonnées du rectangle
-                  let rectCoords: { x: number; y: number; width: number; height: number } | undefined;
-                  if (quote.quote_signature_rect_coords) {
-                    try {
-                      rectCoords = JSON.parse(quote.quote_signature_rect_coords as string);
-                    } catch (parseErr) {
-                      console.error("[QUOTE SIGNATURE] Erreur parsing coordonnées:", parseErr);
-                      rectCoords = undefined;
+                // IMPORTANT: Toujours envoyer l'email, même si le PDF échoue
+                let pdfBuffer: Buffer | null = null;
+                let pdfError: string | null = null;
+
+                // Essayer d'ajouter la signature au PDF existant
+                if (quote.quote_pdf_base64 && signatureDataBase64) {
+                  try {
+                    // Récupérer et parser les coordonnées du rectangle
+                    let rectCoords: { x: number; y: number; width: number; height: number } | undefined;
+                    if (quote.quote_signature_rect_coords) {
+                      try {
+                        rectCoords = JSON.parse(quote.quote_signature_rect_coords as string);
+                      } catch (parseErr) {
+                        console.error("[QUOTE SIGNATURE] Erreur parsing coordonnées:", parseErr);
+                        rectCoords = undefined;
+                      }
                     }
+                    
+                    // Utiliser le PDF stocké et ajouter la signature dessus
+                    pdfBuffer = await addSignatureToPdf(
+                      quote.quote_pdf_base64,
+                      signatureDataBase64,
+                      firstName,
+                      lastName,
+                      new Date(),
+                      rectCoords
+                    );
+                    console.log(`[QUOTE SIGNATURE] PDF signé généré avec succès`);
+                  } catch (pdfGenErr) {
+                    pdfError = pdfGenErr instanceof Error ? pdfGenErr.message : "Erreur lors de la génération du PDF";
+                    console.error("[QUOTE SIGNATURE PDF GENERATION]", pdfError);
+                    // Continuer quand même - on enverra l'email sans PDF
                   }
-                  
-                  // Utiliser le PDF stocké et ajouter la signature dessus
-                  pdfBuffer = await addSignatureToPdf(
-                    quote.quote_pdf_base64,
-                    signatureDataBase64,
-                    firstName,
-                    lastName,
-                    new Date(),
-                    rectCoords
-                  );
                 } else {
-                  // Fallback : si le PDF n'est pas stocké, retourner une erreur
-                  throw new Error("Le PDF du devis n'a pas pu être récupéré. Veuillez renvoyer le devis.");
+                  pdfError = "PDF ou signature non disponible pour la génération";
+                  console.warn("[QUOTE SIGNATURE]", pdfError);
                 }
 
                 const resend = new Resend(resendApiKey);
                 const fromEmail = process.env.SENDER_EMAIL || process.env.RESEND_FROM || "onboarding@resend.dev";
 
-                const htmlContent = `
+                let htmlContent = `
                   <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                     <div style="background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%); color: white; padding: 24px; border-radius: 8px 8px 0 0; text-align: center;">
                       <h1 style="margin: 0; font-size: 24px;">✓ Signature confirmée</h1>
                     </div>
                     <div style="padding: 24px; background-color: #f9fafb;">
                       <p style="margin: 0 0 16px 0; color: #1f2937;">Bonjour ${escapeHtml(quote.client_name || "")},</p>
-                      <p style="margin: 0 0 24px 0; color: #4b5563;">Merci d'avoir signé le devis. Vous trouverez ci-joint le devis signé et numéroté pour votre dossier.</p>
+                      <p style="margin: 0 0 24px 0; color: #4b5563;">Merci d'avoir signé le devis. `;
+                
+                if (pdfBuffer) {
+                  htmlContent += `Vous trouverez ci-joint le devis signé et numéroté pour votre dossier.</p>`;
+                } else {
+                  htmlContent += `Votre signature a bien été enregistrée.</p>
+                    <p style="margin: 0 0 16px 0; color: #f59e0b; background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px; border-radius: 4px;">
+                      <strong>Note:</strong> Le PDF du devis signé sera envoyé dans un prochain email.
+                    </p>`;
+                }
+
+                htmlContent += `
                       <div style="background-color: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 20px 0;">
                         <h3 style="margin: 0 0 12px 0; color: #1f2937; font-size: 16px;">Résumé du devis</h3>
                         <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 14px;">Projet : ${escapeHtml(quote.project_description || 'N/A')}</p>
@@ -1493,30 +1514,46 @@ JSON:
                 `;
 
                 const fileName = `devis-signe-${signatureLink.quote_id?.substring(0, 8)}.pdf`;
-
-                await resend.emails.send({
+                
+                // Préparer l'email avec ou sans pièce jointe
+                const emailPayload: any = {
                   from: fromEmail,
                   to: clientEmail,
                   subject: "✓ Votre devis signé",
                   html: htmlContent,
-                  attachments: [
+                };
+
+                if (pdfBuffer) {
+                  emailPayload.attachments = [
                     {
                       filename: fileName,
                       content: pdfBuffer,
                     },
-                  ],
-                });
-                console.log(`[QUOTE SIGNATURE] Email envoyé à ${clientEmail} avec PDF signé`);
-              } catch (pdfErr) {
-                console.error("[QUOTE SIGNATURE PDF]", pdfErr);
-                // Continuer même si la génération du PDF échoue
+                  ];
+                }
+
+                const emailResult = await resend.emails.send(emailPayload);
+                console.log(`[QUOTE SIGNATURE] Email envoyé à ${clientEmail}${pdfBuffer ? ' avec PDF signé' : ' sans PDF'}`);
+                
+                if (emailResult.error) {
+                  console.error("[QUOTE SIGNATURE RESEND ERROR]", emailResult.error);
+                }
+              } catch (emailSendErr) {
+                console.error("[QUOTE SIGNATURE EMAIL SEND]", emailSendErr);
+                throw emailSendErr; // Relancer pour que l'erreur soit bien loggée
               }
+            } else {
+              console.warn("[QUOTE SIGNATURE] RESEND_API_KEY non configurée, impossible d'envoyer l'email");
             }
+          } else {
+            console.warn("[QUOTE SIGNATURE] Quote ou user_id manquant");
           }
         } catch (emailErr) {
-          console.error("[QUOTE SIGNATURE EMAIL]", emailErr);
-          // Continuer même si l'email échoue
+          console.error("[QUOTE SIGNATURE EMAIL CRITICAL]", emailErr);
+          // Continuer quand même - la signature est sauvegardée
         }
+      } else {
+        console.warn("[QUOTE SIGNATURE] clientEmail ou quote_id manquant, pas d'email envoyé", { clientEmail, quoteId: signatureLink.quote_id });
       }
 
       res.status(200).json({
