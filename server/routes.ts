@@ -1033,7 +1033,24 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
       if (token) {
         const { data: { user: authUser } } = await supabase.auth.getUser(token);
         userId = authUser?.id || null;
-        console.log("👤 [generate-quote-signature-link] userId:", userId)
+        console.log("👤 [generate-quote-signature-link] userId from token:", userId)
+      }
+
+      // Fallback: récupérer user_id depuis la table quotes
+      if (!userId && quoteId) {
+        const { data: quoteRow } = await supabase
+          .from("quotes")
+          .select("user_id")
+          .eq("id", quoteId)
+          .single();
+        userId = quoteRow?.user_id || null;
+        console.log("👤 [generate-quote-signature-link] userId from quote:", userId)
+      }
+
+      if (!userId) {
+        console.error("❌ [generate-quote-signature-link] Impossible de déterminer le userId")
+        res.status(401).json({ message: "Authentification requise." });
+        return;
       }
 
       // Générer un token unique
@@ -1053,8 +1070,8 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
         });
 
       if (insertError) {
-        console.error("❌ [generate-quote-signature-link] Erreur insertion:", insertError);
-        res.status(500).json({ message: "Erreur lors de la génération du lien de signature." });
+        console.error("❌ [generate-quote-signature-link] Erreur insertion:", JSON.stringify(insertError));
+        res.status(500).json({ message: "Erreur lors de la génération du lien de signature.", detail: insertError.message });
         return;
       }
 
