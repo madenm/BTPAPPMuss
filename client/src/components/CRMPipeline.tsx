@@ -641,6 +641,15 @@ export function CRMPipeline() {
 
       // Trouver le devis lié : priorité à linkedQuoteId, sinon chercher par contact_id
       let linkedQuoteId = prospect.linkedQuoteId
+
+      // Si le linkedQuoteId est périmé/supprimé, on le considère comme absent
+      if (linkedQuoteId && allQuotes.length > 0) {
+        const stillExists = allQuotes.some(q => q.id === linkedQuoteId)
+        if (!stillExists) {
+          console.warn("⚠️ linkedQuoteId introuvable dans allQuotes, tentative de résolution via contact_id")
+          linkedQuoteId = undefined
+        }
+      }
       
       if (!linkedQuoteId && allQuotes.length > 0) {
         const matchingQuote = allQuotes.find(q => q.contact_id === prospect.id)
