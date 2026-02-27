@@ -1467,14 +1467,26 @@ JSON:
                 // Méthode 1: Essayer d'ajouter la signature au PDF stocké (si disponible)
                 if (quotePdfBase64 && signatureDataBase64) {
                   try {
-                    // Récupérer et parser les coordonnées du rectangle
+                    // Récupérer et parser les coordonnées du rectangle (JSONB peut déjà être un objet)
                     let rectCoords: { x: number; y: number; width: number; height: number } | undefined;
                     if (quoteSignatureRectCoords) {
-                      try {
-                        rectCoords = JSON.parse(quoteSignatureRectCoords as string);
-                      } catch (parseErr) {
-                        console.error("[QUOTE SIGNATURE] Erreur parsing coordonnées:", parseErr);
-                        rectCoords = undefined;
+                      if (typeof quoteSignatureRectCoords === "string") {
+                        try {
+                          rectCoords = JSON.parse(quoteSignatureRectCoords) as { x: number; y: number; width: number; height: number };
+                        } catch (parseErr) {
+                          console.error("[QUOTE SIGNATURE] Erreur parsing coordonnées:", parseErr);
+                          rectCoords = undefined;
+                        }
+                      } else if (typeof quoteSignatureRectCoords === "object") {
+                        const coords = quoteSignatureRectCoords as { x?: number; y?: number; width?: number; height?: number };
+                        if (
+                          typeof coords.x === "number" &&
+                          typeof coords.y === "number" &&
+                          typeof coords.width === "number" &&
+                          typeof coords.height === "number"
+                        ) {
+                          rectCoords = { x: coords.x, y: coords.y, width: coords.width, height: coords.height };
+                        }
                       }
                     }
                     
