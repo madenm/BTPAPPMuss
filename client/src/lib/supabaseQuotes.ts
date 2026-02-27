@@ -33,12 +33,14 @@ export interface SupabaseQuote {
   project_description: string | null;
   total_ht: number;
   total_ttc: number;
-  status: "brouillon" | "envoyé" | "accepté" | "refusé" | "expiré" | "validé";
+  status: "brouillon" | "envoyé" | "accepté" | "refusé" | "expiré" | "validé" | "signé";
   validity_days: number | null;
   items: QuoteItem[] | null;
   created_at: string;
   updated_at: string;
   accepted_at: string | null;
+  quote_pdf_base64?: string | null;
+  quote_signature_rect_coords?: unknown | null;
 }
 
 export type NewQuotePayload = {
@@ -53,7 +55,7 @@ export type NewQuotePayload = {
   total_ttc: number;
   validity_days: number;
   items: QuoteItem[];
-  status?: "brouillon" | "envoyé" | "accepté" | "refusé" | "expiré" | "validé";
+  status?: "brouillon" | "envoyé" | "accepté" | "refusé" | "expiré" | "validé" | "signé";
 };
 
 /**
@@ -141,6 +143,22 @@ export async function updateQuote(
   quoteId: string,
   payload: NewQuotePayload,
 ): Promise<SupabaseQuote> {
+  const { data: currentQuote, error: currentError } = await supabase
+    .from("quotes")
+    .select("status")
+    .eq("id", quoteId)
+    .eq("user_id", userId)
+    .single();
+
+  if (currentError) {
+    console.error("Error fetching quote status:", currentError);
+    throw currentError;
+  }
+
+  if (currentQuote?.status === "signé") {
+    throw new Error("Ce devis est signé et ne peut plus être modifié.");
+  }
+
   const updateData: any = {
     chantier_id: payload.chantier_id ?? null,
     client_name: payload.client_name,
@@ -218,7 +236,7 @@ export async function insertQuote(
 export async function updateQuoteStatus(
   id: string,
   userId: string,
-  status: "brouillon" | "envoyé" | "accepté" | "refusé" | "expiré" | "validé",
+  status: "brouillon" | "envoyé" | "accepté" | "refusé" | "expiré" | "validé" | "signé",
 ): Promise<SupabaseQuote> {
   const updatedAt = new Date().toISOString();
   let updateData: Partial<SupabaseQuote> = {
@@ -226,7 +244,7 @@ export async function updateQuoteStatus(
     updated_at: updatedAt,
   };
 
-  if (status === "accepté" || status === "validé") {
+  if (status === "accepté" || status === "validé" || status === "signé") {
     updateData.accepted_at = updatedAt;
   }
 

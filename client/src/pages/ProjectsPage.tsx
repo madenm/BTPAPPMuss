@@ -20,7 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { fetchTeamMembers, fetchChantierAssignmentsByChantier, addChantierAssignment, removeChantierAssignment, type TeamMember } from '@/lib/supabase';
 import { fetchQuotesByChantierId, fetchQuotesForUser, getQuoteDisplayNumber, updateQuoteStatus, deleteQuote, type SupabaseQuote } from '@/lib/supabaseQuotes';
-import { downloadQuotePdf, fetchLogoDataUrl, type QuotePdfParams } from '@/lib/quotePdf';
+import { downloadPdfBase64, downloadQuotePdf, fetchLogoDataUrl, type QuotePdfParams } from '@/lib/quotePdf';
 import { QuotePreview } from '@/components/QuotePreview';
 import { useUserSettings } from '@/context/UserSettingsContext';
 import { VoiceInputButton } from '@/components/VoiceInputButton';
@@ -1600,6 +1600,14 @@ export default function ProjectsPage() {
                             onClick={async () => {
                               setQuoteDownloadingId(q.id);
                               try {
+                                if (q.status === 'signé' && q.quote_pdf_base64) {
+                                  const safeName = (q.client_name || 'devis').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
+                                  const date = new Date().toISOString().slice(0, 10);
+                                  const filename = `devis-signe-${safeName}-${date}.pdf`;
+                                  downloadPdfBase64(q.quote_pdf_base64, filename);
+                                  toast({ title: 'Devis téléchargé', description: 'Le PDF signé a été téléchargé.' });
+                                  return;
+                                }
                                 const params = quoteToPdfParams(q);
                                 if (user?.id) {
                                   const allQuotes = await fetchQuotesForUser(user.id);
@@ -1635,7 +1643,7 @@ export default function ProjectsPage() {
                               </>
                             )}
                           </Button>
-                          {q.status !== 'validé' && (
+                          {q.status !== 'validé' && q.status !== 'signé' && (
                             <Button
                               type="button"
                               variant="outline"

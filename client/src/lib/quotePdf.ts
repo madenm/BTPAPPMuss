@@ -347,6 +347,16 @@ export function downloadQuotePdf(params: QuotePdfParams): void {
   doc.save(filename);
 }
 
+export function downloadPdfBase64(base64Pdf: string, filename: string): void {
+  if (!base64Pdf) return;
+  const link = document.createElement("a");
+  link.href = `data:application/pdf;base64,${base64Pdf}`;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 export function getQuotePdfBase64(params: QuotePdfParams): string {
   const doc = buildQuoteDoc(params);
   const dataUrl = doc.output("datauristring");

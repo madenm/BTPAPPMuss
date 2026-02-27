@@ -1551,6 +1551,20 @@ JSON:
                   }
                 }
 
+                // Stocker le PDF signé pour téléchargement futur
+                if (pdfBuffer) {
+                  try {
+                    const signedPdfBase64 = pdfBuffer.toString("base64");
+                    await supabase
+                      .from("quotes")
+                      .update({ quote_pdf_base64: signedPdfBase64 })
+                      .eq("id", signatureLink.quote_id);
+                    console.log("[QUOTE SIGNATURE] PDF signé stocké en base");
+                  } catch (storeErr) {
+                    console.error("[QUOTE SIGNATURE] Erreur stockage PDF signé:", storeErr);
+                  }
+                }
+
                 const resend = new Resend(resendApiKey);
                 const fromEmail = process.env.SENDER_EMAIL || process.env.RESEND_FROM || "onboarding@resend.dev";
 

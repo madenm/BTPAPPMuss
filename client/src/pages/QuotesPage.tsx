@@ -27,7 +27,7 @@ import { UserAccountButton } from '@/components/UserAccountButton';
 import { VoiceInputButton } from '@/components/VoiceInputButton';
 import { insertQuote, updateQuote, deleteQuote, updateQuoteStatus, fetchQuoteById, fetchQuotesForUser, getQuoteDisplayNumber, type QuoteItem, type QuoteSubItem, type SupabaseQuote } from '@/lib/supabaseQuotes';
 import { DEFAULT_THEME_COLOR, QUOTE_STATUS_LABELS, QUOTE_UNIT_NONE, QUOTE_UNIT_OPTIONS, inferUnitFromDescription, backfillUnitOnItems } from '@/lib/quoteConstants';
-import { downloadQuotePdf, fetchLogoDataUrl } from '@/lib/quotePdf';
+import { downloadPdfBase64, downloadQuotePdf, fetchLogoDataUrl } from '@/lib/quotePdf';
 import { QuotePreview } from '@/components/QuotePreview';
 import { QuoteList } from '@/components/QuoteList';
 import { InvoiceDialog } from '@/components/InvoiceDialog';
@@ -118,7 +118,7 @@ export default function QuotesPage() {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [selectedChantierId, setSelectedChantierId] = useState<string | null>(null);
   const [editingQuoteId, setEditingQuoteId] = useState<string | null>(null);
-  const [editingQuoteStatus, setEditingQuoteStatus] = useState<'brouillon' | 'envoyé' | 'accepté' | 'refusé' | 'expiré' | 'validé' | null>(null);
+  const [editingQuoteStatus, setEditingQuoteStatus] = useState<'brouillon' | 'envoyé' | 'accepté' | 'refusé' | 'expiré' | 'validé' | 'signé' | null>(null);
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
   const [clientInfo, setClientInfo] = useState<ClientInfo>({
     name: '',
@@ -392,14 +392,14 @@ export default function QuotesPage() {
         setLocation('/dashboard/quotes');
         return;
       }
-      // Empêcher la modification d'un devis validé
-      if (quote.status === 'validé') {
+      // Empêcher la modification d'un devis validé ou signé
+      if (quote.status === 'validé' || quote.status === 'signé') {
         setQuoteLoadState('error');
         lastAppliedQuoteIdRef.current = null;
         setQuoteIdToOpenFromList(null);
         toast({
-          title: 'Devis validé',
-          description: 'Ce devis a été validé et ne peut plus être modifié.',
+          title: 'Devis verrouillé',
+          description: 'Ce devis est validé ou signé et ne peut plus être modifié.',
           variant: 'destructive',
         });
         // Rediriger vers la page des projets si le devis est associé à un chantier
@@ -783,6 +783,15 @@ export default function QuotesPage() {
 
   const handleDownloadPdfFromList = async (quote: SupabaseQuote) => {
     try {
+      if (quote.status === 'signé' && quote.quote_pdf_base64) {
+        const safeName = (quote.client_name || 'devis').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
+        const date = new Date().toISOString().slice(0, 10);
+        const filename = `devis-signe-${safeName}-${date}.pdf`;
+        downloadPdfBase64(quote.quote_pdf_base64, filename);
+        toast({ title: 'Devis téléchargé', description: 'Le PDF signé a été téléchargé.' });
+        return;
+      }
+
       const pdfItems = (quote.items ?? []).map((i) => ({
         description: i.description,
         quantity: i.quantity,
@@ -897,11 +906,11 @@ export default function QuotesPage() {
       return;
     }
 
-    // Empêcher la sauvegarde d'un devis validé
-    if (editingQuoteStatus === 'validé') {
+    // Empêcher la sauvegarde d'un devis validé ou signé
+    if (editingQuoteStatus === 'validé' || editingQuoteStatus === 'signé') {
       toast({
-        title: 'Devis validé',
-        description: 'Ce devis a été validé et ne peut plus être modifié.',
+        title: 'Devis verrouillé',
+        description: 'Ce devis est validé ou signé et ne peut plus être modifié.',
         variant: 'destructive',
       });
       return;
@@ -1126,10 +1135,22 @@ export default function QuotesPage() {
 
     // Empêcher la sauvegarde d'un devis validé lors du téléchargement
     // Si le devis est validé et existe déjà, permettre le téléchargement du PDF sans sauvegarder
-    if (editingQuoteStatus === 'validé' && editingQuoteId) {
+    if ((editingQuoteStatus === 'validé' || editingQuoteStatus === 'signé') && editingQuoteId) {
       // Permettre le téléchargement du PDF même si le devis est validé (pas de sauvegarde)
       setIsGenerating(true);
       try {
+        if (editingQuoteStatus === 'signé') {
+          const signedQuote = await fetchQuoteById(user.id, editingQuoteId);
+          if (signedQuote?.quote_pdf_base64) {
+            const safeName = (signedQuote.client_name || 'devis').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
+            const date = new Date().toISOString().slice(0, 10);
+            const filename = `devis-signe-${safeName}-${date}.pdf`;
+            downloadPdfBase64(signedQuote.quote_pdf_base64, filename);
+            setIsGenerating(false);
+            return;
+          }
+        }
+
         const pdfItems = items.map((i) => ({
           description: i.description,
           quantity: i.quantity,
@@ -1469,7 +1490,7 @@ export default function QuotesPage() {
             accentColor={accentColor}
             logoUrl={logoUrl}
           />
-          {(editingQuoteStatus === 'accepté' || editingQuoteStatus === 'validé') && (
+          {(editingQuoteStatus === 'accepté' || editingQuoteStatus === 'validé' || editingQuoteStatus === 'signé') && (
             <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
               <Button
                 onClick={() => {
@@ -1489,7 +1510,7 @@ export default function QuotesPage() {
       <InvoiceDialog
         open={isInvoiceDialogOpen}
         onOpenChange={setIsInvoiceDialogOpen}
-        quoteId={editingQuoteStatus === 'accepté' || editingQuoteStatus === 'validé' ? editingQuoteId : null}
+        quoteId={editingQuoteStatus === 'accepté' || editingQuoteStatus === 'validé' || editingQuoteStatus === 'signé' ? editingQuoteId : null}
         chantierId={selectedChantierId}
         clientId={selectedClientId}
         onSaved={() => {
