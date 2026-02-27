@@ -486,19 +486,25 @@ export function CRMPipeline() {
 
       setStoredPipelineMessage(userId, "quote", quoteModalCustomMessage)
 
+      let apiBody: Record<string, any> = { 
+        to: selectedProspect.email, 
+        pdfBase64, 
+        fileName, 
+        htmlContent, 
+        replyTo: userReplyToEmail,
+        quoteId: quoteModalSelectedQuote?.id,
+        userId: userId
+      }
+      
+      // Ajouter les coordonnées du rectangle si c'est un devis (pour la signature)
+      if (hasQuote && quoteModalSelectedQuote && typeof rectCoords !== 'undefined') {
+        apiBody.signatureRectCoords = rectCoords
+      }
+
       const emailRes = await fetch("/api/send-quote-email", {
         method: "POST",
         headers: getApiPostHeaders(session?.access_token),
-        body: JSON.stringify({ 
-          to: selectedProspect.email, 
-          pdfBase64, 
-          fileName, 
-          htmlContent, 
-          replyTo: userReplyToEmail,
-          quoteId: quoteModalSelectedQuote?.id,
-          userId: userId,
-          ...(hasQuote && quoteModalSelectedQuote && { signatureRectCoords: getSignatureRectangleCoordinates(quoteToPdfParams(quoteModalSelectedQuote)) })
-        }),
+        body: JSON.stringify(apiBody),
       })
       const data = await emailRes.json().catch(() => ({}))
       if (!emailRes.ok) {
