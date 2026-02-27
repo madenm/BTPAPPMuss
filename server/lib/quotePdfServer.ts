@@ -270,18 +270,20 @@ export async function addSignatureToPdf(
     const { width, height } = lastPage.getSize();
 
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    // Estimation de la position du rectangle "Bon pour accord"
-    // Le rectangle est généralement au milieu-droit du document
-    // Pour un A4 standard (595.28 x 841.89) :
-    // - Position X : environ 105 points (après les marges)
-    // - Position Y : environ 200-250 points du bas (rectangle de 48x20)
+    // Le rectangle "Bon pour accord" dans le PDF jsPDF généré se trouve à :
+    // - Position X : ~105 (totalsX, milieu-droit du document)
+    // - Position Y : ~220 points du bas (rightColY + 12, après les totaux)
+    // - Largeur : 48 points
+    // - Hauteur : 20 points
     
-    const signatureBoxX = 105; // Aligné avec le texte "Bon pour accord"
-    const signatureBoxY = 220; // Position Y estimée du rectangle (depuis le bas)
-    const signatureBoxW = 48;  // Largeur du rectangle "Bon pour accord"
-    const signatureBoxH = 20;  // Hauteur du rectangle "Bon pour accord"
+    // Pour placer la signature, on utilise le système de coordonnées PDF
+    // où Y=0 est en bas et Y=height est en haut
+    const MARGIN_RIGHT = 60;  // Marge à partir du bord droit
+    const signatureBoxX = width - MARGIN_RIGHT - 48;  // Position X du rectangle
+    const signatureBoxY = height - 250;  // Position Y du rectangle (du bas du PDF)
+    const signatureBoxW = 48;
+    const signatureBoxH = 20;
 
     try {
       // Extract base64 from data URI if needed
@@ -290,28 +292,27 @@ export async function addSignatureToPdf(
         base64Data = base64Data.split(",")[1];
       }
 
-      // Convert base64 to Buffer
+      // Convert base64 to Buffer et ajouter la signature
       const signatureBuffer = Buffer.from(base64Data, "base64");
       const signatureImage = await pdfDoc.embedPng(signatureBuffer);
 
-      // Placer la signature dans le rectangle
-      // Adapter la taille de la signature pour tenir dans le rectangle
-      const signatureWidth = signatureBoxW - 4;  // Marges internes
-      const signatureHeight = signatureBoxH - 4;
-      
+      // Placer la signature dans le rectangle avec un petit padding
+      const padding = 2;
       lastPage.drawImage(signatureImage, {
-        x: signatureBoxX + 2,
-        y: signatureBoxY + 2,
-        width: signatureWidth,
-        height: signatureHeight,
+        x: signatureBoxX + padding,
+        y: signatureBoxY + padding,
+        width: signatureBoxW - (padding * 2),
+        height: signatureBoxH - (padding * 2),
       });
+
+      console.log(`[ADD SIGNATURE] Signature placée à X=${signatureBoxX}, Y=${signatureBoxY}`);
     } catch (imgErr) {
       console.error("[ADD SIGNATURE] Erreur lors de l'ajout de l'image signature:", imgErr);
-      // Fallback : ajouter juste du texte
-      lastPage.drawText("Signé", { 
-        x: signatureBoxX + 5,
-        y: signatureBoxY + 8,
-        size: 8,
+      // Si l'image échoue, on ajoute juste du texte
+      lastPage.drawText("✓", { 
+        x: signatureBoxX + 15,
+        y: signatureBoxY + 7,
+        size: 12,
         font 
       });
     }
