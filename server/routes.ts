@@ -1093,6 +1093,186 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
     }
   });
 
+  // GET /api/signature-link-info/:token - Récupérer les infos d'un lien de signature
+  app.get("/api/signature-link-info/:token", async (req: Request, res: Response) => {
+    const { token } = req.params;
+    if (!token) {
+      res.status(400).json({ message: "Token manquant." });
+      return;
+    }
+
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from("quote_signature_links")
+        .select("id, quote_id, token, user_id, created_at, expires_at, prospect_email")
+        .eq("token", token)
+        .single();
+
+      if (error || !data) {
+        console.error("❌ [signature-link-info] Lien non trouvé:", error);
+        res.status(404).json({ message: "Lien de signature introuvable ou expiré." });
+        return;
+      }
+
+      // Vérifier expiration
+      if (new Date(data.expires_at) < new Date()) {
+        res.status(410).json({ message: "Ce lien de signature a expiré." });
+        return;
+      }
+
+      // Vérifier si déjà signé
+      const { data: existingSig } = await supabase
+        .from("quote_signatures")
+        .select("id")
+        .eq("signature_token", token)
+        .limit(1);
+
+      if (existingSig && existingSig.length > 0) {
+        res.status(410).json({ message: "Ce devis a déjà été signé." });
+        return;
+      }
+
+      // Récupérer les infos du devis si disponible
+      let quoteInfo = null;
+      if (data.quote_id) {
+        const { data: quote } = await supabase
+          .from("quotes")
+          .select("id, client_name, client_email, project_description, total_ht, total_ttc, items")
+          .eq("id", data.quote_id)
+          .single();
+        quoteInfo = quote;
+      }
+
+      res.status(200).json({
+        ok: true,
+        quote_id: data.quote_id,
+        prospect_email: data.prospect_email,
+        expires_at: data.expires_at,
+        quote: quoteInfo,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur serveur.";
+      console.error("❌ [signature-link-info] Exception:", err);
+      res.status(500).json({ message });
+    }
+  });
+
+  // POST /api/submit-quote-signature - Soumettre une signature électronique
+  app.post("/api/submit-quote-signature", async (req: Request, res: Response) => {
+    const { signatureToken, firstName, lastName, email, signatureDataBase64 } = req.body as {
+      signatureToken?: string;
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+      signatureDataBase64?: string;
+    };
+
+    console.log("✍️ [submit-quote-signature] Requête reçue - token:", signatureToken?.substring(0, 8) + "...");
+
+    if (!signatureToken || !firstName || !lastName) {
+      res.status(400).json({ message: "Token, prénom et nom requis." });
+      return;
+    }
+
+    try {
+      const supabase = getSupabaseClient();
+
+      // Vérifier que le lien existe et n'est pas expiré
+      const { data: linkData, error: linkError } = await supabase
+        .from("quote_signature_links")
+        .select("id, quote_id, user_id, expires_at")
+        .eq("token", signatureToken)
+        .single();
+
+      if (linkError || !linkData) {
+        console.error("❌ [submit-quote-signature] Lien non trouvé:", linkError);
+        res.status(404).json({ message: "Lien de signature introuvable." });
+        return;
+      }
+
+      if (new Date(linkData.expires_at) < new Date()) {
+        res.status(410).json({ message: "Ce lien de signature a expiré." });
+        return;
+      }
+
+      // Vérifier pas de double signature
+      const { data: existingSig } = await supabase
+        .from("quote_signatures")
+        .select("id")
+        .eq("signature_token", signatureToken)
+        .limit(1);
+
+      if (existingSig && existingSig.length > 0) {
+        res.status(409).json({ message: "Ce devis a déjà été signé." });
+        return;
+      }
+
+      // Insérer la signature
+      const { error: insertError } = await supabase
+        .from("quote_signatures")
+        .insert({
+          quote_id: linkData.quote_id,
+          signature_token: signatureToken,
+          client_firstname: firstName.trim(),
+          client_lastname: lastName.trim(),
+          client_email: email?.trim() || null,
+          signature_data: signatureDataBase64 || null,
+          ip_address: req.ip || req.headers["x-forwarded-for"]?.toString() || null,
+          user_agent: req.headers["user-agent"] || null,
+        });
+
+      if (insertError) {
+        console.error("❌ [submit-quote-signature] Erreur insertion signature:", JSON.stringify(insertError));
+        res.status(500).json({ message: "Erreur lors de l'enregistrement de la signature." });
+        return;
+      }
+
+      // Mettre à jour le statut du devis en "signé"
+      if (linkData.quote_id) {
+        const { error: updateError } = await supabase
+          .from("quotes")
+          .update({ status: "signé" })
+          .eq("id", linkData.quote_id);
+
+        if (updateError) {
+          console.warn("⚠️ [submit-quote-signature] Erreur mise à jour statut devis:", updateError);
+        } else {
+          console.log("✅ [submit-quote-signature] Devis", linkData.quote_id, "mis à jour en 'signé'");
+        }
+
+        // Mettre à jour le prospect CRM lié en "won"
+        const { error: crmError } = await supabase
+          .from("clients")
+          .update({
+            stage: "won",
+            last_action_at: new Date().toISOString(),
+            last_action_type: "Devis signé électroniquement",
+          })
+          .eq("linked_quote_id", linkData.quote_id);
+
+        if (crmError) {
+          console.warn("⚠️ [submit-quote-signature] Erreur mise à jour CRM:", crmError);
+        } else {
+          console.log("✅ [submit-quote-signature] Prospect CRM mis à jour en 'won'");
+        }
+      }
+
+      // Note: signature_data est stockée dans la table quote_signatures (déjà insérée ci-dessus)
+
+      console.log("✅ [submit-quote-signature] Signature enregistrée avec succès");
+      res.status(200).json({
+        ok: true,
+        message: "Signature enregistrée avec succès.",
+        quoteId: linkData.quote_id,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur serveur.";
+      console.error("❌ [submit-quote-signature] Exception:", err);
+      res.status(500).json({ message });
+    }
+  });
+
   // ===== Routes API Factures =====
   const SUPABASE_URL =
     process.env.SUPABASE_URL ||

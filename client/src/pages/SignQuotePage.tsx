@@ -46,12 +46,18 @@ export default function SignQuotePage() {
         const response = await fetch(`/api/signature-link-info/${signatureToken}`);
         if (response.ok) {
           const data = await response.json();
-            setClientEmail(data.prospect_email || null); // Set clientEmail from API response
+          setClientEmail(data.prospect_email || null);
+          if (data.quote) {
+            setQuote(data.quote);
+          }
         } else {
-            setClientEmail(null); // Set clientEmail to null if response is not ok
+          const errData = await response.json().catch(() => ({ message: "Lien invalide ou expiré." }));
+          setError(errData.message || "Lien invalide ou expiré.");
+          setClientEmail(null);
         }
       } catch (err) {
-          setClientEmail(null); // Set clientEmail to null on error
+        setError("Impossible de charger les informations du devis.");
+        setClientEmail(null);
       } finally {
         setLoading(false);
       }
