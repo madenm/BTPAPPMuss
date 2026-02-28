@@ -321,19 +321,22 @@ export async function addSignatureToPdf(
       console.log(`[ADD SIGNATURE] Coordonnées depuis base (mm): X=${rectCoords.x}, Y=${rectCoords.y}, W=${rectCoords.width}, H=${rectCoords.height}`);
       console.log(`[ADD SIGNATURE] Coordonnées converties (points): X=${signatureX}, Y=${signatureY}, W=${signatureW}, H=${signatureH}`);
     } else {
-      // Valeurs par défaut si pas de coordonnées fournies
+      // Valeurs par défaut basées sur la structure de jsPDF
+      // PAGE_W = 210mm, PAGE_H = 297mm, MARGIN = 10mm
+      // Le rectangle "Bon pour accord" se trouve vers 255-260mm du haut pour un devis type
       const MM_TO_POINTS = 2.834645669;
-      const defaultRectX = 105; // mm (totalsX dans quotePdf.ts)
-      const defaultRectY = 175; // mm (estimation)
-      const defaultRectW = 48;  // mm
-      const defaultRectH = 20;  // mm
+      const A4_HEIGHT_MM = 297;
       
-      signatureX = defaultRectX * MM_TO_POINTS;
-      signatureW = defaultRectW * MM_TO_POINTS;
-      signatureH = defaultRectH * MM_TO_POINTS;
-      signatureY = height - ((defaultRectY + defaultRectH) * MM_TO_POINTS);
+      // Estimer la position du rectangle (vers 35-40mm du bas)
+      const rectFromBottomMm = 35;
+      const rectYmm = A4_HEIGHT_MM - rectFromBottomMm; // ~262mm du haut
       
-      console.log(`[ADD SIGNATURE] Utilisation des coordonnées par défaut (estimées)`);
+      signatureX = 105 * MM_TO_POINTS;  // totalsX = 105mm dans jsPDF
+      signatureW = 48 * MM_TO_POINTS;   // largeur du rectangle
+      signatureH = 20 * MM_TO_POINTS;   // hauteur du rectangle
+      signatureY = height - ((rectYmm + 20) * MM_TO_POINTS); // Convertir position jsPDF en pdf-lib
+      
+      console.log(`[ADD SIGNATURE] Utilisation des coordonnées par défaut (Y estimé: ${rectYmm}mm du haut)`);
     }
 
     try {
