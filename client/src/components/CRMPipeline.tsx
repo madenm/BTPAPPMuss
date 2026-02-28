@@ -24,7 +24,7 @@ import {
   updateProspect,
   deleteProspect,
 } from "@/lib/supabaseClients"
-import { fetchQuotesForUser, updateQuoteStatus, type SupabaseQuote, hasQuoteBeenSigned, isQuoteValidityExpired } from "@/lib/supabaseQuotes"
+import { fetchQuotesForUser, updateQuoteStatus, type SupabaseQuote, hasQuoteBeenSigned, isQuoteValidityExpired, generateSignatureLink } from "@/lib/supabaseQuotes"
 import { getQuotePdfBase64, getSignatureRectangleCoordinates, fetchLogoDataUrl, buildQuoteEmailHtml, buildContactBlockHtml, type QuotePdfParams } from "@/lib/quotePdf"
 import { toast } from "@/hooks/use-toast"
 
@@ -669,24 +669,38 @@ export function CRMPipeline() {
       // Générer un lien de signature si le prospect a un devis lié
       let signatureLink = ""
       
-      if (linkedQuoteId) {
+      if (linkedQuoteId && user?.id) {
         try {
-          const signatureRes = await fetch("/api/generate-quote-signature-link", {
-            method: "POST",
-            headers: getApiPostHeaders(session?.access_token),
-            body: JSON.stringify({ quoteId: linkedQuoteId, expirationDays: 30 }),
-          })
+          // Essayer d'abord via l'API backend si le token est disponible
+          if (session?.access_token) {
+            const signatureRes = await fetch("/api/generate-quote-signature-link", {
+              method: "POST",
+              headers: getApiPostHeaders(session.access_token),
+              body: JSON.stringify({ quoteId: linkedQuoteId, expirationDays: 30 }),
+            })
 
-          if (!signatureRes.ok) {
-            console.error("Échec génération lien signature:", await signatureRes.text())
-          } else {
-            const signatureData = await signatureRes.json()
-            if (signatureData?.signatureLink) {
-              signatureLink = signatureData.signatureLink
+            if (signatureRes.ok) {
+              const signatureData = await signatureRes.json()
+              if (signatureData?.signatureLink) {
+                signatureLink = signatureData.signatureLink
+              }
             }
+          }
+
+          // Fallback client-side si token n'est pas disponible ou API échoue
+          if (!signatureLink) {
+            signatureLink = (await generateSignatureLink(linkedQuoteId, user.id, 30)) || ''
           }
         } catch (err) {
           console.error("Erreur génération lien signature:", err)
+          // Essayer le fallback client-side
+          if (user?.id) {
+            try {
+              signatureLink = (await generateSignatureLink(linkedQuoteId, user.id, 30)) || ''
+            } catch (fallbackErr) {
+              console.error("Erreur fallback génération lien signature:", fallbackErr)
+            }
+          }
         }
       }
 
