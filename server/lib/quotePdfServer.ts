@@ -316,10 +316,10 @@ export async function addSignatureToPdf(
     } else {
       // Coordonnées par défaut pour la zone "Bon pour accord"
       // Bottom-right de la page, environ 35mm du bas et 105mm de la gauche
-      const rectTopMm = 260; // mm du haut (A4 = 297mm total)
-      const rectLeftMm = 105;
-      const rectWidthMm = 48;
-      const rectHeightMm = 20;
+      const rectTopMm = 230; // mm du haut (A4 = 297mm total)
+      const rectLeftMm = 110;
+      const rectWidthMm = 60;
+      const rectHeightMm = 25;
       
       signatureX = rectLeftMm * MM_TO_POINTS;
       signatureW = rectWidthMm * MM_TO_POINTS;
@@ -343,7 +343,7 @@ export async function addSignatureToPdf(
       y: signatureY,
       width: signatureW,
       height: signatureH,
-      borderColor: rgb(200, 100, 100),
+      borderColor: rgb(0.78, 0.39, 0.39),
       borderWidth: 2,
     });
     console.log("[ADD SIGNATURE] ✅ Rectangle de délimitation dessiné");
@@ -372,7 +372,7 @@ export async function addSignatureToPdf(
         y: signatureY + 10,
         size: 12,
         font,
-        color: rgb(0, 150, 0),
+        color: rgb(0, 0.59, 0),
       });
     }
 
