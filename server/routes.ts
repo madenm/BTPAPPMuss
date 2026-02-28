@@ -1198,9 +1198,15 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
         .from("quote_signature_links")
         .select("id, quote_id, prospect_email, expires_at")
         .eq("token", token)
-        .single();
+        .maybeSingle();
 
-      if (error || !signatureLink) {
+      if (error) {
+        console.error("[quote-signature-info] Erreur DB:", error);
+        res.status(500).json({ message: "Erreur serveur." });
+        return;
+      }
+
+      if (!signatureLink) {
         res.status(404).json({ message: "Lien de signature invalide." });
         return;
       }
@@ -1216,6 +1222,7 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
         quoteId: signatureLink.quote_id 
       });
     } catch (err: unknown) {
+      console.error("[quote-signature-info] Erreur:", err);
       const message = err instanceof Error ? err.message : "Erreur lors de la récupération des infos.";
       res.status(500).json({ message });
     }
