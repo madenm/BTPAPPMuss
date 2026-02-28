@@ -982,7 +982,7 @@ export default function QuotesPage() {
       // Fallback client-side si API échoue ou token n'est pas disponible
       if (!signatureLink && user?.id && quoteToSend.id) {
         try {
-          signatureLink = (await generateSignatureLink(quoteToSend.id, user.id, 30)) || '';
+          signatureLink = (await generateSignatureLink(quoteToSend.id, user.id, 30, session)) || '';
         } catch (fallbackErr) {
           console.error('Erreur génération lien signature (fallback):', fallbackErr);
         }
@@ -1027,7 +1027,9 @@ export default function QuotesPage() {
           pdfBase64,
           fileName: filename,
           htmlContent,
-          quoteId: quoteToSend.id,
+          // Ne passer quoteId que si le lien de signature n'a pas pu être généré
+          // (le backend ne doivent pas générer un lien si c'est déjà fait côté frontend)
+          ...(signatureLink ? {} : { quoteId: quoteToSend.id }),
           userId: user.id,
         }),
       });

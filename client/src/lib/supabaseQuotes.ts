@@ -1,4 +1,5 @@
 import { supabase, isSupabaseTableMissing } from "./supabaseClient";
+import { createClient } from "@supabase/supabase-js";
 
 export interface QuoteSubItem {
   id: string;
@@ -389,19 +390,49 @@ export async function getQuoteSignatureLink(quoteId: string): Promise<string | n
  * Fallback client-side: Crée un nouveau lien de signature en insérant directement dans Supabase
  * Utilisé si le backend échoue ou que le token n'est pas disponible
  */
-export async function generateSignatureLink(quoteId: string, userId: string, expirationDays = 30): Promise<string | null> {
+export async function generateSignatureLink(
+  quoteId: string, 
+  userId: string, 
+  expirationDays = 30,
+  session?: any
+): Promise<string | null> {
   try {
     const token = crypto.randomUUID().replace(/-/g, '') + Math.random().toString(36).substring(2, 10);
     const expiresAt = new Date(Date.now() + expirationDays * 24 * 60 * 60 * 1000).toISOString();
 
-    const { error } = await supabase
-      .from("quote_signature_links")
-      .insert({
-        quote_id: quoteId,
-        token,
-        user_id: userId,
-        expires_at: expiresAt,
-      });
+    let clientToUse = supabase;
+
+    // Si une session est fournie, créer un client Supabase authentifié avec cette session
+    if (session?.access_token) {
+      try {
+        const url = import.meta.env.VITE_SUPABASE_URL || 'https://hvnjlxxcxfxvuwlmnwtw.supabase.co';
+        const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2bmpseHhjeGZ4dnV3bG1ud3R3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5NzA3ODIsImV4cCI6MjA3OTU0Njc4Mn0.SmL4eqGq8XLfbLOolxGdafLhS6eeTgYGGn1w9gcrWdU';
+        const authenticatedClient = createClient(url, anonKey);
+        
+        // Définir la session sur le client authenticatedClient
+        await authenticatedClient.auth.setSession({
+          access_token: session.access_token,
+          refresh_token: session.refresh_token || '',
+          expires_in: session.expires_in || 3600,
+          expires_at: session.expires_at || Date.now() + 3600 * 1000,
+          token_type: 'bearer',
+          type: 'bearer',
+          user: session.user || {},
+        });
+        
+        clientToUse = authenticatedClient;
+      } catch (sessionErr) {
+        console.warn("Cannot create authenticated client for generateSignatureLink, using default:", sessionErr);
+        clientToUse = supabase;
+      }
+    }
+
+    const { error } = await clientToUse.from("quote_signature_links").insert({
+      quote_id: quoteId,
+      token,
+      user_id: userId,
+      expires_at: expiresAt,
+    });
 
     if (error) {
       console.error("Error generateSignatureLink:", error);

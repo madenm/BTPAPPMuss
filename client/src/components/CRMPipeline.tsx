@@ -689,14 +689,14 @@ export function CRMPipeline() {
 
           // Fallback client-side si token n'est pas disponible ou API échoue
           if (!signatureLink) {
-            signatureLink = (await generateSignatureLink(linkedQuoteId, user.id, 30)) || ''
+            signatureLink = (await generateSignatureLink(linkedQuoteId, user.id, 30, session)) || ''
           }
         } catch (err) {
           console.error("Erreur génération lien signature:", err)
           // Essayer le fallback client-side
           if (user?.id) {
             try {
-              signatureLink = (await generateSignatureLink(linkedQuoteId, user.id, 30)) || ''
+              signatureLink = (await generateSignatureLink(linkedQuoteId, user.id, 30, session)) || ''
             } catch (fallbackErr) {
               console.error("Erreur fallback génération lien signature:", fallbackErr)
             }
