@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 import { storage } from "./storage";
 
 import { generateInvoicePdfBuffer } from "./lib/invoicePdfServer";
-import { generateQuotePdfWithSignature } from "./lib/quotePdfServer";
+import { addSignatureToPdf } from "./lib/quotePdfServer";
 import { getArtiprixForMetier } from "./lib/artiprixCatalog";
 
 import { Resend } from "resend";
@@ -1324,78 +1324,45 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
 
       console.log("[submit-quote-signature] ✅ Signature enregistrée avec succès");
 
-      // Récupérer le devis complet pour regénérer le PDF avec signature
+      // Récupérer le PDF de base du devis et ajouter la signature
       const { data: quote, error: quoteError } = await supabase
         .from("quotes")
-        .select("*")
+        .select("quote_pdf_base64")
         .eq("id", quoteId)
         .single();
 
       let updateError: any = null;
 
-      if (!quoteError && quote) {
+      if (!quoteError && quote && quote.quote_pdf_base64) {
         try {
-          // Récupérer le profil utilisateur (infos entreprise)
-          const { data: userProfile } = await supabase
-            .from("user_profiles")
-            .select("*")
-            .eq("user_id", quote.user_id)
-            .single();
+          // Ajouter la signature au PDF existant
+          const pdfWithSignature = await addSignatureToPdf(
+            quote.quote_pdf_base64,
+            signatureDataBase64 ?? "",
+            firstName.trim(),
+            lastName.trim(),
+            new Date()
+          );
 
-          // Parser les items du devis
-          const items = (() => {
-            if (!quote.items) return [];
-            if (typeof quote.items === "string") return JSON.parse(quote.items);
-            return quote.items;
-          })();
+          // Convertir le PDF signé en base64
+          const signedPdfBase64 = pdfWithSignature.toString("base64");
 
-          // Calculer les totaux
-          const subtotalHt = items.reduce((sum: number, i: any) => sum + (i.total || 0), 0);
-          const tvaAmount = (quote.total_ttc || 0) - (quote.total_ht || 0);
+          console.log("[submit-quote-signature] ✅ Signature ajoutée au PDF");
 
-          // Générer le PDF avec signature
-          const pdfBuffer = await generateQuotePdfWithSignature({
-            quoteNumber: quote.quote_number,
-            projectDescription: quote.project_description,
-            validityDays: String(quote.validity_days || 30),
-            clientName: quote.client_name,
-            clientEmail: quote.client_email,
-            clientPhone: quote.client_phone,
-            clientAddress: quote.client_address,
-            items: items,
-            subtotalHt: subtotalHt,
-            tva: tvaAmount,
-            totalTtc: quote.total_ttc,
-            companyName: userProfile?.company_name,
-            companyEmail: userProfile?.company_email,
-            companyPhone: userProfile?.company_phone,
-            companyAddress: userProfile?.company_address,
-            companySiret: userProfile?.company_siret,
-            signatureData: signatureDataBase64,
-            signerFirstName: firstName,
-            signerLastName: lastName,
-            signedAt: new Date().toISOString(),
-          });
-
-          // Convertir le PDF en base64
-          const pdfBase64 = pdfBuffer.toString("base64");
-
-          console.log("[submit-quote-signature] ✅ PDF généré avec signature");
-
-          // Mettre à jour le statut du devis à "signé" ET stocker le PDF
+          // Mettre à jour le devis avec le PDF signé
           const { error } = await supabase
             .from("quotes")
             .update({
               status: "signé",
               accepted_at: new Date().toISOString(),
-              quote_pdf_base64: pdfBase64,
+              quote_pdf_base64: signedPdfBase64,
             })
             .eq("id", quoteId);
-          
+
           updateError = error;
         } catch (pdfErr) {
-          console.error("[submit-quote-signature] Erreur génération PDF:", pdfErr);
-          // Continuer quand même : mettre à jour le statut sans le PDF
+          console.error("[submit-quote-signature] Erreur ajout signature PDF:", pdfErr);
+          // Continuer quand même : mettre à jour le statut sans le PDF signé
           const { error } = await supabase
             .from("quotes")
             .update({
@@ -1403,11 +1370,12 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
               accepted_at: new Date().toISOString(),
             })
             .eq("id", quoteId);
-          
+
           updateError = error;
         }
       } else {
-        // Mettre à jour le statut du devis à "signé" si on ne peut pas récupérer le devis
+        // Si pas de PDF existant, juste mettre à jour le statut
+        console.warn("[submit-quote-signature] ⚠️ Pas de PDF existant pour ajouter la signature");
         const { error } = await supabase
           .from("quotes")
           .update({
@@ -1415,7 +1383,7 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
             accepted_at: new Date().toISOString(),
           })
           .eq("id", quoteId);
-        
+
         updateError = error;
       }
 
