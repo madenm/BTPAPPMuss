@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import { storage } from "./storage";
 
 import { generateInvoicePdfBuffer } from "./lib/invoicePdfServer";
+import { generateQuotePdfWithSignature } from "./lib/quotePdfServer";
 import { getArtiprixForMetier } from "./lib/artiprixCatalog";
 
 import { Resend } from "resend";
@@ -1323,14 +1324,92 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
 
       console.log("[submit-quote-signature] ✅ Signature enregistrée avec succès");
 
-      // Mettre à jour le statut du devis à "signé"
-      const { error: updateError } = await supabase
+      // Récupérer le devis complet pour regénérer le PDF avec signature
+      const { data: quote, error: quoteError } = await supabase
         .from("quotes")
-        .update({
-          status: "signé",
-          accepted_at: new Date().toISOString(),
-        })
-        .eq("id", quoteId);
+        .select("*")
+        .eq("id", quoteId)
+        .single();
+
+      if (!quoteError && quote) {
+        try {
+          // Récupérer le profil utilisateur (infos entreprise)
+          const { data: userProfile } = await supabase
+            .from("user_profiles")
+            .select("*")
+            .eq("user_id", quote.user_id)
+            .single();
+
+          // Parser les items du devis
+          const items = (() => {
+            if (!quote.items) return [];
+            if (typeof quote.items === "string") return JSON.parse(quote.items);
+            return quote.items;
+          })();
+
+          // Calculer les totaux
+          const subtotalHt = items.reduce((sum: number, i: any) => sum + (i.total || 0), 0);
+          const tvaAmount = (quote.total_ttc || 0) - (quote.total_ht || 0);
+
+          // Générer le PDF avec signature
+          const pdfBuffer = await generateQuotePdfWithSignature({
+            quoteNumber: quote.quote_number,
+            projectDescription: quote.project_description,
+            validityDays: String(quote.validity_days || 30),
+            clientName: quote.client_name,
+            clientEmail: quote.client_email,
+            clientPhone: quote.client_phone,
+            clientAddress: quote.client_address,
+            items: items,
+            subtotalHt: subtotalHt,
+            tva: tvaAmount,
+            totalTtc: quote.total_ttc,
+            companyName: userProfile?.company_name,
+            companyEmail: userProfile?.company_email,
+            companyPhone: userProfile?.company_phone,
+            companyAddress: userProfile?.company_address,
+            companySiret: userProfile?.company_siret,
+            signatureData: signatureDataBase64,
+            signerFirstName: firstName,
+            signerLastName: lastName,
+            signedAt: new Date().toISOString(),
+          });
+
+          // Convertir le PDF en base64
+          const pdfBase64 = pdfBuffer.toString("base64");
+
+          console.log("[submit-quote-signature] ✅ PDF généré avec signature");
+
+          // Mettre à jour le statut du devis à "signé" ET stocker le PDF
+          const { error: updateError } = await supabase
+            .from("quotes")
+            .update({
+              status: "signé",
+              accepted_at: new Date().toISOString(),
+              quote_pdf_base64: pdfBase64,
+            })
+            .eq("id", quoteId);
+        } catch (pdfErr) {
+          console.error("[submit-quote-signature] Erreur génération PDF:", pdfErr);
+          // Continuer quand même : mettre à jour le statut sans le PDF
+          const { error: updateError } = await supabase
+            .from("quotes")
+            .update({
+              status: "signé",
+              accepted_at: new Date().toISOString(),
+            })
+            .eq("id", quoteId);
+        }
+      } else {
+        // Mettre à jour le statut du devis à "signé" si on ne peut pas récupérer le devis
+        const { error: updateError } = await supabase
+          .from("quotes")
+          .update({
+            status: "signé",
+            accepted_at: new Date().toISOString(),
+          })
+          .eq("id", quoteId);
+      }
 
       if (updateError) {
         console.error("[QUOTE SIGNATURE] Erreur lors de la mise à jour du devis:", updateError);
