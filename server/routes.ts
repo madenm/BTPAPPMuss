@@ -1335,6 +1335,8 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
 
       if (!quoteError && quote && quote.quote_pdf_base64) {
         try {
+          console.log("[submit-quote-signature] PDF base64 length:", quote.quote_pdf_base64?.length ?? "NULL OR UNDEFINED");
+          
           // Ajouter la signature au PDF existant
           const pdfWithSignature = await addSignatureToPdf(
             quote.quote_pdf_base64,
@@ -1362,6 +1364,7 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
           updateError = error;
         } catch (pdfErr) {
           console.error("[submit-quote-signature] Erreur ajout signature PDF:", pdfErr);
+          console.error("[submit-quote-signature] FULL ERROR:", JSON.stringify(pdfErr, Object.getOwnPropertyNames(pdfErr)));
           // Continuer quand même : mettre à jour le statut sans le PDF signé
           const { error } = await supabase
             .from("quotes")
