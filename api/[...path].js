@@ -68,21 +68,19 @@ export default async function handler(req, res) {
     }
   }
 
-  const descriptor = {
-    url: { value: pathForExpress, writable: true },
-    method: { value: method, writable: true },
-    path: { value: pathnameOnly, writable: true },
-    originalUrl: { value: pathForExpress, writable: true },
-  };
+  // Patch req properties without breaking inherited getters (like req.ip)
+  req.url = pathForExpress;
+  req.method = method;
+  req.path = pathnameOnly;
+  req.originalUrl = pathForExpress;
   if (parsedBody !== undefined) {
-    descriptor.body = { value: parsedBody, writable: true };
+    req.body = parsedBody;
   }
-  const wrappedReq = Object.create(req, descriptor);
 
   return new Promise((resolve, reject) => {
     res.on("finish", () => resolve(undefined));
     res.on("error", reject);
-    app(wrappedReq, res, (err) => {
+    app(req, res, (err) => {
       if (err) reject(err);
     });
   });
