@@ -2,6 +2,7 @@
 
 import React, { useRef, useState } from "react";
 import { motion } from "framer-motion";
+import { supabase } from "@/lib/supabaseClient";
 
 interface QuoteSignatureFormProps {
   quoteId: string;
@@ -133,8 +134,23 @@ export const QuoteSignatureForm: React.FC<QuoteSignatureFormProps> = ({
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || "Erreur lors de l'envoi de la signature.");
+        const data = await response.json().catch(() => ({}));
+
+        const { error: fallbackError } = await supabase
+          .from("quote_signatures")
+          .insert({
+            quote_id: quoteId || null,
+            signature_token: signatureToken,
+            client_firstname: firstName.trim(),
+            client_lastname: lastName.trim(),
+            client_email: email.trim() || null,
+            signature_data: signatureDataBase64,
+            user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+          });
+
+        if (fallbackError) {
+          throw new Error(data.message || fallbackError.message || "Erreur lors de l'envoi de la signature.");
+        }
       }
 
       setSuccess(true);

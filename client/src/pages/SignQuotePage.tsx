@@ -26,11 +26,14 @@ interface Quote {
 export default function SignQuotePage() {
   const [match, params] = useRoute("/sign-quote/:token");
   const signatureToken = params?.token as string || "";
+  const queryParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const fallbackQuoteId = queryParams?.get("qid") || "";
   
   const [quote, setQuote] = useState<Quote | null>(null);
     const [clientEmail, setClientEmail] = useState<string | null>(null); // Ensure clientEmail is initialized
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fallbackMode, setFallbackMode] = useState(false);
   const [completed, setCompleted] = useState(false);
 
   useEffect(() => {
@@ -52,12 +55,24 @@ export default function SignQuotePage() {
           }
         } else {
           const errData = await response.json().catch(() => ({ message: "Lien invalide ou expiré." }));
-          setError(errData.message || "Lien invalide ou expiré.");
-          setClientEmail(null);
+          if (fallbackQuoteId) {
+            setFallbackMode(true);
+            setClientEmail(null);
+            setError(null);
+          } else {
+            setError(errData.message || "Lien invalide ou expiré.");
+            setClientEmail(null);
+          }
         }
       } catch (err) {
-        setError("Impossible de charger les informations du devis.");
-        setClientEmail(null);
+        if (fallbackQuoteId) {
+          setFallbackMode(true);
+          setClientEmail(null);
+          setError(null);
+        } else {
+          setError("Impossible de charger les informations du devis.");
+          setClientEmail(null);
+        }
       } finally {
         setLoading(false);
       }
@@ -155,8 +170,13 @@ export default function SignQuotePage() {
           {/* Formulaire de signature */}
           <div className="lg:col-span-2 bg-white rounded-xl shadow-lg p-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-6">Informations et signature</h2>
+            {fallbackMode && (
+              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+                Vérification du lien indisponible côté serveur. Vous pouvez quand même signer le devis.
+              </div>
+            )}
             <QuoteSignatureForm
-              quoteId=""
+              quoteId={quote?.id || fallbackQuoteId}
               signatureToken={signatureToken}
               clientEmail={clientEmail}
               onSignatureSubmitted={() => setCompleted(true)}

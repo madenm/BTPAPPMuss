@@ -409,7 +409,8 @@ export async function generateSignatureLink(quoteId: string, userId: string, exp
     }
 
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    return `${origin}/sign-quote/${token}`;
+    const quoteIdQuery = encodeURIComponent(quoteId);
+    return `${origin}/sign-quote/${token}?qid=${quoteIdQuery}`;
   } catch (err) {
     console.error("❌ Erreur generateSignatureLink:", err);
     return null;
