@@ -1250,20 +1250,32 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
       const supabase = getSupabaseClient();
 
       // Récupérer le lien de signature et vérifier qu'il n'est pas expiré
-      const { data: signatureLink } = await supabase
+      const { data: signatureLink, error: linkError } = await supabase
         .from("quote_signature_links")
-        .select("id, quote_id, expires_at")
+        .select("id, quote_id, expires_at, user_id")
         .eq("token", signatureToken)
-        .single();
+        .maybeSingle();
 
-      if (!signatureLink) {
-        res.status(404).json({ message: "Lien de signature invalide ou expiré." });
-        return;
+      // Logs de débogage
+      console.log("[submit-quote-signature] Token recherché:", signatureToken);
+      console.log("[submit-quote-signature] Lien trouvé:", signatureLink ? "OUI" : "NON");
+
+      // Si le lien existe, vérifier l'expiration
+      if (signatureLink) {
+        const expiresAt = new Date(signatureLink.expires_at);
+        if (expiresAt < new Date()) {
+          res.status(410).json({ message: "Ce lien de signature a expiré." });
+          return;
+        }
       }
 
-      const expiresAt = new Date(signatureLink.expires_at);
-      if (expiresAt < new Date()) {
-        res.status(410).json({ message: "Ce lien de signature a expiré." });
+      // Extraire le quote_id (soit du lien, soit on accepte sans vérification stricte)
+      const quoteId = signatureLink?.quote_id;
+      if (!quoteId) {
+        console.warn("[submit-quote-signature] ⚠️ Token non trouvé dans quote_signature_links");
+        // On pourrait accepter sans quote_id si on veut être permissif
+        // Pour l'instant on bloque car on a besoin du quote_id
+        res.status(404).json({ message: "Lien de signature invalide ou expiré." });
         return;
       }
 
@@ -1271,8 +1283,8 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
       const { data: existingSignature } = await supabase
         .from("quote_signatures")
         .select("id")
-        .eq("quote_id", signatureLink.quote_id)
-        .single();
+        .eq("quote_id", quoteId)
+        .maybeSingle();
 
       if (existingSignature) {
         res.status(409).json({ message: "Ce devis a déjà été signé." });
@@ -1286,7 +1298,7 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
       const { error: insertError } = await supabase
         .from("quote_signatures")
         .insert({
-          quote_id: signatureLink.quote_id,
+          quote_id: quoteId,
           signature_token: signatureToken,
           client_firstname: firstName.trim(),
           client_lastname: lastName.trim(),
@@ -1297,9 +1309,12 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
         });
 
       if (insertError) {
+        console.error("[submit-quote-signature] Erreur insertion:", insertError);
         res.status(500).json({ message: "Erreur lors de l'enregistrement de la signature." });
         return;
       }
+
+      console.log("[submit-quote-signature] ✅ Signature enregistrée avec succès");
 
       // Mettre à jour le statut du devis à "signé"
       const { error: updateError } = await supabase
@@ -1308,10 +1323,12 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
           status: "signé",
           accepted_at: new Date().toISOString(),
         })
-        .eq("id", signatureLink.quote_id);
+        .eq("id", quoteId);
 
       if (updateError) {
         console.error("[QUOTE SIGNATURE] Erreur lors de la mise à jour du devis:", updateError);
+      } else {
+        console.log("[submit-quote-signature] ✅ Devis mis à jour (status: signé)");
       }
 
       // Mettre à jour le client CRM lié en "won"
@@ -1322,18 +1339,21 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
           last_action_at: new Date().toISOString(),
           last_action_type: "Devis signé électroniquement",
         })
-        .eq("linked_quote_id", signatureLink.quote_id);
+        .eq("linked_quote_id", quoteId);
 
       if (crmError) {
         console.error("[QUOTE SIGNATURE] Erreur lors de la mise à jour du client CRM:", crmError);
+      } else {
+        console.log("[submit-quote-signature] ✅ Client CRM mis à jour (stage: won)");
       }
 
       res.status(200).json({
         ok: true,
         message: "Signature enregistrée avec succès.",
-        quoteId: signatureLink.quote_id,
+        quoteId: quoteId,
       });
     } catch (err: unknown) {
+      console.error("[submit-quote-signature] ❌ Erreur:", err);
       const message = err instanceof Error ? err.message : "Erreur lors de l'enregistrement de la signature.";
       res.status(500).json({ message });
     }
