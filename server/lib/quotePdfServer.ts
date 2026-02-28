@@ -267,111 +267,123 @@ export async function addSignatureToPdf(
   rectCoords?: { x: number; y: number; width: number; height: number }
 ): Promise<Buffer> {
   try {
+    console.log("[ADD SIGNATURE] === Début ajout signature ===");
+    
     // Charger le PDF existant
     const pdfBuffer = Buffer.from(pdfBase64, "base64");
     const pdfDoc = await PDFDocument.load(pdfBuffer);
 
-    // Obtenir la dernière page (celle avec la signature)
+    // Obtenir la dernière page
     const pages = pdfDoc.getPages();
     const lastPage = pages[pages.length - 1];
-    const { width, height } = lastPage.getSize();
+    const { width: pageWidth, height: pageHeight } = lastPage.getSize();
 
-    console.log(`[ADD SIGNATURE] Page size: ${width}x${height}`);
+    console.log(`[ADD SIGNATURE] Taille page: ${pageWidth}x${pageHeight} points (A4 = 595.28x841.89)`);
 
     // Extraire la base64
     let base64Data = signatureDataBase64;
-    if (base64Data.includes(",")) {
+    if (base64Data && base64Data.includes(",")) {
       base64Data = base64Data.split(",")[1];
     }
 
     // Valider le base64
     if (!base64Data || base64Data.length < 100) {
-      console.warn("[ADD SIGNATURE] Données de signature invalides ou vides, longueur:", base64Data?.length);
+      console.error("[ADD SIGNATURE] ❌ Signature vide ou invalide! Longueur:", base64Data?.length || 0);
       return Buffer.from(pdfBase64, "base64");
     }
 
-    console.log(`[ADD SIGNATURE] Base64 valide, longueur: ${base64Data.length}`);
+    console.log(`[ADD SIGNATURE] ✅ Signature base64 valide (${base64Data.length} caractères)`);
 
+    // Convertir en buffer
     const signatureBuffer = Buffer.from(base64Data, "base64");
-    console.log(`[ADD SIGNATURE] Buffer créé, taille: ${signatureBuffer.length} bytes`);
-    
+    console.log(`[ADD SIGNATURE] ✅ Buffer créé: ${signatureBuffer.length} bytes`);
+
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     
-    // Déterminer les coordonnées du rectangle
-    // Si rectCoords est fourni (en mm), convertir en points pdf-lib
-    // Sinon, utiliser des valeurs par défaut estimées
+    // Calculer les coordonnées
+    const MM_TO_POINTS = 2.834645669;
     let signatureX: number;
     let signatureY: number;
     let signatureW: number;
     let signatureH: number;
 
     if (rectCoords && rectCoords.x && rectCoords.y && rectCoords.width && rectCoords.height) {
-      // Convertir de mm (jsPDF) à points (pdf-lib)
-      // 1 mm = 2.834645669 points
-      const MM_TO_POINTS = 2.834645669;
-      
+      console.log(`[ADD SIGNATURE] Utilisant les coordonnées fournies: ${JSON.stringify(rectCoords)}`);
       signatureX = rectCoords.x * MM_TO_POINTS;
       signatureW = rectCoords.width * MM_TO_POINTS;
       signatureH = rectCoords.height * MM_TO_POINTS;
-      
-      // Y : jsPDF compte de haut en bas, pdf-lib compte de bas en haut
-      // Y_pdflib = pageHeight - (Y_jspdf + height_jspdf)
-      signatureY = height - ((rectCoords.y + rectCoords.height) * MM_TO_POINTS);
-      
-      console.log(`[ADD SIGNATURE] Coordonnées depuis base (mm): X=${rectCoords.x}, Y=${rectCoords.y}, W=${rectCoords.width}, H=${rectCoords.height}`);
-      console.log(`[ADD SIGNATURE] Coordonnées converties (points): X=${signatureX}, Y=${signatureY}, W=${signatureW}, H=${signatureH}`);
+      signatureY = pageHeight - ((rectCoords.y + rectCoords.height) * MM_TO_POINTS);
     } else {
-      // Valeurs par défaut basées sur la structure de jsPDF
-      // PAGE_W = 210mm, PAGE_H = 297mm, MARGIN = 10mm
-      // Le rectangle "Bon pour accord" se trouve vers 255-260mm du haut pour un devis type
-      const MM_TO_POINTS = 2.834645669;
-      const A4_HEIGHT_MM = 297;
+      // Coordonnées par défaut pour la zone "Bon pour accord"
+      // Bottom-right de la page, environ 35mm du bas et 105mm de la gauche
+      const rectTopMm = 260; // mm du haut (A4 = 297mm total)
+      const rectLeftMm = 105;
+      const rectWidthMm = 48;
+      const rectHeightMm = 20;
       
-      // Estimer la position du rectangle (vers 35-40mm du bas)
-      const rectFromBottomMm = 35;
-      const rectYmm = A4_HEIGHT_MM - rectFromBottomMm; // ~262mm du haut
+      signatureX = rectLeftMm * MM_TO_POINTS;
+      signatureW = rectWidthMm * MM_TO_POINTS;
+      signatureH = rectHeightMm * MM_TO_POINTS;
       
-      signatureX = 105 * MM_TO_POINTS;  // totalsX = 105mm dans jsPDF
-      signatureW = 48 * MM_TO_POINTS;   // largeur du rectangle
-      signatureH = 20 * MM_TO_POINTS;   // hauteur du rectangle
-      signatureY = height - ((rectYmm + 20) * MM_TO_POINTS); // Convertir position jsPDF en pdf-lib
+      // Convertir Y: jsPDF (top-origin) → pdf-lib (bottom-origin)
+      signatureY = pageHeight - ((rectTopMm + rectHeightMm) * MM_TO_POINTS);
       
-      console.log(`[ADD SIGNATURE] Utilisation des coordonnées par défaut (Y estimé: ${rectYmm}mm du haut)`);
+      console.log(`[ADD SIGNATURE] Utilisant coordonnées par défaut:`);
+      console.log(`  - Rect top jsPDF: ${rectTopMm}mm`);
+      console.log(`  - Rect size: ${rectWidthMm}x${rectHeightMm}mm`);
     }
 
+    console.log(`[ADD SIGNATURE] Coordonnées finales (points):`);
+    console.log(`  - X: ${signatureX.toFixed(2)}, Y: ${signatureY.toFixed(2)}`);
+    console.log(`  - Largeur: ${signatureW.toFixed(2)}, Hauteur: ${signatureH.toFixed(2)}`);
+
+    // Dessiner un rectangle pour marquer la zone (pour debug)
+    lastPage.drawRectangle({
+      x: signatureX,
+      y: signatureY,
+      width: signatureW,
+      height: signatureH,
+      borderColor: rgb(200, 100, 100),
+      borderWidth: 2,
+    });
+    console.log("[ADD SIGNATURE] ✅ Rectangle de délimitation dessiné");
+
+    // Essayer d'ajouter l'image
     try {
       const signatureImage = await pdfDoc.embedPng(signatureBuffer);
-      console.log("[ADD SIGNATURE] Image PNG embedée avec succès");
+      console.log("[ADD SIGNATURE] ✅ PNG embedé avec succès");
       
-      // Placer l'image dans le rectangle
+      // Dessiner l'image
       lastPage.drawImage(signatureImage, {
-        x: signatureX + 1,
-        y: signatureY + 1,
-        width: signatureW - 2,
-        height: signatureH - 2,
-      });
-      
-      console.log("[ADD SIGNATURE] Image dessinée dans le PDF");
-    } catch (embedErr) {
-      console.error("[ADD SIGNATURE] Erreur lors de l'embed PNG:", embedErr?.toString());
-      
-      // Fallback : écrire du texte visible pour tester les coordonnées
-      lastPage.drawText("✓ Signé", {
         x: signatureX + 2,
-        y: signatureY + 3,
-        size: 8,
-        font,
-        color: rgb(0, 0, 0),
+        y: signatureY + 2,
+        width: signatureW - 4,
+        height: signatureH - 4,
       });
-      console.log("[ADD SIGNATURE] Fallback texte ajouté");
+      
+      console.log("[ADD SIGNATURE] ✅ Image dessinée dans le PDF");
+    } catch (embedErr) {
+      console.error("[ADD SIGNATURE] ❌ Erreur PNG embed:", embedErr);
+      console.error("[ADD SIGNATURE] Fallback: ajout de texte visible");
+      
+      // Fallback visible 
+      lastPage.drawText("✓ SIGNÉ", {
+        x: signatureX + 5,
+        y: signatureY + 10,
+        size: 12,
+        font,
+        color: rgb(0, 150, 0),
+      });
     }
 
-    // Sauvegarder et retourner le PDF modifié
+    // Sauvegarder
     const pdfBytes = await pdfDoc.save();
-    console.log("[ADD SIGNATURE] PDF sauvegardé");
+    console.log(`[ADD SIGNATURE] ✅ PDF sauvegardé (${pdfBytes.length} bytes)`);
+    
     return Buffer.from(pdfBytes);
-  } catch (err) {
-    console.error("[ADD SIGNATURE TO PDF] Erreur générale:", err);
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error("[ADD SIGNATURE] ❌ Erreur générale:", errorMsg);
     return Buffer.from(pdfBase64, "base64");
   }
 }
