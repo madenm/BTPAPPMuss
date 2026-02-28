@@ -1239,8 +1239,8 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
       }
 
       // Insérer la signature
-      const ipAddress = req.ip || req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() || "unknown";
-      const userAgent = req.headers["user-agent"] || "unknown";
+      const ipAddress = (req.ip ?? req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim()) || "unknown";
+      const userAgent = (req.headers["user-agent"] as string) || "unknown";
 
       const { error: insertError } = await supabase
         .from("quote_signatures")
