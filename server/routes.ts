@@ -1331,6 +1331,8 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
         .eq("id", quoteId)
         .single();
 
+      let updateError: any = null;
+
       if (!quoteError && quote) {
         try {
           // Récupérer le profil utilisateur (infos entreprise)
@@ -1381,7 +1383,7 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
           console.log("[submit-quote-signature] ✅ PDF généré avec signature");
 
           // Mettre à jour le statut du devis à "signé" ET stocker le PDF
-          const { error: updateError } = await supabase
+          const { error } = await supabase
             .from("quotes")
             .update({
               status: "signé",
@@ -1389,26 +1391,32 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
               quote_pdf_base64: pdfBase64,
             })
             .eq("id", quoteId);
+          
+          updateError = error;
         } catch (pdfErr) {
           console.error("[submit-quote-signature] Erreur génération PDF:", pdfErr);
           // Continuer quand même : mettre à jour le statut sans le PDF
-          const { error: updateError } = await supabase
+          const { error } = await supabase
             .from("quotes")
             .update({
               status: "signé",
               accepted_at: new Date().toISOString(),
             })
             .eq("id", quoteId);
+          
+          updateError = error;
         }
       } else {
         // Mettre à jour le statut du devis à "signé" si on ne peut pas récupérer le devis
-        const { error: updateError } = await supabase
+        const { error } = await supabase
           .from("quotes")
           .update({
             status: "signé",
             accepted_at: new Date().toISOString(),
           })
           .eq("id", quoteId);
+        
+        updateError = error;
       }
 
       if (updateError) {
