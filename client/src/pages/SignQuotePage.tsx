@@ -41,30 +41,10 @@ export default function SignQuotePage() {
       return;
     }
 
-    // Récupérer les informations du lien de signature (email prospect, etc.)
-    const fetchSignatureInfo = async () => {
-      try {
-        const response = await fetch(`/api/quote-signature-info/${signatureToken}`);
-        
-        if (!response.ok) {
-          const data = await response.json();
-          setError(data.message || "Lien de signature invalide.");
-          setLoading(false);
-          return;
-        }
-
-        const data = await response.json();
-        setProspectEmail(data.prospectEmail || "");
-        setQuoteId(data.quoteId || "");
-        setLoading(false);
-      } catch (err) {
-        console.error("Erreur récupération infos signature:", err);
-        setError("Impossible de charger les informations du devis.");
-        setLoading(false);
-      }
-    };
-
-    fetchSignatureInfo();
+    // On bypasse l'API - l'utilisateur remplira l'email manuellement
+    setProspectEmail("");
+    setQuoteId("");
+    setLoading(false);
   }, [signatureToken]);
 
   if (!match) {
