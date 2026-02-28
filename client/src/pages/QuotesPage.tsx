@@ -25,10 +25,9 @@ import { useUserSettings } from '@/context/UserSettingsContext';
 import { useToast } from '@/hooks/use-toast';
 import { UserAccountButton } from '@/components/UserAccountButton';
 import { VoiceInputButton } from '@/components/VoiceInputButton';
-import { insertQuote, updateQuote, deleteQuote, updateQuoteStatus, fetchQuoteById, fetchQuotesForUser, getQuoteDisplayNumber, generateSignatureLink, type QuoteItem, type QuoteSubItem, type SupabaseQuote } from '@/lib/supabaseQuotes';
+import { insertQuote, updateQuote, deleteQuote, updateQuoteStatus, fetchQuoteById, fetchQuotesForUser, getQuoteDisplayNumber, type QuoteItem, type QuoteSubItem, type SupabaseQuote } from '@/lib/supabaseQuotes';
 import { DEFAULT_THEME_COLOR, QUOTE_STATUS_LABELS, QUOTE_UNIT_NONE, QUOTE_UNIT_OPTIONS, inferUnitFromDescription, backfillUnitOnItems } from '@/lib/quoteConstants';
-import { downloadPdfBase64, downloadQuotePdf, fetchLogoDataUrl } from '@/lib/quotePdf';
-import { findProspectByEmail, findProspectByName, getProspectById, fetchProspectsForUser as fetchCRMClients, insertProspect, updateProspect } from '@/lib/supabaseClients';
+import { downloadQuotePdf, fetchLogoDataUrl, getQuotePdfBase64 } from '@/lib/quotePdf';
 import { QuotePreview } from '@/components/QuotePreview';
 import { QuoteList } from '@/components/QuoteList';
 import { InvoiceDialog } from '@/components/InvoiceDialog';
@@ -67,8 +66,6 @@ import {
   Columns2
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
-
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface ClientInfo {
   name: string;
@@ -121,7 +118,7 @@ export default function QuotesPage() {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [selectedChantierId, setSelectedChantierId] = useState<string | null>(null);
   const [editingQuoteId, setEditingQuoteId] = useState<string | null>(null);
-  const [editingQuoteStatus, setEditingQuoteStatus] = useState<'brouillon' | 'envoyé' | 'accepté' | 'refusé' | 'expiré' | 'validé' | 'signé' | null>(null);
+  const [editingQuoteStatus, setEditingQuoteStatus] = useState<'brouillon' | 'envoyé' | 'accepté' | 'refusé' | 'expiré' | 'validé' | null>(null);
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
   const [clientInfo, setClientInfo] = useState<ClientInfo>({
     name: '',
@@ -158,7 +155,6 @@ export default function QuotesPage() {
   const [highlightMissing, setHighlightMissing] = useState<{
     clientName?: boolean;
     clientEmail?: boolean;
-    clientEmailInvalid?: boolean;
     itemsSection?: boolean;
     itemIds?: string[];
   }>({});
@@ -169,10 +165,6 @@ export default function QuotesPage() {
   const lastAppliedQuoteIdRef = useRef<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isCreatingChantier, setIsCreatingChantier] = useState(false);
-  const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
-  const [quoteToSend, setQuoteToSend] = useState<SupabaseQuote | null>(null);
-  const [sendingEmail, setSendingEmail] = useState(false);
-  const [recipientEmail, setRecipientEmail] = useState('');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -185,10 +177,7 @@ export default function QuotesPage() {
     }
   }, [showForm, user?.id, listStatusFilter]);
 
-  const hasResetForNewRef = useRef(false);
-  const shouldSkipToStep3Ref = useRef(false);
-  const isFromEstimationRef = useRef(false);
-  const isFromDirectEstimationRef = useRef(false);
+  const hasResetForNewRef = useRef(false);  const isFromDirectEstimationRef = useRef(false);
 
   useEffect(() => {
     if (!showForm) {
@@ -203,10 +192,9 @@ export default function QuotesPage() {
     }
     if (hasResetForNewRef.current) return;
     hasResetForNewRef.current = true;
-    
-    // Vérifier si on vient d'une estimation
-    const fromEstimation = searchParams.get('fromEstimation') === '1';
-    isFromEstimationRef.current = fromEstimation;
+    // Vérifier si c'est un flux direct depuis estimation
+    const fromDirectEstimation = fromEstimation && searchParams.get('fromEstimation') === '1';
+    isFromDirectEstimationRef.current = fromDirectEstimation;
     
     setStep(1);
     setEditingQuoteId(null);
@@ -226,82 +214,35 @@ export default function QuotesPage() {
     setQuoteLoadState('idle');
     lastAppliedQuoteIdRef.current = null;
 
-    if (fromEstimation) {
+    if (searchParams.get('fromEstimation') === '1') {
       try {
-        // Essayer d'abord le flux direct depuis estimation
-        let raw = sessionStorage.getItem('estimationForDevisDirect');
-        let isDirect = false;
-        
-        // Si pas de données directes, utiliser le flux normal
-        if (!raw) {
-          raw = sessionStorage.getItem('estimationForDevis');
-          isDirect = false;
-        } else {
-          isDirect = true;
-        }
-        
-        isFromDirectEstimationRef.current = isDirect;
-        
+        const raw = sessionStorage.getItem('estimationForDevis');
         if (raw) {
           const est = JSON.parse(raw) as {
             clientName?: string; clientEmail?: string; clientPhone?: string;
             projectType?: string; projectDescription?: string;
             items?: { description: string; quantity: number; unitPrice: number; unit: string }[];
             conditions?: string;
-            estimationData?: any;
           };
-          if (est.clientName) {
-            setClientInfo(prev => ({ ...prev, name: est.clientName!, email: est.clientEmail || '', phone: est.clientPhone || '' }));
-          }
+          if (est.clientName) setClientInfo(prev => ({ ...prev, name: est.clientName!, email: est.clientEmail || '', phone: est.clientPhone || '' }));
           if (est.projectType) setProjectType(est.projectType);
           if (est.projectDescription) setProjectDescription(est.projectDescription);
           if (est.conditions) setGeneralConditions(est.conditions);
           if (est.items?.length) {
-            const mappedItems = est.items.map((it, i) => ({
+            setItems(est.items.map((it, i) => ({
               id: String(i + 1),
               description: it.description,
               quantity: it.quantity || 1,
               unitPrice: it.unitPrice || 0,
               total: (it.quantity || 1) * (it.unitPrice || 0),
               unit: it.unit || '',
-            }));
-            setItems(mappedItems);
-            // Marquer qu'on doit passer à l'étape 3
-            if (est.clientName && est.projectDescription && mappedItems.length > 0) {
-              shouldSkipToStep3Ref.current = true;
-              // Stocker les données d'estimation pour les afficher dans le devis
-              if (est.estimationData) {
-                sessionStorage.setItem('currentEstimationData', JSON.stringify(est.estimationData));
-              }
-            }
+            })));
           }
-          // Nettoyer le sessionStorage approprié
-          sessionStorage.removeItem(isDirect ? 'estimationForDevisDirect' : 'estimationForDevis');
+          sessionStorage.removeItem('estimationForDevis');
         }
       } catch {}
     }
   }, [showForm, pathname, searchParams.get('new'), searchParams.get('quoteId')]);
-
-  // Passer directement à l'étape 3 si on vient d'une estimation et les données sont disponibles
-  useEffect(() => {
-    if (!isFromEstimationRef.current || !shouldSkipToStep3Ref.current) return;
-    
-    const hasClientName = clientInfo.name?.trim().length ?? 0 > 0;
-    const hasClientEmail = clientInfo.email?.trim().length ?? 0 > 0;
-    const hasProjectDescription = projectDescription?.trim().length ?? 0 > 0;
-    const hasItems = items.length > 0 && items.some(i => i.description?.trim());
-    
-    // On exige toujours au minimum: nom client + email + description + items
-    // car ces données sont nécessaires pour sauvegarder ou télécharger le devis
-    const canSkipToStep3 = hasClientName && hasClientEmail && hasProjectDescription && hasItems;
-    
-    if (canSkipToStep3) {
-      shouldSkipToStep3Ref.current = false;
-      isFromEstimationRef.current = false;
-      isFromDirectEstimationRef.current = false;
-      setStep(3);
-    }
-  }, [clientInfo, projectDescription, items]);
 
   useEffect(() => {
     if (step !== 2 && step !== 3) return;
@@ -400,14 +341,14 @@ export default function QuotesPage() {
         setLocation('/dashboard/quotes');
         return;
       }
-      // Empêcher la modification d'un devis validé ou signé
-      if (quote.status === 'validé' || quote.status === 'signé') {
+      // Empêcher la modification d'un devis validé
+      if (quote.status === 'validé') {
         setQuoteLoadState('error');
         lastAppliedQuoteIdRef.current = null;
         setQuoteIdToOpenFromList(null);
         toast({
-          title: 'Devis verrouillé',
-          description: 'Ce devis est validé ou signé et ne peut plus être modifié.',
+          title: 'Devis validé',
+          description: 'Ce devis a été validé et ne peut plus être modifié.',
           variant: 'destructive',
         });
         // Rediriger vers la page des projets si le devis est associé à un chantier
@@ -627,32 +568,7 @@ export default function QuotesPage() {
   const tva = subtotalAfterDiscount * (parsedTvaRate / 100);
   const total = subtotalAfterDiscount + tva;
 
-  const handleNext = async () => {    // Validation étape 1 : vérifier le nom et l'email
-    if (step === 1) {
-      const missingName = !clientInfo.name?.trim();
-      const missingEmail = !clientInfo.email?.trim();
-      const invalidEmail = clientInfo.email?.trim() && !EMAIL_REGEX.test(clientInfo.email.trim());
-      
-      if (missingName || missingEmail || invalidEmail) {
-        setHighlightMissing({
-          clientName: missingName,
-          clientEmail: missingEmail,
-          clientEmailInvalid: invalidEmail,
-        });
-        
-        if (!canGoNextFromStep1) {
-          toast({
-            title: 'Informations client requises',
-            description: invalidEmail 
-              ? 'Le format de l\'email est invalide (ex: nom@exemple.com)' 
-              : 'Veuillez renseigner le nom et l\'email du contact',
-            variant: 'destructive',
-          });
-          return;
-        }
-      }
-    }
-
+  const handleNext = async () => {
     const nextStep = Math.min(3, step + 1);
     const needPrefill = step === 2 && nextStep === 3 && projectDescription.trim();
 
@@ -763,11 +679,7 @@ export default function QuotesPage() {
   const handlePrev = () => {
     setStep((s) => Math.max(1, s - 1));
   };
-  const canGoNextFromStep1 = Boolean(
-    clientInfo.name?.trim() && 
-    clientInfo.email?.trim() && 
-    EMAIL_REGEX.test(clientInfo.email.trim())
-  );
+  const canGoNextFromStep1 = Boolean(clientInfo.name?.trim() && clientInfo.email?.trim());
 
   const handleNewQuote = () => {
     lastAppliedQuoteIdRef.current = null;
@@ -796,9 +708,6 @@ export default function QuotesPage() {
   const handleDuplicateQuote = async (quote: SupabaseQuote) => {
     if (!user) return;
     try {
-      // Copie profonde des items pour éviter les références partagées
-      const itemsCopy = JSON.parse(JSON.stringify(quote.items ?? []));
-      
       const duplicated = await insertQuote(user.id, {
         chantier_id: quote.chantier_id ?? undefined,
         client_name: quote.client_name ?? '',
@@ -810,9 +719,47 @@ export default function QuotesPage() {
         total_ht: quote.total_ht,
         total_ttc: quote.total_ttc,
         validity_days: quote.validity_days ?? 30,
-        items: itemsCopy,
+        items: quote.items ?? [],
         status: 'brouillon',
       });
+      
+      // Generate and save PDF immediately
+      try {
+        const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : undefined;
+        const pdfBase64 = getQuotePdfBase64({
+          clientInfo: {
+            name: duplicated.client_name || '',
+            email: duplicated.client_email || '',
+            phone: duplicated.client_phone || '',
+            address: duplicated.client_address || '',
+          },
+          projectType: duplicated.project_type || '',
+          projectDescription: duplicated.project_description || '',
+          validityDays: (duplicated.validity_days || 30).toString(),
+          items: duplicated.items?.map(i => ({
+            description: i.description || '',
+            quantity: i.quantity || 0,
+            unitPrice: i.unitPrice || 0,
+            total: i.total || 0,
+            unit: i.unit,
+            subItems: i.subItems,
+          })) || [],
+          subtotal: duplicated.total_ht,
+          tva: (duplicated.total_ttc || 0) - (duplicated.total_ht || 0),
+          total: duplicated.total_ttc,
+          themeColor: accentColor,
+          logoDataUrl,
+          companyName: profile?.company_name || profile?.full_name,
+          companyAddress: profile?.company_address,
+          companyPhone: profile?.company_phone,
+          companyEmail: profile?.company_email,
+          companySiret: profile?.company_siret,
+        });
+        await supabase.from("quotes").update({ quote_pdf_base64: pdfBase64 }).eq("id", duplicated.id);
+      } catch (err) {
+        console.error('Error generating PDF for duplicated quote:', err);
+      }
+      
       setListQuotes((prev) => [duplicated, ...prev]);
       toast({ title: 'Devis dupliqué', description: 'Le devis a été dupliqué en brouillon.' });
     } catch (e) {
@@ -823,15 +770,6 @@ export default function QuotesPage() {
 
   const handleDownloadPdfFromList = async (quote: SupabaseQuote) => {
     try {
-      if (quote.status === 'signé' && quote.quote_pdf_base64) {
-        const safeName = (quote.client_name || 'devis').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
-        const date = new Date().toISOString().slice(0, 10);
-        const filename = `devis-signe-${safeName}-${date}.pdf`;
-        downloadPdfBase64(quote.quote_pdf_base64, filename);
-        toast({ title: 'Devis téléchargé', description: 'Le PDF signé a été téléchargé.' });
-        return;
-      }
-
       const pdfItems = (quote.items ?? []).map((i) => ({
         description: i.description,
         quantity: i.quantity,
@@ -880,220 +818,6 @@ export default function QuotesPage() {
     }
   };
 
-  const handleSendEmailFromList = async (quote: SupabaseQuote) => {
-    setQuoteToSend(quote);
-    let emailToUse = quote.client_email || '';
-    
-    // Si le devis a un contact_id, récupérer l'email à jour du contact
-    if (user?.id && quote.contact_id) {
-      try {
-        const contact = await getProspectById(user.id, quote.contact_id);
-        if (contact && contact.email) {
-          emailToUse = contact.email;
-        }
-      } catch (err) {
-        console.error('Erreur lors de la récupération du contact:', err);
-      }
-    }
-    
-    setRecipientEmail(emailToUse);
-    setSendEmailDialogOpen(true);
-  };
-
-  const handleConfirmSendEmail = async () => {
-    if (!quoteToSend || !user?.id) return;
-    
-    if (!recipientEmail.trim()) {
-      toast({ title: 'Erreur', description: 'Veuillez saisir une adresse email', variant: 'destructive' });
-      return;
-    }
-
-    setSendingEmail(true);
-    try {
-      // Générer le PDF
-      const pdfItems = (quoteToSend.items ?? []).map((i) => ({
-        description: i.description,
-        quantity: i.quantity,
-        unitPrice: i.unitPrice,
-        total: i.total ?? i.quantity * i.unitPrice,
-        unit: i.unit ?? undefined,
-        subItems: i.subItems?.map((s) => ({
-          description: s.description,
-          quantity: s.quantity,
-          unitPrice: s.unitPrice,
-          total: s.total,
-          unit: s.unit ?? undefined,
-        })),
-      }));
-      
-      const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : undefined;
-      const quoteNum = getQuoteDisplayNumber(listQuotes, quoteToSend.id);
-      
-      const { getQuotePdfBase64 } = await import('@/lib/quotePdf');
-      const pdfBase64 = getQuotePdfBase64({
-        clientInfo: {
-          name: quoteToSend.client_name ?? '',
-          email: quoteToSend.client_email ?? '',
-          phone: quoteToSend.client_phone ?? '',
-          address: quoteToSend.client_address ?? '',
-        },
-        projectType: quoteToSend.project_type ?? '',
-        projectDescription: quoteToSend.project_description ?? '',
-        validityDays: String(quoteToSend.validity_days ?? 30),
-        items: pdfItems,
-        subtotal: quoteToSend.total_ht,
-        tva: quoteToSend.total_ttc - quoteToSend.total_ht,
-        total: quoteToSend.total_ttc,
-        themeColor: accentColor,
-        quoteNumber: quoteNum || undefined,
-        companyName: profile?.company_name || profile?.full_name || undefined,
-        companyAddress: profile?.company_address ?? undefined,
-        companyCityPostal: profile?.company_city_postal ?? undefined,
-        companyPhone: profile?.company_phone ?? undefined,
-        companyEmail: profile?.company_email ?? undefined,
-        companySiret: profile?.company_siret ?? undefined,
-        companyLegal: [profile?.company_name, profile?.company_siret && `SIRET ${profile.company_siret}`, profile?.company_tva_number && `TVA ${profile.company_tva_number}`, profile?.company_rcs && `RCS ${profile.company_rcs}`, profile?.company_capital && `Capital ${profile.company_capital} €`].filter(Boolean).join(' — ') || undefined,
-        ...(logoDataUrl && { logoDataUrl }),
-      });
-
-      let signatureLink = '';
-      
-      // Essayer d'abord via l'API backend si le token est disponible
-      if (session?.access_token && quoteToSend.id) {
-        try {
-          const signatureRes = await fetch("/api/generate-quote-signature-link", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${session.access_token}`
-            },
-            body: JSON.stringify({ quoteId: quoteToSend.id, expirationDays: 30 }),
-          });
-
-          if (signatureRes.ok) {
-            const signatureData = await signatureRes.json();
-            signatureLink = signatureData?.signatureLink || '';
-          }
-        } catch (err) {
-          console.error('Erreur génération lien signature (API):', err);
-        }
-      }
-
-      // Fallback client-side si API échoue ou token n'est pas disponible
-      if (!signatureLink && user?.id && quoteToSend.id) {
-        try {
-          signatureLink = (await generateSignatureLink(quoteToSend.id, user.id, 30, session)) || '';
-        } catch (fallbackErr) {
-          console.error('Erreur génération lien signature (fallback):', fallbackErr);
-        }
-      }
-
-      const signatureLinkHtml = signatureLink
-        ? `
-          <div style="margin: 24px 0; padding: 16px; background-color: #f3f4f6; border-radius: 8px; text-align: center;">
-            <p style="margin: 0 0 12px 0; font-weight: 600; color: #374151;">Pour signer votre devis en ligne :</p>
-            <a href="${signatureLink}" style="display: inline-block; padding: 12px 24px; background-color: #8b5cf6; color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">✍️ Signer le devis</a>
-          </div>
-        `
-        : '';
-
-      // Créer le contenu HTML de l'email
-      const htmlContent = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: ${accentColor || '#334155'};">Nouveau devis</h2>
-          <p>Bonjour ${quoteToSend.client_name || 'Madame, Monsieur'},</p>
-          <p>Veuillez trouver ci-joint votre devis ${quoteNum || ''}.</p>
-          ${signatureLinkHtml}
-          <p>Cordialement,<br/>${profile?.company_name || profile?.full_name || ''}</p>
-          ${profile?.company_phone ? `<p style="color: #64748b;">Tel: ${profile.company_phone}</p>` : ''}
-          ${profile?.company_email ? `<p style="color: #64748b;">Email: ${profile.company_email}</p>` : ''}
-        </div>
-      `;
-
-      const safeName = (quoteToSend.client_name || 'devis').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
-      const date = new Date().toISOString().slice(0, 10);
-      const filename = `devis-${safeName}-${date}.pdf`;
-
-      const replyTo = profile?.company_email || user?.email || null;
-      
-      // Envoyer l'email
-      const res = await fetch('/api/send-quote-email', {
-        method: 'POST',
-        headers: getApiPostHeaders(session?.access_token),
-        body: JSON.stringify({
-          to: recipientEmail,
-          fromEmail: profile?.company_email || user?.email,
-          replyTo,
-          pdfBase64,
-          fileName: filename,
-          htmlContent,
-          // Ne passer quoteId que si le lien de signature n'a pas pu être généré
-          // (le backend ne doivent pas générer un lien si c'est déjà fait côté frontend)
-          ...(signatureLink ? {} : { quoteId: quoteToSend.id }),
-          userId: user.id,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || 'Erreur lors de l\'envoi de l\'email');
-      }
-
-      // Mettre à jour le statut du devis
-      if (quoteToSend.status === 'brouillon') {
-        await updateQuoteStatus(quoteToSend.id, user.id, 'envoyé');
-        // Rafraîchir la liste
-        const updatedQuotes = await fetchQuotesForUser(user.id, listStatusFilter === 'all' ? undefined : listStatusFilter);
-        setListQuotes(updatedQuotes);
-      }
-
-      // Créer ou mettre à jour la carte CRM liée à CE devis spécifique
-      try {
-        const allProspects = await fetchCRMClients(user.id);
-        // Chercher un prospect déjà lié à CE devis précis
-        const existingForQuote = allProspects.find(p => p.linkedQuoteId === quoteToSend.id);
-        
-        const crmUpdates = {
-          stage: 'quote',
-          linked_quote_id: quoteToSend.id,
-          last_action_at: new Date().toISOString(),
-          last_action_type: 'Devis envoyé',
-          last_email_sent_at: new Date().toISOString(),
-          relance_count: 0,
-        };
-        
-        if (existingForQuote) {
-          // Ce devis a déjà une carte CRM, on la met à jour
-          await updateProspect(user.id, existingForQuote.id, crmUpdates);
-        } else {
-          // Créer une nouvelle carte CRM pour ce devis
-          const newProspect = await insertProspect(user.id, {
-            name: quoteToSend.client_name || 'Client',
-            email: recipientEmail.trim(),
-            phone: quoteToSend.client_phone || undefined,
-          });
-          await updateProspect(user.id, newProspect.id, crmUpdates);
-        }
-      } catch (err) {
-        console.warn('CRM: impossible de mettre à jour:', err);
-      }
-
-      toast({ title: 'Succès', description: 'Le devis a été envoyé par email' });
-      setSendEmailDialogOpen(false);
-      setQuoteToSend(null);
-      setRecipientEmail('');
-    } catch (error) {
-      console.error(error);
-      toast({ 
-        title: 'Erreur', 
-        description: error instanceof Error ? error.message : 'Impossible d\'envoyer l\'email', 
-        variant: 'destructive' 
-      });
-    } finally {
-      setSendingEmail(false);
-    }
-  };
-
   const filteredListQuotes = useMemo(() => {
     let result = listQuotes;
     if (listProjectFilter && listProjectFilter !== 'all') {
@@ -1116,13 +840,12 @@ export default function QuotesPage() {
     
     const missingName = !clientInfo.name?.trim();
     const missingEmail = !clientInfo.email?.trim();
-    const invalidEmail = clientInfo.email?.trim() && !EMAIL_REGEX.test(clientInfo.email.trim());
     
     // Calculer les totaux pour vérifier si le devis est valide
     const currentSubtotal = items.reduce((sum, item) => sum + getItemTotal(item), 0);
     const missingItems = items.length === 0 || currentSubtotal === 0;
     
-    return !missingName && !missingEmail && !invalidEmail && !missingItems;
+    return !missingName && !missingEmail && !missingItems;
   };
 
   // Fonction de sauvegarde manuelle du devis
@@ -1131,7 +854,6 @@ export default function QuotesPage() {
     
     const missingName = !clientInfo.name?.trim();
     const missingEmail = !clientInfo.email?.trim();
-    const invalidEmail = clientInfo.email?.trim() && !EMAIL_REGEX.test(clientInfo.email.trim());
     const invalidItemIds = items.filter((i) => !i.description?.trim() || getItemTotal(i) === 0).map((i) => i.id);
     const currentSubtotal = items.reduce((sum, item) => sum + getItemTotal(item), 0);
     const currentDiscountAmt = discountType === 'percent'
@@ -1142,19 +864,17 @@ export default function QuotesPage() {
     const currentSubtotalAfterDiscount = Math.max(0, currentSubtotal - currentDiscountAmt);
     const missingItems = items.length === 0 || currentSubtotal === 0;
     
-    if (missingName || missingEmail || invalidEmail || missingItems) {
+    if (missingName || missingEmail || missingItems) {
       setHighlightMissing({
         clientName: missingName,
         clientEmail: missingEmail,
-        clientEmailInvalid: invalidEmail,
         itemsSection: missingItems,
         itemIds: missingItems ? invalidItemIds : undefined,
       });
-      if (missingName || missingEmail || invalidEmail) setStep(1);
+      if (missingName || missingEmail) setStep(1);
       const parts: string[] = [];
       if (missingName) parts.push('Nom client');
       if (missingEmail) parts.push('Email client');
-      if (invalidEmail) parts.push('Format email valide');
       if (missingItems) parts.push('Au moins une ligne avec un montant');
       toast({
         title: 'Il manque des informations',
@@ -1164,11 +884,11 @@ export default function QuotesPage() {
       return;
     }
 
-    // Empêcher la sauvegarde d'un devis validé ou signé
-    if (editingQuoteStatus === 'validé' || editingQuoteStatus === 'signé') {
+    // Empêcher la sauvegarde d'un devis validé
+    if (editingQuoteStatus === 'validé') {
       toast({
-        title: 'Devis verrouillé',
-        description: 'Ce devis est validé ou signé et ne peut plus être modifié.',
+        title: 'Devis validé',
+        description: 'Ce devis a été validé et ne peut plus être modifié.',
         variant: 'destructive',
       });
       return;
@@ -1196,6 +916,39 @@ export default function QuotesPage() {
           // Ne pas définir de statut lors de la sauvegarde
         };
         const newQuote = await insertQuote(user.id, payload);
+        
+        // Generate and save PDF immediately
+        try {
+          const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : undefined;
+          const pdfBase64 = getQuotePdfBase64({
+            clientInfo,
+            projectType,
+            projectDescription,
+            validityDays,
+            items: items.map(i => ({
+              description: i.description,
+              quantity: i.quantity,
+              unitPrice: i.unitPrice,
+              total: i.quantity * i.unitPrice,
+              unit: i.unit,
+              subItems: i.subItems,
+            })),
+            subtotal: currentSubtotalAfterDiscount,
+            tva: currentTotal - currentSubtotalAfterDiscount,
+            total: currentTotal,
+            themeColor: accentColor,
+            logoDataUrl,
+            companyName: profile?.company_name || profile?.full_name,
+            companyAddress: profile?.company_address,
+            companyPhone: profile?.company_phone,
+            companyEmail: profile?.company_email,
+            companySiret: profile?.company_siret,
+          });
+          await supabase.from("quotes").update({ quote_pdf_base64: pdfBase64 }).eq("id", newQuote.id);
+        } catch (err) {
+          console.error('Error generating PDF for new quote:', err);
+        }
+        
         setEditingQuoteId(newQuote.id);
         setEditingQuoteStatus(newQuote.status);
         if (selectedChantierId) {
@@ -1367,22 +1120,19 @@ export default function QuotesPage() {
 
     const missingName = !clientInfo.name?.trim();
     const missingEmail = !clientInfo.email?.trim();
-    const invalidEmail = clientInfo.email?.trim() && !EMAIL_REGEX.test(clientInfo.email.trim());
     const invalidItemIds = items.filter((i) => !i.description?.trim() || getItemTotal(i) === 0).map((i) => i.id);
     const missingItems = items.length === 0 || subtotal === 0;
-    if (missingName || missingEmail || invalidEmail || missingItems) {
+    if (missingName || missingEmail || missingItems) {
       setHighlightMissing({
         clientName: missingName,
         clientEmail: missingEmail,
-        clientEmailInvalid: invalidEmail,
         itemsSection: missingItems,
         itemIds: missingItems ? invalidItemIds : undefined,
       });
-      if (missingName || missingEmail || invalidEmail) setStep(1);
+      if (missingName || missingEmail) setStep(1);
       const parts: string[] = [];
       if (missingName) parts.push('Nom client');
       if (missingEmail) parts.push('Email client');
-      if (invalidEmail) parts.push('Format email valide');
       if (missingItems) parts.push('Au moins une ligne avec un montant');
       toast({
         title: 'Il manque des informations',
@@ -1396,22 +1146,10 @@ export default function QuotesPage() {
 
     // Empêcher la sauvegarde d'un devis validé lors du téléchargement
     // Si le devis est validé et existe déjà, permettre le téléchargement du PDF sans sauvegarder
-    if ((editingQuoteStatus === 'validé' || editingQuoteStatus === 'signé') && editingQuoteId) {
+    if (editingQuoteStatus === 'validé' && editingQuoteId) {
       // Permettre le téléchargement du PDF même si le devis est validé (pas de sauvegarde)
       setIsGenerating(true);
       try {
-        if (editingQuoteStatus === 'signé') {
-          const signedQuote = await fetchQuoteById(user.id, editingQuoteId);
-          if (signedQuote?.quote_pdf_base64) {
-            const safeName = (signedQuote.client_name || 'devis').replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
-            const date = new Date().toISOString().slice(0, 10);
-            const filename = `devis-signe-${safeName}-${date}.pdf`;
-            downloadPdfBase64(signedQuote.quote_pdf_base64, filename);
-            setIsGenerating(false);
-            return;
-          }
-        }
-
         const pdfItems = items.map((i) => ({
           description: i.description,
           quantity: i.quantity,
@@ -1489,6 +1227,39 @@ export default function QuotesPage() {
           // Ne pas définir de statut lors du téléchargement du PDF
         };
         const newQuote = await insertQuote(user.id, payload);
+        
+        // Generate and save PDF immediately
+        try {
+          const logoDataUrlForPdf = logoUrl ? await fetchLogoDataUrl(logoUrl) : undefined;
+          const pdfBase64 = getQuotePdfBase64({
+            clientInfo,
+            projectType,
+            projectDescription,
+            validityDays,
+            items: items.map(i => ({
+              description: i.description,
+              quantity: i.quantity,
+              unitPrice: i.unitPrice,
+              total: i.quantity * i.unitPrice,
+              unit: i.unit,
+              subItems: i.subItems,
+            })),
+            subtotal: subtotalAfterDiscount,
+            tva,
+            total,
+            themeColor: accentColor,
+            logoDataUrl: logoDataUrlForPdf,
+            companyName: profile?.company_name || profile?.full_name,
+            companyAddress: profile?.company_address,
+            companyPhone: profile?.company_phone,
+            companyEmail: profile?.company_email,
+            companySiret: profile?.company_siret,
+          });
+          await supabase.from("quotes").update({ quote_pdf_base64: pdfBase64 }).eq("id", newQuote.id);
+        } catch (err) {
+          console.error('Error generating PDF for new quote:', err);
+        }
+        
         quoteIdToUse = newQuote.id;
         setEditingQuoteId(newQuote.id);
         setEditingQuoteStatus(newQuote.status);
@@ -1647,8 +1418,7 @@ export default function QuotesPage() {
           onDuplicateQuote={handleDuplicateQuote}
           onDeleteQuote={handleDeleteQuoteFromList}
           onChangeStatus={handleChangeStatusFromList}
-          onGoToProjects={(chantierId) => setLocation(`/dashboard/projects/${chantierId}`)}
-          onSendEmail={handleSendEmailFromList}
+          onGoToProjects={() => setLocation('/dashboard/projects')}
         />
       ) : (
         <>
@@ -1752,7 +1522,7 @@ export default function QuotesPage() {
             accentColor={accentColor}
             logoUrl={logoUrl}
           />
-          {(editingQuoteStatus === 'accepté' || editingQuoteStatus === 'validé' || editingQuoteStatus === 'signé') && (
+          {(editingQuoteStatus === 'accepté' || editingQuoteStatus === 'validé') && (
             <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
               <Button
                 onClick={() => {
@@ -1772,7 +1542,7 @@ export default function QuotesPage() {
       <InvoiceDialog
         open={isInvoiceDialogOpen}
         onOpenChange={setIsInvoiceDialogOpen}
-        quoteId={editingQuoteStatus === 'accepté' || editingQuoteStatus === 'validé' || editingQuoteStatus === 'signé' ? editingQuoteId : null}
+        quoteId={editingQuoteStatus === 'accepté' || editingQuoteStatus === 'validé' ? editingQuoteId : null}
         chantierId={selectedChantierId}
         clientId={selectedClientId}
         onSaved={() => {
@@ -2007,16 +1777,13 @@ export default function QuotesPage() {
                         onChange={(e) => {
                           const newEmail = e.target.value;
                           setClientInfo(prev => ({ ...prev, email: newEmail }));
-                          setHighlightMissing(prev => ({ ...prev, clientEmail: false, clientEmailInvalid: false }));
+                          setHighlightMissing(prev => ({ ...prev, clientEmail: false }));
                           const selClient = selectedClientId ? clients.find(c => c.id === selectedClientId) : null;
                           if (selectedClientId && selClient && newEmail.trim() !== (selClient.email ?? '')) setSelectedClientId(null);
                         }}
                         placeholder="email@exemple.com"
-                        className={`cursor-text rounded-xl border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 ${highlightMissing.clientEmail || highlightMissing.clientEmailInvalid ? 'border-amber-400 dark:border-amber-500/80 bg-amber-50/20 dark:bg-amber-950/10' : ''}`}
+                        className={`cursor-text rounded-xl border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 ${highlightMissing.clientEmail ? 'border-amber-400 dark:border-amber-500/80 bg-amber-50/20 dark:bg-amber-950/10' : ''}`}
                       />
-                      {highlightMissing.clientEmailInvalid && (
-                        <p className="text-xs text-amber-600 dark:text-amber-400">Format d'email invalide (ex: nom@exemple.com)</p>
-                      )}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="client-phone" className="text-gray-700 dark:text-gray-300">Téléphone</Label>
@@ -2203,7 +1970,10 @@ export default function QuotesPage() {
                         />
                         <VoiceInputButton
                           onTranscript={(text) => {
-                            setProjectDescription(text);
+                            setProjectDescription((prev) => {
+                              const trimmed = prev.trim();
+                              return trimmed ? `${trimmed} ${text}` : text;
+                            });
                           }}
                           className="self-start mt-1"
                         />
@@ -2912,65 +2682,6 @@ export default function QuotesPage() {
       </div>
         </>
       )}
-
-      {/* Dialog d'envoi d'email */}
-      <Dialog open={sendEmailDialogOpen} onOpenChange={setSendEmailDialogOpen}>
-        <DialogContent className="sm:max-w-lg flex flex-col max-h-screen">
-          <DialogHeader>
-            <DialogTitle>Envoyer le devis par email</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="recipient-email">Email du destinataire</Label>
-              <Input
-                id="recipient-email"
-                type="email"
-                placeholder="client@example.com"
-                value={recipientEmail}
-                readOnly
-                disabled
-              />
-            </div>
-            {quoteToSend && (
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                <p><strong>Devis:</strong> {getQuoteDisplayNumber(listQuotes, quoteToSend.id)}</p>
-                <p><strong>Client:</strong> {quoteToSend.client_name}</p>
-                <p><strong>Montant:</strong> {quoteToSend.total_ttc.toFixed(2)} €</p>
-              </div>
-            )}
-          </div>
-          <div className="flex justify-end gap-2 pt-4 border-t mt-auto">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setSendEmailDialogOpen(false);
-                setQuoteToSend(null);
-                setRecipientEmail('');
-              }}
-              disabled={sendingEmail}
-            >
-              Annuler
-            </Button>
-            <Button
-              onClick={handleConfirmSendEmail}
-              disabled={sendingEmail || !recipientEmail.trim()}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              {sendingEmail ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Envoi en cours...
-                </>
-              ) : (
-                <>
-                  <Mail className="h-4 w-4 mr-2" />
-                  Envoyer
-                </>
-              )}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </PageWrapper>
   );
 }

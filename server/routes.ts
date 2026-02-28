@@ -6,7 +6,6 @@ import { fileURLToPath } from "url";
 import { storage } from "./storage";
 
 import { generateInvoicePdfBuffer } from "./lib/invoicePdfServer";
-import { addSignatureToPdf, generateQuotePdfWithSignature } from "./lib/quotePdfServer";
 import { getArtiprixForMetier } from "./lib/artiprixCatalog";
 
 import { Resend } from "resend";
@@ -92,18 +91,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     peinture: "Peinture & Revêtements",
     autre: "Autre",
   };
-
-  function normalizeEnvValue(value?: string): string {
-    const trimmed = (value || "").trim();
-    if (
-      trimmed &&
-      ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-        (trimmed.startsWith("'") && trimmed.endsWith("'")))
-    ) {
-      return trimmed.slice(1, -1).trim();
-    }
-    return trimmed;
-  }
 
   app.get("/api/ai-status", (_req: Request, res: Response) => {
     res.json({
@@ -864,15 +851,13 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
   });
 
   app.post("/api/send-quote-email", async (req: Request, res: Response) => {
-    const { to, fromEmail, replyTo, pdfBase64, fileName, htmlContent, quoteId, expirationDays } = req.body as {
+    const { to, fromEmail, replyTo, pdfBase64, fileName, htmlContent } = req.body as {
       to?: string;
       fromEmail?: string | null;
       replyTo?: string | null;
       pdfBase64?: string;
       fileName?: string;
       htmlContent?: string | null;
-      quoteId?: string;
-      expirationDays?: number;
     };
 
     if (!to || typeof to !== "string" || !to.trim()) {
@@ -888,81 +873,6 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
     const toAddress = to.trim();
     const attachmentFilename = fileName && String(fileName).trim() ? String(fileName).trim() : "devis.pdf";
     const resendApiKey = process.env.RESEND_API_KEY;
-
-    let htmlToSend = (htmlContent && String(htmlContent).trim()) || "<p>Veuillez trouver ci-joint votre devis.</p>";
-
-    if (quoteId && typeof quoteId === "string" && quoteId.trim()) {
-      try {
-        // Authentification requise pour générer un lien de signature
-        const authHeader = req.headers.authorization;
-        const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
-        
-        if (!userToken) {
-          res.status(401).json({ message: "Authentification requise pour générer un lien de signature." });
-          return;
-        }
-
-        const supabaseUser = getSupabaseClientWithUserToken(userToken);
-        
-        // Vérifier que le devis appartient à l'utilisateur authentifié
-        const { data: { user: authUser } } = await supabaseUser.auth.getUser();
-        if (!authUser?.id) {
-          res.status(401).json({ message: "Authentification invalide." });
-          return;
-        }
-
-        const { data: quote } = await supabaseUser
-          .from("quotes")
-          .select("id, user_id")
-          .eq("id", quoteId.trim())
-          .single();
-
-        if (!quote || quote.user_id !== authUser.id) {
-          res.status(403).json({ message: "Accès refusé. Ce devis ne vous appartient pas." });
-          return;
-        }
-
-        // Générer un token unique
-        const { randomBytes } = await import("crypto");
-        const signatureToken = randomBytes(32).toString('hex');
-
-        const expirationDaysValue = expirationDays ?? 30;
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + expirationDaysValue);
-
-        // Insérer dans quote_signature_links avec le client utilisateur
-        const { error: insertError } = await supabaseUser
-          .from("quote_signature_links")
-          .insert({
-            quote_id: quoteId.trim(),
-            token: signatureToken,
-            user_id: authUser.id,
-            prospect_email: toAddress, // Utiliser l'email du destinataire
-            expires_at: expiresAt.toISOString(),
-          });
-
-        if (insertError) {
-          throw new Error("Erreur lors de la création du lien de signature.");
-        }
-
-        // Construire le lien public
-        const proto = req.get("x-forwarded-proto") || req.protocol || "https";
-        const host = req.get("x-forwarded-host") || req.get("host") || "app.titanbtp.com";
-        const origin = normalizeEnvValue(process.env.VITE_APP_URL) || `${proto}://${host}`;
-        const signatureLink = `${origin}/sign-quote/${signatureToken}`;
-
-        htmlToSend += `
-          <div style="margin: 24px 0; padding: 16px; background-color: #f3f4f6; border-radius: 8px; text-align: center;">
-            <p style="margin: 0 0 12px 0; font-weight: 600; color: #374151;">Pour signer votre devis en ligne :</p>
-            <a href="${signatureLink}" style="display: inline-block; padding: 12px 24px; background-color: #8b5cf6; color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">✍️ Signer le devis</a>
-          </div>
-        `;
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Impossible de générer le lien de signature.";
-        res.status(500).json({ message, detail: message });
-        return;
-      }
-    }
 
     // --- Resend ---
     if (resendApiKey) {
@@ -988,7 +898,7 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
           to: toAddress,
           ...(replyToAddr ? { replyTo: replyToAddr } : {}),
           subject: "Votre devis",
-          html: htmlToSend,
+          html: (htmlContent && String(htmlContent).trim()) || "<p>Veuillez trouver ci-joint votre devis.</p>",
           attachments: [{ filename: attachmentFilename, content: buffer }],
         });
 
@@ -1037,7 +947,7 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
       return;
     }
 
-    // Envoyer au vrai email du contact
+    // Toujours envoyer au destinataire du prospect (pas de redirection RESEND_TEST_EMAIL) pour que l'UI et l'envoi correspondent
     const toAddress = to.trim();
     const subjectText = subject && String(subject).trim() ? String(subject).trim() : "Relance - Votre devis";
     const html = (htmlContent && String(htmlContent).trim()) ? String(htmlContent).trim() : "<p>Bonjour, je souhaite faire un suivi concernant notre échange précédent.</p>";
@@ -1097,415 +1007,13 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
     });
   });
 
-  // POST /api/generate-quote-signature-link - Générer un lien de signature pour un devis
-  app.post("/api/generate-quote-signature-link", async (req: Request, res: Response) => {
-    const { quoteId, expirationDays } = req.body as {
-      quoteId?: string;
-      expirationDays?: number;
-    };
-
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
-
-    if (!quoteId || typeof quoteId !== "string") {
-      res.status(400).json({ message: "quoteId (string) requis." });
-      return;
-    }
-
-    if (!token) {
-      res.status(401).json({ message: "Non authentifié." });
-      return;
-    }
-
-    try {
-      // Utiliser le client avec le token utilisateur pour vérifier l'ownership
-      const supabaseUser = getSupabaseClientWithUserToken(token);
-
-      // Vérifier que le devis appartient à l'utilisateur authentifié
-      const { data: { user: authUser } } = await supabaseUser.auth.getUser();
-      if (!authUser?.id) {
-        res.status(401).json({ message: "Authentification invalide." });
-        return;
-      }
-
-      const { data: quote } = await supabaseUser
-        .from("quotes")
-        .select("id, user_id, client_email")
-        .eq("id", quoteId)
-        .single();
-
-      if (!quote || quote.user_id !== authUser.id) {
-        res.status(403).json({ message: "Accès refusé. Ce devis ne vous appartient pas." });
-        return;
-      }
-
-      // Générer un token unique
-      const { randomBytes } = await import("crypto");
-      const signatureToken = randomBytes(32).toString('hex');
-
-      const expirationDaysValue = expirationDays ?? 30;
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + expirationDaysValue);
-
-      // Insérer dans quote_signature_links avec le client utilisateur (RLS policy autorise)
-      const { error: insertError } = await supabaseUser
-        .from("quote_signature_links")
-        .insert({
-          quote_id: quoteId,
-          token: signatureToken,
-          user_id: authUser.id,
-          prospect_email: quote.client_email || null,
-          expires_at: expiresAt.toISOString(),
-        });
-
-      if (insertError) {
-        res.status(500).json({ message: "Erreur lors de la création du lien de signature." });
-        return;
-      }
-
-      // Retourner le lien public pour le client
-      const proto = req.get("x-forwarded-proto") || req.protocol || "https";
-      const host = req.get("x-forwarded-host") || req.get("host") || "app.titanbtp.com";
-      const origin = normalizeEnvValue(process.env.VITE_APP_URL) || `${proto}://${host}`;
-      const signatureLink = `${origin}/sign-quote/${signatureToken}`;
-
-      res.status(200).json({
-        ok: true,
-        signatureToken,
-        signatureLink,
-        expiresAt: expiresAt.toISOString(),
-      });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Erreur lors de la génération du lien de signature.";
-      res.status(500).json({ message });
-    }
-  });
-
-
-
-  // GET /api/quote-signature-info/:token - Récupérer les infos du lien de signature (email prospect, etc.)
-  app.get("/api/quote-signature-info/:token", async (req: Request, res: Response) => {
-    const { token } = req.params;
-
-    if (!token || typeof token !== "string") {
-      res.status(400).json({ message: "Token requis." });
-      return;
-    }
-
-    try {
-      const supabase = getSupabaseClient();
-
-      const { data: signatureLink, error } = await supabase
-        .from("quote_signature_links")
-        .select("id, quote_id, prospect_email, expires_at")
-        .eq("token", token)
-        .maybeSingle();
-
-      if (error) {
-        console.error("[quote-signature-info] Erreur DB:", error);
-        res.status(500).json({ message: "Erreur serveur." });
-        return;
-      }
-
-      if (!signatureLink) {
-        res.status(404).json({ message: "Lien de signature invalide." });
-        return;
-      }
-
-      const expiresAt = new Date(signatureLink.expires_at);
-      if (expiresAt < new Date()) {
-        res.status(410).json({ message: "Ce lien de signature a expiré." });
-        return;
-      }
-
-      res.status(200).json({ 
-        prospectEmail: signatureLink.prospect_email || null,
-        quoteId: signatureLink.quote_id 
-      });
-    } catch (err: unknown) {
-      console.error("[quote-signature-info] Erreur:", err);
-      const message = err instanceof Error ? err.message : "Erreur lors de la récupération des infos.";
-      res.status(500).json({ message });
-    }
-  });
-
-  // POST /api/submit-quote-signature - Soumettre une signature pour un devis
-  app.post("/api/submit-quote-signature", async (req: Request, res: Response) => {
-    const { signatureToken, firstName, lastName, email, signatureDataBase64 } = req.body as {
-      signatureToken?: string;
-      firstName?: string;
-      lastName?: string;
-      email?: string;
-      signatureDataBase64?: string;
-    };
-
-    if (!signatureToken || typeof signatureToken !== "string") {
-      res.status(400).json({ message: "signatureToken requis." });
-      return;
-    }
-
-    if (!firstName || typeof firstName !== "string" || !firstName.trim()) {
-      res.status(400).json({ message: "firstName requis." });
-      return;
-    }
-
-    if (!lastName || typeof lastName !== "string" || !lastName.trim()) {
-      res.status(400).json({ message: "lastName requis." });
-      return;
-    }
-
-    try {
-      const supabase = getSupabaseClient();
-
-      // Récupérer le lien de signature et vérifier qu'il n'est pas expiré
-      const { data: signatureLink, error: linkError } = await supabase
-        .from("quote_signature_links")
-        .select("id, quote_id, expires_at, user_id")
-        .eq("token", signatureToken)
-        .maybeSingle();
-
-      // Logs de débogage
-      console.log("[submit-quote-signature] Token recherché:", signatureToken);
-      console.log("[submit-quote-signature] Lien trouvé:", signatureLink ? "OUI" : "NON");
-
-      // Si le lien existe, vérifier l'expiration
-      if (signatureLink) {
-        const expiresAt = new Date(signatureLink.expires_at);
-        if (expiresAt < new Date()) {
-          res.status(410).json({ message: "Ce lien de signature a expiré." });
-          return;
-        }
-      }
-
-      // Extraire le quote_id (soit du lien, soit on accepte sans vérification stricte)
-      const quoteId = signatureLink?.quote_id;
-      if (!quoteId) {
-        console.warn("[submit-quote-signature] ⚠️ Token non trouvé dans quote_signature_links");
-        // On pourrait accepter sans quote_id si on veut être permissif
-        // Pour l'instant on bloque car on a besoin du quote_id
-        res.status(404).json({ message: "Lien de signature invalide ou expiré." });
-        return;
-      }
-
-      // Vérifier si une signature existe déjà pour ce devis
-      const { data: existingSignature } = await supabase
-        .from("quote_signatures")
-        .select("id")
-        .eq("quote_id", quoteId)
-        .maybeSingle();
-
-      if (existingSignature) {
-        res.status(409).json({ message: "Ce devis a déjà été signé." });
-        return;
-      }
-
-      // Insérer la signature
-      const ipAddress = (req.ip ?? req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim()) || "unknown";
-      const userAgent = (req.headers["user-agent"] as string) || "unknown";
-
-      const { error: insertError } = await supabase
-        .from("quote_signatures")
-        .insert({
-          quote_id: quoteId,
-          signature_token: signatureToken,
-          client_firstname: firstName.trim(),
-          client_lastname: lastName.trim(),
-          client_email: email && typeof email === "string" ? email.trim() : null,
-          signature_data: signatureDataBase64 ?? null,
-          ip_address: ipAddress,
-          user_agent: userAgent,
-        });
-
-      if (insertError) {
-        console.error("[submit-quote-signature] Erreur insertion:", insertError);
-        res.status(500).json({ message: "Erreur lors de l'enregistrement de la signature." });
-        return;
-      }
-
-      console.log("[submit-quote-signature] ✅ Signature enregistrée avec succès");
-
-      // Récupérer le devis complet avec toutes les données nécessaires
-      const { data: quote, error: quoteError } = await supabase
-        .from("quotes")
-        .select("*")
-        .eq("id", quoteId)
-        .single();
-
-      // Récupérer le profil utilisateur pour les infos de l'entreprise
-      const { data: userProfile } = await supabase
-        .from("user_profiles")
-        .select("company_name, company_email, company_phone, company_address, company_siret")
-        .eq("user_id", signatureLink.user_id)
-        .single();
-
-      let updateError: any = null;
-
-      if (!quoteError && quote && quote.quote_pdf_base64) {
-        try {
-          console.log("[submit-quote-signature] PDF base64 length:", quote.quote_pdf_base64?.length ?? "NULL OR UNDEFINED");
-          
-          // Ajouter la signature au PDF existant
-          const pdfWithSignature = await addSignatureToPdf(
-            quote.quote_pdf_base64,
-            signatureDataBase64 ?? "",
-            firstName.trim(),
-            lastName.trim(),
-            new Date()
-          );
-
-          // Convertir le PDF signé en base64
-          const signedPdfBase64 = pdfWithSignature.toString("base64");
-
-          console.log("[submit-quote-signature] ✅ Signature ajoutée au PDF");
-
-          // Mettre à jour le devis avec le PDF signé
-          const { error } = await supabase
-            .from("quotes")
-            .update({
-              status: "signé",
-              accepted_at: new Date().toISOString(),
-              quote_pdf_base64: signedPdfBase64,
-            })
-            .eq("id", quoteId);
-
-          updateError = error;
-        } catch (pdfErr) {
-          console.error("[submit-quote-signature] Erreur ajout signature PDF:", pdfErr);
-          console.error("[submit-quote-signature] FULL ERROR:", JSON.stringify(pdfErr, Object.getOwnPropertyNames(pdfErr)));
-          // Continuer quand même : mettre à jour le statut sans le PDF signé
-          const { error } = await supabase
-            .from("quotes")
-            .update({
-              status: "signé",
-              accepted_at: new Date().toISOString(),
-            })
-            .eq("id", quoteId);
-
-          updateError = error;
-        }
-      } else {
-        // Si pas de PDF existant, générer le PDF puis ajouter la signature
-        console.log("[submit-quote-signature] Génération du PDF depuis les données du devis...");
-        try {
-          // Calculer le numéro de devis
-          const quoteYear = new Date(quote.created_at).getFullYear();
-          const { data: yearQuotes } = await supabase
-            .from("quotes")
-            .select("id, created_at")
-            .eq("user_id", signatureLink.user_id)
-            .gte("created_at", `${quoteYear}-01-01`)
-            .lte("created_at", `${quoteYear}-12-31`)
-            .order("created_at", { ascending: true });
-          
-          const quoteIndex = yearQuotes?.findIndex((q) => q.id === quoteId) ?? -1;
-          const quoteNumber = quoteIndex >= 0 ? `${quoteYear}-${String(quoteIndex + 1).padStart(3, "0")}` : "N/A";
-
-          // Préparer les données pour le PDF
-          const pdfData = {
-            quoteNumber,
-            projectDescription: quote.project_description,
-            validityDays: quote.validity_days?.toString(),
-            clientName: quote.client_name,
-            clientEmail: quote.client_email,
-            clientPhone: quote.client_phone,
-            clientAddress: quote.client_address,
-            items: quote.items || [],
-            subtotalHt: quote.total_ht,
-            tva: (quote.total_ttc || 0) - (quote.total_ht || 0),
-            totalTtc: quote.total_ttc,
-            companyName: userProfile?.company_name || "TitanBtp",
-            companyEmail: userProfile?.company_email,
-            companyPhone: userProfile?.company_phone,
-            companyAddress: userProfile?.company_address,
-            companySiret: userProfile?.company_siret,
-          };
-
-          // Générer le PDF sans signature
-          const generatedPdfBuffer = await generateQuotePdfWithSignature(pdfData);
-          const pdfBase64 = generatedPdfBuffer.toString("base64");
-
-          // Ajouter la signature au PDF
-          const pdfWithSignature = await addSignatureToPdf(
-            pdfBase64,
-            signatureDataBase64 ?? "",
-            firstName.trim(),
-            lastName.trim(),
-            new Date()
-          );
-
-          const signedPdfBase64 = pdfWithSignature.toString("base64");
-
-          console.log("[submit-quote-signature] ✅ PDF généré et signature ajoutée");
-
-          // Mettre à jour le devis avec le PDF signé
-          const { error } = await supabase
-            .from("quotes")
-            .update({
-              status: "signé",
-              accepted_at: new Date().toISOString(),
-              quote_pdf_base64: signedPdfBase64,
-            })
-            .eq("id", quoteId);
-
-          updateError = error;
-        } catch (pdfGenErr) {
-          console.error("[submit-quote-signature] Erreur génération PDF:", pdfGenErr);
-          console.error("[submit-quote-signature] FULL ERROR:", JSON.stringify(pdfGenErr, Object.getOwnPropertyNames(pdfGenErr)));
-          // Continuer quand même : mettre à jour le statut sans le PDF
-          const { error } = await supabase
-            .from("quotes")
-            .update({
-              status: "signé",
-              accepted_at: new Date().toISOString(),
-            })
-            .eq("id", quoteId);
-
-          updateError = error;
-        }
-      }
-
-      if (updateError) {
-        console.error("[QUOTE SIGNATURE] Erreur lors de la mise à jour du devis:", updateError);
-      } else {
-        console.log("[submit-quote-signature] ✅ Devis mis à jour (status: signé)");
-      }
-
-      // Mettre à jour le client CRM lié en "won"
-      const { error: crmError } = await supabase
-        .from("clients")
-        .update({
-          stage: "won",
-          last_action_at: new Date().toISOString(),
-          last_action_type: "Devis signé électroniquement",
-        })
-        .eq("linked_quote_id", quoteId);
-
-      if (crmError) {
-        console.error("[QUOTE SIGNATURE] Erreur lors de la mise à jour du client CRM:", crmError);
-      } else {
-        console.log("[submit-quote-signature] ✅ Client CRM mis à jour (stage: won)");
-      }
-
-      res.status(200).json({
-        ok: true,
-        message: "Signature enregistrée avec succès.",
-        quoteId: quoteId,
-      });
-    } catch (err: unknown) {
-      console.error("[submit-quote-signature] ❌ Erreur:", err);
-      const message = err instanceof Error ? err.message : "Erreur lors de l'enregistrement de la signature.";
-      res.status(500).json({ message });
-    }
-  });
-
   // ===== Routes API Factures =====
   const SUPABASE_URL =
     process.env.SUPABASE_URL ||
     process.env.VITE_SUPABASE_URL ||
     "https://hvnjlxxcxfxvuwlmnwtw.supabase.co";
   // Server must use service_role key so RLS does not block (auth.uid() is null server-side).
-  const SUPABASE_SERVICE_KEY = normalizeEnvValue(process.env.SUPABASE_SERVICE_KEY);
-  const SUPABASE_ANON_KEY = normalizeEnvValue(process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY);
+  const SUPABASE_SERVICE_KEY = (process.env.SUPABASE_SERVICE_KEY || "").trim();
 
   function getSupabaseClient() {
     if (!SUPABASE_SERVICE_KEY) {
@@ -1515,20 +1023,6 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
     }
     return createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
   }
-
-  function getSupabaseClientWithUserToken(token: string) {
-    if (!SUPABASE_ANON_KEY) {
-      throw new Error("SUPABASE_ANON_KEY is required for user authentication");
-    }
-    return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
-    });
-  }
-
 
   // POST /api/invoice-reminders - Send overdue invoice reminder email to the artisan
   app.post("/api/invoice-reminders", async (req: Request, res: Response) => {
