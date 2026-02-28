@@ -28,19 +28,43 @@ export default function SignQuotePage() {
   const signatureToken = params?.token as string || "";
 
   const [quote, setQuote] = useState<Quote | null>(null);
+  const [prospectEmail, setProspectEmail] = useState<string>("");
+  const [quoteId, setQuoteId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
 
   useEffect(() => {
-    // Cette page sera accessible sans auth, donc on ne peut pas faire de requête authentifiée
-    // On affichera juste le formulaire et un aperçu du devis basique
     if (!signatureToken) {
       setError("Token de signature invalide.");
       setLoading(false);
       return;
     }
-    setLoading(false);
+
+    // Récupérer les informations du lien de signature (email prospect, etc.)
+    const fetchSignatureInfo = async () => {
+      try {
+        const response = await fetch(`/api/quote-signature-info/${signatureToken}`);
+        
+        if (!response.ok) {
+          const data = await response.json();
+          setError(data.message || "Lien de signature invalide.");
+          setLoading(false);
+          return;
+        }
+
+        const data = await response.json();
+        setProspectEmail(data.prospectEmail || "");
+        setQuoteId(data.quoteId || "");
+        setLoading(false);
+      } catch (err) {
+        console.error("Erreur récupération infos signature:", err);
+        setError("Impossible de charger les informations du devis.");
+        setLoading(false);
+      }
+    };
+
+    fetchSignatureInfo();
   }, [signatureToken]);
 
   if (!match) {
@@ -133,8 +157,9 @@ export default function SignQuotePage() {
           <div className="lg:col-span-2 bg-white rounded-xl shadow-lg p-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-6">Informations et signature</h2>
             <QuoteSignatureForm
-              quoteId=""
+              quoteId={quoteId}
               signatureToken={signatureToken}
+              prospectEmail={prospectEmail}
               onSignatureSubmitted={() => setCompleted(true)}
             />
           </div>

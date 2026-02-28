@@ -427,10 +427,24 @@ export async function generateSignatureLink(
       }
     }
 
+    // Récupérer l'email du client depuis le devis
+    let prospectEmail: string | null = null;
+    try {
+      const { data: quote } = await clientToUse
+        .from("quotes")
+        .select("client_email")
+        .eq("id", quoteId)
+        .single();
+      prospectEmail = quote?.client_email || null;
+    } catch (err) {
+      console.warn("Cannot fetch client_email for signature link:", err);
+    }
+
     const { error } = await clientToUse.from("quote_signature_links").insert({
       quote_id: quoteId,
       token,
       user_id: userId,
+      prospect_email: prospectEmail,
       expires_at: expiresAt,
     });
 

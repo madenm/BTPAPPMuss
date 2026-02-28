@@ -936,6 +936,7 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
             quote_id: quoteId.trim(),
             token: signatureToken,
             user_id: authUser.id,
+            prospect_email: toAddress, // Utiliser l'email du destinataire
             expires_at: expiresAt.toISOString(),
           });
 
@@ -1128,7 +1129,7 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
 
       const { data: quote } = await supabaseUser
         .from("quotes")
-        .select("id, user_id")
+        .select("id, user_id, client_email")
         .eq("id", quoteId)
         .single();
 
@@ -1152,6 +1153,7 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
           quote_id: quoteId,
           token: signatureToken,
           user_id: authUser.id,
+          prospect_email: quote.client_email || null,
           expires_at: expiresAt.toISOString(),
         });
 
@@ -1179,6 +1181,45 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
   });
 
 
+
+  // GET /api/quote-signature-info/:token - Récupérer les infos du lien de signature (email prospect, etc.)
+  app.get("/api/quote-signature-info/:token", async (req: Request, res: Response) => {
+    const { token } = req.params;
+
+    if (!token || typeof token !== "string") {
+      res.status(400).json({ message: "Token requis." });
+      return;
+    }
+
+    try {
+      const supabase = getSupabaseClient();
+
+      const { data: signatureLink, error } = await supabase
+        .from("quote_signature_links")
+        .select("id, quote_id, prospect_email, expires_at")
+        .eq("token", token)
+        .single();
+
+      if (error || !signatureLink) {
+        res.status(404).json({ message: "Lien de signature invalide." });
+        return;
+      }
+
+      const expiresAt = new Date(signatureLink.expires_at);
+      if (expiresAt < new Date()) {
+        res.status(410).json({ message: "Ce lien de signature a expiré." });
+        return;
+      }
+
+      res.status(200).json({ 
+        prospectEmail: signatureLink.prospect_email || null,
+        quoteId: signatureLink.quote_id 
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur lors de la récupération des infos.";
+      res.status(500).json({ message });
+    }
+  });
 
   // POST /api/submit-quote-signature - Soumettre une signature pour un devis
   app.post("/api/submit-quote-signature", async (req: Request, res: Response) => {

@@ -6,23 +6,32 @@ import { motion } from "framer-motion";
 interface QuoteSignatureFormProps {
   quoteId: string;
   signatureToken: string;
+  prospectEmail?: string;
   onSignatureSubmitted?: () => void;
 }
 
 export const QuoteSignatureForm: React.FC<QuoteSignatureFormProps> = ({
   quoteId,
   signatureToken,
+  prospectEmail,
   onSignatureSubmitted,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(prospectEmail || "");
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // Mettre à jour l'email si prospectEmail change
+  React.useEffect(() => {
+    if (prospectEmail) {
+      setEmail(prospectEmail);
+    }
+  }, [prospectEmail]);
 
   // Initialiser le canvas
   React.useEffect(() => {
@@ -214,19 +223,34 @@ export const QuoteSignatureForm: React.FC<QuoteSignatureFormProps> = ({
       </div>
 
       {/* Email */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Email (optionnel)
-        </label>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="jean.dupont@email.com"
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-          disabled={isSubmitting}
-        />
-      </div>
+      {prospectEmail && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Email
+          </label>
+          <input
+            type="email"
+            value={email}
+            readOnly
+            className="w-full px-4 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
+          />
+        </div>
+      )}
+      {!prospectEmail && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Email (optionnel)
+          </label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="jean.dupont@email.com"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+            disabled={isSubmitting}
+          />
+        </div>
+      )}
 
       {/* Zone de signature */}
       <div>
