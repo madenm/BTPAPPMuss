@@ -892,7 +892,7 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
 
     if (quoteId && typeof quoteId === "string" && quoteId.trim()) {
       try {
-        // Utiliser le service_role key pour gérer la génération de lien
+        // Authentification requise pour générer un lien de signature
         const authHeader = req.headers.authorization;
         const userToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
         
@@ -901,16 +901,16 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
           return;
         }
 
-        const supabase = getSupabaseClient();
+        const supabaseUser = getSupabaseClientWithUserToken(userToken);
         
         // Vérifier que le devis appartient à l'utilisateur authentifié
-        const { data: { user: authUser } } = await supabase.auth.getUser(userToken);
+        const { data: { user: authUser } } = await supabaseUser.auth.getUser();
         if (!authUser?.id) {
           res.status(401).json({ message: "Authentification invalide." });
           return;
         }
 
-        const { data: quote } = await supabase
+        const { data: quote } = await supabaseUser
           .from("quotes")
           .select("id, user_id")
           .eq("id", quoteId.trim())
@@ -929,8 +929,8 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + expirationDaysValue);
 
-        // Insérer dans quote_signature_links
-        const { error: insertError } = await supabase
+        // Insérer dans quote_signature_links avec le client utilisateur
+        const { error: insertError } = await supabaseUser
           .from("quote_signature_links")
           .insert({
             quote_id: quoteId.trim(),
@@ -1116,16 +1116,17 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
     }
 
     try {
-      const supabase = getSupabaseClient();
+      // Utiliser le client avec le token utilisateur pour vérifier l'ownership
+      const supabaseUser = getSupabaseClientWithUserToken(token);
 
       // Vérifier que le devis appartient à l'utilisateur authentifié
-      const { data: { user: authUser } } = await supabase.auth.getUser(token);
+      const { data: { user: authUser } } = await supabaseUser.auth.getUser();
       if (!authUser?.id) {
         res.status(401).json({ message: "Authentification invalide." });
         return;
       }
 
-      const { data: quote } = await supabase
+      const { data: quote } = await supabaseUser
         .from("quotes")
         .select("id, user_id")
         .eq("id", quoteId)
@@ -1144,8 +1145,8 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + expirationDaysValue);
 
-      // Insérer dans quote_signature_links
-      const { error: insertError } = await supabase
+      // Insérer dans quote_signature_links avec le client utilisateur (RLS policy autorise)
+      const { error: insertError } = await supabaseUser
         .from("quote_signature_links")
         .insert({
           quote_id: quoteId,
@@ -1315,6 +1316,18 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
     return createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
   }
 
+  function getSupabaseClientWithUserToken(token: string) {
+    if (!SUPABASE_ANON_KEY) {
+      throw new Error("SUPABASE_ANON_KEY is required for user authentication");
+    }
+    return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    });
+  }
 
 
   // POST /api/invoice-reminders - Send overdue invoice reminder email to the artisan
