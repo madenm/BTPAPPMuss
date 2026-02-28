@@ -709,7 +709,6 @@ export default function QuotesPage() {
     if (!user) return;
     try {
       const duplicated = await insertQuote(user.id, {
-        contact_id: quote.contact_id ?? undefined,
         chantier_id: quote.chantier_id ?? undefined,
         client_name: quote.client_name ?? '',
         client_email: quote.client_email ?? '',
