@@ -35,7 +35,7 @@ app.use((req: Request, res: Response, next) => {
 // CSP en dev pour autoriser unsafe-eval (dépendances) ; en prod géré par vercel.json
 if (process.env.VERCEL !== "1") {
   const csp =
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss: ws:; frame-ancestors 'self';";
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss: ws: http://127.0.0.1:5000 ws://127.0.0.1:5000 http://localhost:5000 ws://localhost:5000; frame-ancestors 'self';";
   app.use((_req: Request, res: Response, next: NextFunction) => {
     res.setHeader("Content-Security-Policy", csp);
     next();

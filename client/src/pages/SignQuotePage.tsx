@@ -26,59 +26,21 @@ interface Quote {
 export default function SignQuotePage() {
   const [match, params] = useRoute("/sign-quote/:token");
   const signatureToken = params?.token as string || "";
-  const queryParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
-  const fallbackQuoteId = queryParams?.get("qid") || "";
-  
+
   const [quote, setQuote] = useState<Quote | null>(null);
-    const [clientEmail, setClientEmail] = useState<string | null>(null); // Ensure clientEmail is initialized
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [fallbackMode, setFallbackMode] = useState(false);
   const [completed, setCompleted] = useState(false);
 
   useEffect(() => {
-    // Récupérer les informations du lien de signature depuis l'API
+    // Cette page sera accessible sans auth, donc on ne peut pas faire de requête authentifiée
+    // On affichera juste le formulaire et un aperçu du devis basique
     if (!signatureToken) {
       setError("Token de signature invalide.");
       setLoading(false);
       return;
     }
-
-    const fetchSignatureLink = async () => {
-      try {
-        const response = await fetch(`/api/signature-link-info/${signatureToken}`);
-        if (response.ok) {
-          const data = await response.json();
-          setClientEmail(data.prospect_email || null);
-          if (data.quote) {
-            setQuote(data.quote);
-          }
-        } else {
-          const errData = await response.json().catch(() => ({ message: "Lien invalide ou expiré." }));
-          if (fallbackQuoteId) {
-            setFallbackMode(true);
-            setClientEmail(null);
-            setError(null);
-          } else {
-            setError(errData.message || "Lien invalide ou expiré.");
-            setClientEmail(null);
-          }
-        }
-      } catch (err) {
-        if (fallbackQuoteId) {
-          setFallbackMode(true);
-          setClientEmail(null);
-          setError(null);
-        } else {
-          setError("Impossible de charger les informations du devis.");
-          setClientEmail(null);
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchSignatureLink();
+    setLoading(false);
   }, [signatureToken]);
 
   if (!match) {
@@ -151,7 +113,7 @@ export default function SignQuotePage() {
   }
 
   return (
-    <div className="relative z-10 min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 py-12 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 py-12 px-4">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -170,15 +132,9 @@ export default function SignQuotePage() {
           {/* Formulaire de signature */}
           <div className="lg:col-span-2 bg-white rounded-xl shadow-lg p-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-6">Informations et signature</h2>
-            {fallbackMode && (
-              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
-                Vérification du lien indisponible côté serveur. Vous pouvez quand même signer le devis.
-              </div>
-            )}
             <QuoteSignatureForm
-              quoteId={quote?.id || fallbackQuoteId}
+              quoteId=""
               signatureToken={signatureToken}
-              clientEmail={clientEmail}
               onSignatureSubmitted={() => setCompleted(true)}
             />
           </div>
@@ -188,24 +144,6 @@ export default function SignQuotePage() {
             <div className="bg-white rounded-xl shadow-lg p-6 sticky top-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Devis</h3>
               <div className="space-y-3 text-sm">
-                {quote?.client_name && (
-                  <div>
-                    <p className="text-gray-500">Client</p>
-                    <p className="text-gray-900 font-medium">{quote.client_name}</p>
-                  </div>
-                )}
-                {quote?.project_description && (
-                  <div>
-                    <p className="text-gray-500">Projet</p>
-                    <p className="text-gray-900 font-medium">{quote.project_description}</p>
-                  </div>
-                )}
-                {quote?.total_ttc != null && (
-                  <div>
-                    <p className="text-gray-500">Montant TTC</p>
-                    <p className="text-gray-900 font-semibold text-lg">{Number(quote.total_ttc).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</p>
-                  </div>
-                )}
                 <div>
                   <p className="text-gray-500">Type</p>
                   <p className="text-gray-900 font-medium">Signature électronique</p>

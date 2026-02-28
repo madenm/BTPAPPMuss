@@ -25,7 +25,7 @@ import { useUserSettings } from '@/context/UserSettingsContext';
 import { useToast } from '@/hooks/use-toast';
 import { UserAccountButton } from '@/components/UserAccountButton';
 import { VoiceInputButton } from '@/components/VoiceInputButton';
-import { insertQuote, updateQuote, deleteQuote, updateQuoteStatus, fetchQuoteById, fetchQuotesForUser, getQuoteDisplayNumber, generateSignatureLink, type QuoteItem, type QuoteSubItem, type SupabaseQuote } from '@/lib/supabaseQuotes';
+import { insertQuote, updateQuote, deleteQuote, updateQuoteStatus, fetchQuoteById, fetchQuotesForUser, getQuoteDisplayNumber, type QuoteItem, type QuoteSubItem, type SupabaseQuote } from '@/lib/supabaseQuotes';
 import { DEFAULT_THEME_COLOR, QUOTE_STATUS_LABELS, QUOTE_UNIT_NONE, QUOTE_UNIT_OPTIONS, inferUnitFromDescription, backfillUnitOnItems } from '@/lib/quoteConstants';
 import { downloadPdfBase64, downloadQuotePdf, fetchLogoDataUrl } from '@/lib/quotePdf';
 import { findProspectByEmail, findProspectByName, getProspectById, fetchProspectsForUser as fetchCRMClients, insertProspect, updateProspect } from '@/lib/supabaseClients';
@@ -958,9 +958,21 @@ export default function QuotesPage() {
 
       let signatureLink = '';
       try {
-        signatureLink = (await generateSignatureLink(quoteToSend.id, user.id, 30)) || '';
+        const signatureRes = await fetch("/api/generate-quote-signature-link", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session?.access_token}`
+          },
+          body: JSON.stringify({ quoteId: quoteToSend.id, expirationDays: 30 }),
+        });
+
+        if (signatureRes.ok) {
+          const signatureData = await signatureRes.json();
+          signatureLink = signatureData?.signatureLink || '';
+        }
       } catch (signatureErr) {
-        console.error('Erreur génération lien signature (fallback client):', signatureErr);
+        console.error('Erreur génération lien signature:', signatureErr);
       }
 
       const signatureLinkHtml = signatureLink

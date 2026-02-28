@@ -2,25 +2,22 @@
 
 import React, { useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { supabase } from "@/lib/supabaseClient";
 
 interface QuoteSignatureFormProps {
   quoteId: string;
   signatureToken: string;
-  clientEmail?: string | null;
   onSignatureSubmitted?: () => void;
 }
 
 export const QuoteSignatureForm: React.FC<QuoteSignatureFormProps> = ({
   quoteId,
   signatureToken,
-  clientEmail,
   onSignatureSubmitted,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const email = clientEmail || "";
+  const [email, setEmail] = useState("");
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -134,28 +131,14 @@ export const QuoteSignatureForm: React.FC<QuoteSignatureFormProps> = ({
       });
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-
-        const { error: fallbackError } = await supabase
-          .from("quote_signatures")
-          .insert({
-            quote_id: quoteId || null,
-            signature_token: signatureToken,
-            client_firstname: firstName.trim(),
-            client_lastname: lastName.trim(),
-            client_email: email.trim() || null,
-            signature_data: signatureDataBase64,
-            user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
-          });
-
-        if (fallbackError) {
-          throw new Error(data.message || fallbackError.message || "Erreur lors de l'envoi de la signature.");
-        }
+        const data = await response.json();
+        throw new Error(data.message || "Erreur lors de l'envoi de la signature.");
       }
 
       setSuccess(true);
       setFirstName("");
       setLastName("");
+      setEmail("");
       clearSignature();
 
       if (onSignatureSubmitted) {
@@ -230,6 +213,20 @@ export const QuoteSignatureForm: React.FC<QuoteSignatureFormProps> = ({
         </div>
       </div>
 
+      {/* Email */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Email (optionnel)
+        </label>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="jean.dupont@email.com"
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+          disabled={isSubmitting}
+        />
+      </div>
 
       {/* Zone de signature */}
       <div>

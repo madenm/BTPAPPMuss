@@ -24,7 +24,7 @@ import {
   updateProspect,
   deleteProspect,
 } from "@/lib/supabaseClients"
-import { fetchQuotesForUser, updateQuoteStatus, type SupabaseQuote, hasQuoteBeenSigned, isQuoteValidityExpired, generateSignatureLink } from "@/lib/supabaseQuotes"
+import { fetchQuotesForUser, updateQuoteStatus, type SupabaseQuote, hasQuoteBeenSigned, isQuoteValidityExpired } from "@/lib/supabaseQuotes"
 import { getQuotePdfBase64, getSignatureRectangleCoordinates, fetchLogoDataUrl, buildQuoteEmailHtml, buildContactBlockHtml, type QuotePdfParams } from "@/lib/quotePdf"
 import { toast } from "@/hooks/use-toast"
 
@@ -668,63 +668,26 @@ export function CRMPipeline() {
 
       // Générer un lien de signature si le prospect a un devis lié
       let signatureLink = ""
-      console.log("🔗 Génération lien signature - linkedQuoteId:", linkedQuoteId)
       
       if (linkedQuoteId) {
         try {
-          console.log("📤 Génération lien signature côté serveur...")
           const signatureRes = await fetch("/api/generate-quote-signature-link", {
             method: "POST",
             headers: getApiPostHeaders(session?.access_token),
             body: JSON.stringify({ quoteId: linkedQuoteId, expirationDays: 30 }),
           })
 
-          const signatureText = await signatureRes.text()
-          const signatureData = signatureText
-            ? (() => {
-                try {
-                  return JSON.parse(signatureText)
-                } catch {
-                  return {}
-                }
-              })()
-            : {}
-
-          const link = typeof signatureData?.signatureLink === "string" ? signatureData.signatureLink : ""
-
-          if (signatureRes.ok && link) {
-            signatureLink = link
-            console.log("✅ Lien généré:", signatureLink)
+          if (!signatureRes.ok) {
+            console.error("Échec génération lien signature:", await signatureRes.text())
           } else {
-            console.error("❌ Échec génération lien signature:", signatureData?.message || "Réponse invalide")
-
-            if (userId) {
-              console.log("🔁 Tentative fallback génération lien signature côté client...")
-              const fallbackLink = await generateSignatureLink(linkedQuoteId, userId, 30)
-              if (fallbackLink) {
-                signatureLink = fallbackLink
-                console.log("✅ Lien généré (fallback client):", signatureLink)
-              }
+            const signatureData = await signatureRes.json()
+            if (signatureData?.signatureLink) {
+              signatureLink = signatureData.signatureLink
             }
           }
         } catch (err) {
-          console.error("❌ Erreur génération lien signature:", err)
-
-          if (userId) {
-            try {
-              console.log("🔁 Tentative fallback génération lien signature côté client...")
-              const fallbackLink = await generateSignatureLink(linkedQuoteId, userId, 30)
-              if (fallbackLink) {
-                signatureLink = fallbackLink
-                console.log("✅ Lien généré (fallback client):", signatureLink)
-              }
-            } catch (fallbackErr) {
-              console.error("❌ Erreur fallback génération lien signature:", fallbackErr)
-            }
-          }
+          console.error("Erreur génération lien signature:", err)
         }
-      } else {
-        console.warn("⚠️ Pas de devis lié trouvé - aucun lien de signature généré")
       }
 
       if (linkedQuoteId && !signatureLink) {
