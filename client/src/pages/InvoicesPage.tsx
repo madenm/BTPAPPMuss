@@ -27,6 +27,8 @@ import {
   Clock,
   XCircle,
   Euro,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import {
   fetchInvoicesForUser,
@@ -61,6 +63,8 @@ function formatDate(dateStr: string): string {
   return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+const PAGE_SIZE = 10;
+
 export default function InvoicesPage() {
   const { user } = useAuth();
   const effectiveUserId = useTeamEffectiveUserId();
@@ -78,6 +82,7 @@ export default function InvoicesPage() {
   const [isInvoiceDetailOpen, setIsInvoiceDetailOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<InvoiceWithPayments | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceWithPayments | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Générer les années disponibles (année courante et 2 ans avant)
   const availableYears = useMemo(() => {
@@ -124,6 +129,16 @@ export default function InvoicesPage() {
         inv.client_name.toLowerCase().includes(query)
     );
   }, [invoices, searchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredInvoices.length / PAGE_SIZE));
+  const paginatedInvoices = useMemo(
+    () => filteredInvoices.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filteredInvoices, currentPage]
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterClientId, filterChantierId, filterStatus, filterYear, filteredInvoices.length]);
 
   const handleCreateInvoice = () => {
     setEditingInvoice(null);
@@ -265,7 +280,7 @@ export default function InvoicesPage() {
               <>
                 {/* Vue cartes - mobile uniquement */}
                 <div className="max-md:block md:hidden space-y-3">
-                  {filteredInvoices.map((invoice) => {
+                  {paginatedInvoices.map((invoice) => {
                     const paidAmount = invoice.paidAmount || 0;
                     const totalTtc = invoice.total_ttc;
                     const remainingAmount = invoice.remainingAmount || totalTtc;
@@ -358,7 +373,7 @@ export default function InvoicesPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredInvoices.map((invoice, index) => {
+                      {paginatedInvoices.map((invoice, index) => {
                         const paidAmount = invoice.paidAmount || 0;
                         const totalTtc = invoice.total_ttc;
                         const remainingAmount = invoice.remainingAmount || totalTtc;
@@ -454,6 +469,40 @@ export default function InvoicesPage() {
                     </TableBody>
                   </Table>
                 </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-white/10">
+                    <p className="text-sm text-white/70">
+                      {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredInvoices.length)} sur {filteredInvoices.length} factures
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={currentPage <= 1}
+                        className="border-white/20 text-white hover:bg-white/10"
+                      >
+                        <ChevronLeft className="h-4 w-4 mr-1" />
+                        Précédent
+                      </Button>
+                      <span className="text-sm text-white/70 px-2">
+                        Page {currentPage} sur {totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={currentPage >= totalPages}
+                        className="border-white/20 text-white hover:bg-white/10"
+                      >
+                        Suivant
+                        <ChevronRight className="h-4 w-4 ml-1" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </CardContent>

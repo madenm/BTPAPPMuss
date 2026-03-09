@@ -80,6 +80,7 @@ export function getQuoteDisplayNumber(quotes: SupabaseQuote[], quoteId: string):
 export async function fetchQuotesForUser(
   userId: string,
   status?: string,
+  limit?: number,
 ): Promise<SupabaseQuote[]> {
   let query = supabase
     .from("quotes")
@@ -89,6 +90,9 @@ export async function fetchQuotesForUser(
 
   if (status) {
     query = query.eq("status", status);
+  }
+  if (limit != null && limit > 0) {
+    query = query.limit(limit);
   }
 
   const { data, error } = await query;

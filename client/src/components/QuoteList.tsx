@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,7 @@ import type { SupabaseQuote } from "@/lib/supabaseQuotes";
 import {
   FileText, Plus, Loader2, Download, Pencil, ExternalLink, Search,
   MoreVertical, Copy, Building, Trash2, RefreshCw, Clock, Mail,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 
 export interface QuoteListChantier {
@@ -73,6 +74,8 @@ function isExpired(quote: SupabaseQuote): boolean {
   return getExpirationDate(quote) < new Date();
 }
 
+const PAGE_SIZE = 10;
+
 const STATUS_TRANSITIONS: Record<string, QuoteStatus[]> = {
   brouillon: ["envoyé"],
   envoyé: ["accepté", "refusé"],
@@ -106,6 +109,17 @@ export function QuoteList({
 }: QuoteListProps) {
   const chantierMap = new Map(chantiers.map((c) => [c.id, c.nom]));
   const [deleteTarget, setDeleteTarget] = useState<SupabaseQuote | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const totalPages = Math.max(1, Math.ceil(filteredQuotes.length / PAGE_SIZE));
+  const paginatedQuotes = useMemo(
+    () => filteredQuotes.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filteredQuotes, currentPage]
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, searchQuery, projectFilter, filteredQuotes.length]);
 
   return (
     <>
@@ -203,7 +217,7 @@ export function QuoteList({
                 <>
                   {/* Vue Mobile Simple - Liste */}
                   <div className="md:hidden space-y-2">
-                    {filteredQuotes.map((q) => {
+                    {paginatedQuotes.map((q) => {
                       const expDate = getExpirationDate(q);
                       const expired = isExpired(q);
                       const transitions = STATUS_TRANSITIONS[q.status] ?? [];
@@ -351,7 +365,7 @@ export function QuoteList({
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredQuotes.map((q) => {
+                        {paginatedQuotes.map((q) => {
                           const expDate = getExpirationDate(q);
                           const expired = isExpired(q);
                           const transitions = STATUS_TRANSITIONS[q.status] ?? [];
@@ -488,6 +502,40 @@ export function QuoteList({
                       </TableBody>
                     </Table>
                   </div>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredQuotes.length)} sur {filteredQuotes.length} devis
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-xl"
+                          onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                          disabled={currentPage <= 1}
+                        >
+                          <ChevronLeft className="h-4 w-4 mr-1" />
+                          Précédent
+                        </Button>
+                        <span className="text-sm text-gray-600 dark:text-gray-400 px-2">
+                          Page {currentPage} sur {totalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-xl"
+                          onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                          disabled={currentPage >= totalPages}
+                        >
+                          Suivant
+                          <ChevronRight className="h-4 w-4 ml-1" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </CardContent>

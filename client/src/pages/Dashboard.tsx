@@ -47,6 +47,7 @@ import { useTeamEffectiveUserId } from '@/context/TeamEffectiveUserIdContext'
 import { insertPayment, type InvoiceWithPayments } from '@/lib/supabaseInvoices'
 import { getApiPostHeaders } from '@/lib/apiHeaders'
 import { useToast } from '@/hooks/use-toast'
+import { Skeleton } from '@/components/ui/skeleton'
 import { fetchPlanningNotesForRange, type PlanningNote } from '@/lib/supabasePlanningNotes'
 import { toNoteDateKey } from '@/lib/planningUtils'
 
@@ -233,17 +234,6 @@ function OverviewTab() {
     return merged;
   }, [alerts, planningNotes, todayKey]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64 text-white">
-        <div className="text-center">
-          <div className="text-lg mb-2">Chargement des métriques...</div>
-          <div className="text-sm text-white/60">Récupération de vos données</div>
-        </div>
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <div className="flex items-center justify-center h-64 text-white">
@@ -263,8 +253,14 @@ function OverviewTab() {
           <h1 className="text-2xl sm:text-4xl font-light tracking-tight text-white mb-1 drop-shadow-lg sm:truncate">
             {getGreeting()}{userName ? `, ${userName}` : ""}
           </h1>
-          <p className="text-white/70 drop-shadow-md text-sm sm:text-base">
+          <p className="text-white/70 drop-shadow-md text-sm sm:text-base flex items-center gap-2">
             {new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+            {loading && (
+              <span className="inline-flex items-center gap-1.5 text-white/50 text-xs">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Mise à jour des données…
+              </span>
+            )}
           </p>
         </div>
         <div className="flex-shrink-0 w-full sm:w-auto">
@@ -273,7 +269,24 @@ function OverviewTab() {
       </div>
 
       {/* Alerts Section */}
-      {allAlerts.length > 0 && (
+      {loading ? (
+        <Card className="bg-black/20  border border-white/10 shadow-xl rounded-2xl overflow-hidden">
+          <CardHeader className="pb-2">
+            <Skeleton className="h-5 w-32 bg-white/10" />
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center gap-3 p-3 rounded-xl">
+                <Skeleton className="h-4 w-4 rounded-full bg-white/10 shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 max-w-[85%] bg-white/10" />
+                  <Skeleton className="h-3 max-w-[55%] bg-white/10" />
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : allAlerts.length > 0 ? (
         <Card className="bg-black/20  border border-white/10 shadow-xl rounded-2xl text-white overflow-hidden">
           <CardHeader className="pb-2">
             <CardTitle className="text-white font-light flex items-center gap-2 text-base">
@@ -312,47 +325,66 @@ function OverviewTab() {
             ))}
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
-        <KpiCard
-          title="CA du mois"
-          value={formatCurrency(totalRevenue)}
-          trend={revenueTrend}
-          icon={Euro}
-          onClick={() => setLocation("/dashboard/invoices")}
-        />
-        <KpiCard
-          title="Chantiers actifs"
-          value={activeChantiers.toString()}
-          subtitle={lateProjectsCount > 0 ? `${lateProjectsCount} en retard` : undefined}
-          subtitleColor={lateProjectsCount > 0 ? "text-red-400" : undefined}
-          icon={Building}
-          onClick={() => setLocation("/dashboard/projects")}
-        />
-        <KpiCard
-          title="Devis en attente"
-          value={pendingQuotes.toString()}
-          subtitle={expiringQuotesCount > 0 ? `${expiringQuotesCount} expire${expiringQuotesCount > 1 ? "nt" : ""} bientôt` : undefined}
-          subtitleColor="text-amber-400"
-          icon={FileText}
-          onClick={() => setLocation("/dashboard/quotes")}
-        />
-        <KpiCard
-          title="À encaisser"
-          value={formatCurrency(remainingToCollect)}
-          subtitle={overdueInvoicesCount > 0 ? `${overdueInvoicesCount} en retard` : undefined}
-          subtitleColor="text-red-400"
-          icon={Wallet}
-          onClick={() => setLocation("/dashboard/invoices")}
-        />
-        <KpiCard
-          title="Taux conversion"
-          value={`${conversionRate}%`}
-          icon={BarChart3}
-          className="col-span-2 lg:col-span-1"
-        />
+        {loading ? (
+          <>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Card key={i} className={`bg-black/20 border border-white/10 rounded-2xl ${i === 5 ? "col-span-2 lg:col-span-1" : ""}`}>
+                <CardContent className="p-3 sm:p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <Skeleton className="h-4 w-20 bg-white/10" />
+                    <Skeleton className="h-4 w-4 rounded bg-white/10" />
+                  </div>
+                  <Skeleton className="h-8 w-24 bg-white/10 mb-2" />
+                  <Skeleton className="h-4 w-28 bg-white/10" />
+                </CardContent>
+              </Card>
+            ))}
+          </>
+        ) : (
+          <>
+            <KpiCard
+              title="CA du mois"
+              value={formatCurrency(totalRevenue)}
+              trend={revenueTrend}
+              icon={Euro}
+              onClick={() => setLocation("/dashboard/invoices")}
+            />
+            <KpiCard
+              title="Chantiers actifs"
+              value={activeChantiers.toString()}
+              subtitle={lateProjectsCount > 0 ? `${lateProjectsCount} en retard` : undefined}
+              subtitleColor={lateProjectsCount > 0 ? "text-red-400" : undefined}
+              icon={Building}
+              onClick={() => setLocation("/dashboard/projects")}
+            />
+            <KpiCard
+              title="Devis en attente"
+              value={pendingQuotes.toString()}
+              subtitle={expiringQuotesCount > 0 ? `${expiringQuotesCount} expire${expiringQuotesCount > 1 ? "nt" : ""} bientôt` : undefined}
+              subtitleColor="text-amber-400"
+              icon={FileText}
+              onClick={() => setLocation("/dashboard/quotes")}
+            />
+            <KpiCard
+              title="À encaisser"
+              value={formatCurrency(remainingToCollect)}
+              subtitle={overdueInvoicesCount > 0 ? `${overdueInvoicesCount} en retard` : undefined}
+              subtitleColor="text-red-400"
+              icon={Wallet}
+              onClick={() => setLocation("/dashboard/invoices")}
+            />
+            <KpiCard
+              title="Taux conversion"
+              value={`${conversionRate}%`}
+              icon={BarChart3}
+              className="col-span-2 lg:col-span-1"
+            />
+          </>
+        )}
       </div>
 
       {/* Charts Row */}
@@ -363,7 +395,9 @@ function OverviewTab() {
             <CardTitle className="text-white font-light text-base">Évolution des Revenus</CardTitle>
           </CardHeader>
           <CardContent>
-            {revenueEvolution.length > 0 ? (
+            {loading ? (
+              <Skeleton className="h-[250px] w-full rounded-xl bg-white/10" />
+            ) : revenueEvolution.length > 0 ? (
               <ResponsiveContainer width="100%" height={250}>
                 <AreaChart data={revenueEvolution}>
                   <defs>
@@ -406,7 +440,9 @@ function OverviewTab() {
             <CardTitle className="text-white font-light text-base">Taux de Conversion</CardTitle>
           </CardHeader>
           <CardContent>
-            {conversionEvolution.length > 0 ? (
+            {loading ? (
+              <Skeleton className="h-[250px] w-full rounded-xl bg-white/10" />
+            ) : conversionEvolution.length > 0 ? (
               <ResponsiveContainer width="100%" height={250}>
                 <LineChart data={conversionEvolution}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -429,7 +465,31 @@ function OverviewTab() {
       </div>
 
       {/* Pending Invoices - Quick Actions */}
-      {visiblePendingInvoices.length > 0 && (
+      {loading ? (
+        <Card className="bg-black/20  border border-white/10 shadow-xl rounded-2xl">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-5 w-56 bg-white/10" />
+              <Skeleton className="h-6 w-16 rounded-full bg-white/10" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="flex items-center gap-3 p-3 rounded-xl border border-white/10">
+                  <Skeleton className="h-8 w-8 rounded-full bg-white/10 shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-24 bg-white/10" />
+                    <Skeleton className="h-3 w-40 bg-white/10" />
+                  </div>
+                  <Skeleton className="h-6 w-16 bg-white/10 shrink-0" />
+                  <Skeleton className="h-8 w-[110px] bg-white/10 shrink-0" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : visiblePendingInvoices.length > 0 ? (
         <Card className="bg-black/20  border border-white/10 shadow-xl rounded-2xl text-white">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
@@ -504,7 +564,7 @@ function OverviewTab() {
             </div>
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
       {/* Bottom Row: Activity + Contextual Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -517,7 +577,20 @@ function OverviewTab() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {recentActivity.length === 0 ? (
+            {loading ? (
+              <div className="space-y-2">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="flex items-center gap-3 py-2.5 px-3 rounded-lg">
+                    <Skeleton className="h-8 w-8 rounded-full bg-white/10 shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 max-w-[200px] bg-white/10" />
+                      <Skeleton className="h-3 max-w-[140px] bg-white/10" />
+                    </div>
+                    <Skeleton className="h-4 w-12 bg-white/10 shrink-0" />
+                  </div>
+                ))}
+              </div>
+            ) : recentActivity.length === 0 ? (
               <div className="flex items-center justify-center h-40 text-white/50 text-sm">
                 <div className="text-center">
                   <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -565,6 +638,20 @@ function OverviewTab() {
             <CardTitle className="text-white font-light text-base">Actions</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
+            {loading ? (
+              <>
+                <Skeleton className="h-12 w-full rounded-xl bg-white/10" />
+                <Skeleton className="h-12 w-full rounded-xl bg-white/10" />
+                <Skeleton className="h-12 w-full rounded-xl bg-white/10" />
+                <div className="border-t border-white/10 pt-3 mt-3 space-y-2">
+                  <Skeleton className="h-3 w-24 bg-white/10 mb-2" />
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <Skeleton key={i} className="h-10 w-full rounded-lg bg-white/10" />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
             {pendingQuotes > 0 && (
               <ContextualAction
                 icon={FileText}
@@ -601,6 +688,8 @@ function OverviewTab() {
               <QuickAction icon={Calendar} label="Voir le planning" onClick={() => setLocation("/dashboard/planning")} />
               <QuickAction icon={Users} label="Gérer l'équipe" onClick={() => setLocation("/dashboard/team")} />
             </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -78,13 +78,15 @@ export function useDashboardMetrics(): DashboardMetrics {
       try {
         setMetrics((prev) => ({ ...prev, loading: true, error: null }));
 
-        // 1) Charger en parallèle devis, factures et revenus (au lieu d'enchaîner les 3 appels)
+        // 1) Charger en parallèle devis, factures et revenus (limite pour alléger le dashboard)
+        const DASHBOARD_QUOTES_LIMIT = 500;
+        const DASHBOARD_INVOICES_LIMIT = 500;
         const [allQuotes, invoices, revenuesByMonth] = await Promise.all([
-          fetchQuotesForUser(user.id).catch((e) => {
+          fetchQuotesForUser(user.id, undefined, DASHBOARD_QUOTES_LIMIT).catch((e) => {
             console.warn("fetchQuotesForUser failed, using empty list:", e);
             return [] as Awaited<ReturnType<typeof fetchQuotesForUser>>;
           }),
-          fetchInvoicesForUser(user.id).catch((e) => {
+          fetchInvoicesForUser(user.id, { limit: DASHBOARD_INVOICES_LIMIT }).catch((e) => {
             console.warn("fetchInvoicesForUser failed, using empty list:", e);
             return [] as Awaited<ReturnType<typeof fetchInvoicesForUser>>;
           }),

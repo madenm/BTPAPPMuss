@@ -129,6 +129,8 @@ export async function fetchInvoicesForUser(
     chantierId?: string;
     status?: string;
     year?: number;
+    /** Limite le nombre de factures retournées (ex. pour le dashboard). */
+    limit?: number;
   }
 ): Promise<InvoiceWithPayments[]> {
   let query = supabase
@@ -151,6 +153,9 @@ export async function fetchInvoicesForUser(
     const yearStart = `${filters.year}-01-01`;
     const yearEnd = `${filters.year}-12-31`;
     query = query.gte("invoice_date", yearStart).lte("invoice_date", yearEnd);
+  }
+  if (filters?.limit != null && filters.limit > 0) {
+    query = query.limit(filters.limit);
   }
 
   const { data, error } = await query;
