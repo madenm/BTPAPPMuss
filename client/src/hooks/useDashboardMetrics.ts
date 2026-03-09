@@ -68,32 +68,34 @@ export function useDashboardMetrics(): DashboardMetrics {
 
   useEffect(() => {
     const loadMetrics = async () => {
-      if (!user) {
+      if (!user?.id) {
         setMetrics((prev) => ({ ...prev, loading: false }));
         return;
       }
 
-      // Protection contre les appels multiples
-      if (loadingRef.current) {
-        return;
-      }
-
+      if (loadingRef.current) return;
       loadingRef.current = true;
       try {
         setMetrics((prev) => ({ ...prev, loading: true, error: null }));
 
-        // Chantiers actifs = uniquement ceux dont le statut est "en cours"
-        const activeChantiers = chantiers.filter(
-          (c) => c.statut === "en cours",
-        ).length;
+        // 1) Charger en parallèle devis, factures et revenus (au lieu d'enchaîner les 3 appels)
+        const [allQuotes, invoices, revenuesByMonth] = await Promise.all([
+          fetchQuotesForUser(user.id).catch((e) => {
+            console.warn("fetchQuotesForUser failed, using empty list:", e);
+            return [] as Awaited<ReturnType<typeof fetchQuotesForUser>>;
+          }),
+          fetchInvoicesForUser(user.id).catch((e) => {
+            console.warn("fetchInvoicesForUser failed, using empty list:", e);
+            return [] as Awaited<ReturnType<typeof fetchInvoicesForUser>>;
+          }),
+          fetchRevenuesByPeriod(user.id, "month").catch((e) => {
+            console.warn("fetchRevenuesByPeriod failed, using empty list:", e);
+            return [] as Awaited<ReturnType<typeof fetchRevenuesByPeriod>>;
+          }),
+        ]);
 
-        // Charger les devis (résilient: en cas d'erreur Supabase/RLS on utilise [])
-        let allQuotes: Awaited<ReturnType<typeof fetchQuotesForUser>> = [];
-        try {
-          allQuotes = await fetchQuotesForUser(user.id);
-        } catch (e) {
-          console.warn("fetchQuotesForUser failed, using empty list:", e);
-        }
+        // Chantiers actifs et projets en retard (chantiers peut encore être [] si pas encore chargés)
+        const activeChantiers = chantiers.filter((c) => c.statut === "en cours").length;
         // Devis en attente = au plus un par chantier (chantiers ayant au moins un devis envoyé/brouillon)
         const pendingStatuses = ["envoyé", "brouillon"];
         const pendingQuotesList = allQuotes.filter((q) =>
@@ -108,22 +110,14 @@ export function useDashboardMetrics(): DashboardMetrics {
         const pendingQuotes =
           chantierIdsWithPending.size + pendingWithoutChantier;
 
-        // Taux de conversion = devis signés / total devis ayant reçu une réponse
-        // Numérateur : devis acceptés ou validés (= signés)
-        // Dénominateur : tous les devis qui ont dépassé le stade brouillon (envoyé + accepté + validé + refusé + expiré)
+        // Taux de conversion
         const resolvedStatuses = ["envoyé", "accepté", "validé", "refusé", "expiré"];
         const devisResolved = allQuotes.filter((q) => resolvedStatuses.includes(q.status)).length;
         const devisConverted = allQuotes.filter((q) => q.status === "accepté" || q.status === "validé").length;
-        let invoices: Awaited<ReturnType<typeof fetchInvoicesForUser>> = [];
-        try {
-          invoices = await fetchInvoicesForUser(user.id);
-        } catch (e) {
-          console.warn("fetchInvoicesForUser failed, using empty list:", e);
-        }
         const conversionRate =
           devisResolved > 0 ? Math.round((devisConverted / devisResolved) * 100) : 0;
 
-        // Factures en attente de paiement (non payées, non annulées, non brouillon)
+        // Factures en attente de paiement
         const pendingInvoices = invoices
           .filter((inv) => inv.status !== "payée" && inv.status !== "annulée" && inv.status !== "brouillon")
           .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
@@ -150,13 +144,6 @@ export function useDashboardMetrics(): DashboardMetrics {
           0,
         );
 
-        // Charger l'évolution des revenus (par mois) (résilient: table payments peut être absente)
-        let revenuesByMonth: Awaited<ReturnType<typeof fetchRevenuesByPeriod>> = [];
-        try {
-          revenuesByMonth = await fetchRevenuesByPeriod(user.id, "month");
-        } catch (e) {
-          console.warn("fetchRevenuesByPeriod failed, using empty list:", e);
-        }
         const monthNames = [
           "Jan",
           "Fév",
@@ -388,7 +375,39 @@ export function useDashboardMetrics(): DashboardMetrics {
     };
 
     void loadMetrics();
-  }, [user?.id, chantiers.length]); // Utiliser user.id et chantiers.length pour éviter les re-renders inutiles
+  }, [user?.id]); // Ne plus attendre chantiers : on lance tout de suite (chantiers mis à jour dans l'effet ci-dessous)
+
+  // Mettre à jour chantiers actifs et projets en retard quand les chantiers arrivent (sans refetch)
+  useEffect(() => {
+    if (metrics.loading) return;
+    const activeChantiers = chantiers.filter((c) => c.statut === "en cours").length;
+    const now = new Date();
+    const lateProjects = chantiers.filter((c) => {
+      if (!c.dateFin || c.statut === "terminé") return false;
+      return c.dateFin.slice(0, 10) < now.toISOString().slice(0, 10);
+    });
+    const otherAlerts = metrics.alerts.filter((a) => a.id !== "late-projects");
+    const newAlerts =
+      lateProjects.length > 0
+        ? [
+            ...otherAlerts,
+            {
+              id: "late-projects",
+              type: "danger" as const,
+              icon: "project" as const,
+              title: `${lateProjects.length} projet${lateProjects.length > 1 ? "s" : ""} en retard`,
+              detail: lateProjects.slice(0, 2).map((c) => c.nom).join(", ") + (lateProjects.length > 2 ? "..." : ""),
+              link: "/dashboard/projects",
+            },
+          ]
+        : otherAlerts;
+    setMetrics((prev) => ({
+      ...prev,
+      activeChantiers,
+      lateProjectsCount: lateProjects.length,
+      alerts: newAlerts,
+    }));
+  }, [chantiers, metrics.loading]); // eslint-disable-line react-hooks/exhaustive-deps -- on met à jour uniquement les champs dérivés des chantiers
 
   return metrics;
 }

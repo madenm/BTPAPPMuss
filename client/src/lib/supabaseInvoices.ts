@@ -163,21 +163,50 @@ export async function fetchInvoicesForUser(
 
   const invoices = (data ?? []) as SupabaseInvoice[];
 
-  // Charger les paiements pour chaque facture et calculer les montants
-  const invoicesWithPayments: InvoiceWithPayments[] = await Promise.all(
-    invoices.map(async (invoice) => {
-      const payments = await fetchPaymentsForInvoice(userId, invoice.id);
-      const paidAmount = payments.reduce((sum, p) => sum + p.amount, 0);
-      const correctStatus = calculateInvoiceStatus(paidAmount, invoice.total_ttc, invoice.status);
-      return {
-        ...invoice,
-        status: correctStatus,
-        payments,
-        paidAmount,
-        remainingAmount: invoice.total_ttc - paidAmount,
-      };
-    })
-  );
+  if (invoices.length === 0) return [];
+
+  // Une seule requête pour tous les paiements de l'utilisateur (évite N+1)
+  const invoiceIds = invoices.map((i) => i.id);
+  const { data: paymentsData, error: paymentsError } = await supabase
+    .from("payments")
+    .select("*")
+    .eq("user_id", userId)
+    .in("invoice_id", invoiceIds)
+    .order("payment_date", { ascending: false });
+
+  if (paymentsError) {
+    if (isSupabaseTableMissing(paymentsError)) {
+      return invoices.map((inv) => ({
+        ...inv,
+        payments: [] as SupabasePayment[],
+        paidAmount: 0,
+        remainingAmount: inv.total_ttc,
+      }));
+    }
+    console.error("Error fetching payments:", paymentsError);
+    throw paymentsError;
+  }
+
+  const allPayments = (paymentsData ?? []) as SupabasePayment[];
+  const paymentsByInvoiceId = new Map<string, SupabasePayment[]>();
+  for (const p of allPayments) {
+    const list = paymentsByInvoiceId.get(p.invoice_id) ?? [];
+    list.push(p);
+    paymentsByInvoiceId.set(p.invoice_id, list);
+  }
+
+  const invoicesWithPayments: InvoiceWithPayments[] = invoices.map((invoice) => {
+    const payments = paymentsByInvoiceId.get(invoice.id) ?? [];
+    const paidAmount = payments.reduce((sum, p) => sum + p.amount, 0);
+    const correctStatus = calculateInvoiceStatus(paidAmount, invoice.total_ttc, invoice.status);
+    return {
+      ...invoice,
+      status: correctStatus,
+      payments,
+      paidAmount,
+      remainingAmount: invoice.total_ttc - paidAmount,
+    };
+  });
 
   return invoicesWithPayments;
 }

@@ -104,10 +104,19 @@ export async function fetchRevenuesByPeriod(
   userId: string,
   period: "month" | "week" = "month",
 ): Promise<PeriodRevenue[]> {
+  // Limiter aux 12 derniers mois pour alléger la requête et le traitement
+  const end = new Date();
+  const start = new Date();
+  start.setMonth(start.getMonth() - 12);
+  const startStr = start.toISOString().split("T")[0];
+  const endStr = end.toISOString().split("T")[0];
+
   const { data, error } = await supabase
     .from<SupabasePayment>("payments")
     .select("amount, payment_date")
     .eq("user_id", userId)
+    .gte("payment_date", startStr)
+    .lte("payment_date", endStr)
     .order("payment_date", { ascending: true });
 
   if (error) {

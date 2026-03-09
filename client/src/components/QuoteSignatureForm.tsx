@@ -33,48 +33,54 @@ export const QuoteSignatureForm: React.FC<QuoteSignatureFormProps> = ({
     }
   }, [prospectEmail]);
 
-  // Initialiser le canvas
+  // Initialiser le canvas (prise en charge écrans HD / mobile)
   React.useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas) {
       const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width;
-      canvas.height = rect.height;
+      const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+      canvas.width = Math.round(rect.width * dpr);
+      canvas.height = Math.round(rect.height * dpr);
       const ctx = canvas.getContext("2d");
       if (ctx) {
+        ctx.scale(dpr, dpr);
         ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillRect(0, 0, rect.width, rect.height);
         ctx.strokeStyle = "#e5e7eb";
         ctx.lineWidth = 1;
         ctx.setLineDash([5, 5]);
-        ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
+        ctx.strokeRect(5, 5, rect.width - 10, rect.height - 10);
       }
     }
   }, []);
 
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const startDrawing = (clientX: number, clientY: number) => {
     if (!canvasRef.current) return;
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
     const ctx = canvas.getContext("2d");
     if (ctx) {
       ctx.beginPath();
-      ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+      ctx.moveTo(x, y);
       setIsDrawing(true);
     }
   };
 
-  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const draw = (clientX: number, clientY: number) => {
     if (!isDrawing || !canvasRef.current) return;
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
     const ctx = canvas.getContext("2d");
     if (ctx) {
       ctx.lineWidth = 2;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.strokeStyle = "#1e293b";
-      ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+      ctx.lineTo(x, y);
       ctx.stroke();
       setHasSignature(true);
     }
@@ -84,17 +90,49 @@ export const QuoteSignatureForm: React.FC<QuoteSignatureFormProps> = ({
     setIsDrawing(false);
   };
 
+  const handlePointerDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    startDrawing(e.clientX, e.clientY);
+  };
+
+  const handlePointerMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    draw(e.clientX, e.clientY);
+  };
+
+  const handlePointerUp = () => {
+    stopDrawing();
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    const touch = e.touches[0];
+    if (touch) startDrawing(touch.clientX, touch.clientY);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    if (touch) draw(touch.clientX, touch.clientY);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (e.changedTouches[0]) stopDrawing();
+  };
+
   const clearSignature = () => {
     const canvas = canvasRef.current;
     if (canvas) {
+      const rect = canvas.getBoundingClientRect();
       const ctx = canvas.getContext("2d");
       if (ctx) {
+        const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.scale(dpr, dpr);
         ctx.strokeStyle = "#e5e7eb";
         ctx.lineWidth = 1;
         ctx.setLineDash([5, 5]);
-        ctx.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
+        ctx.strokeRect(5, 5, rect.width - 10, rect.height - 10);
         setHasSignature(false);
       }
     }
@@ -257,17 +295,22 @@ export const QuoteSignatureForm: React.FC<QuoteSignatureFormProps> = ({
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Votre signature <span className="text-red-500">*</span>
         </label>
-        <div className="border-2 border-gray-300 rounded-lg overflow-hidden bg-white shadow-md">
+        <div className="border-2 border-gray-300 rounded-lg overflow-hidden bg-white shadow-md touch-none">
           <canvas
             ref={canvasRef}
-            onMouseDown={startDrawing}
-            onMouseMove={draw}
-            onMouseUp={stopDrawing}
-            onMouseLeave={stopDrawing}
-            className="w-full h-64 cursor-crosshair bg-white block touch-none"
+            onMouseDown={handlePointerDown}
+            onMouseMove={handlePointerMove}
+            onMouseUp={handlePointerUp}
+            onMouseLeave={handlePointerUp}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchEnd}
+            style={{ touchAction: "none" }}
+            className="w-full h-64 cursor-crosshair bg-white block min-h-[200px]"
           />
         </div>
-        <p className="text-xs text-gray-500 mt-2">Cliquez et glissez pour signer</p>
+        <p className="text-xs text-gray-500 mt-2">Cliquez et glissez pour signer (ou utilisez le doigt sur mobile)</p>
       </div>
 
       {/* Boutons */}
