@@ -29,7 +29,7 @@ export function ProjectKpiBar({ chantiers, filteredCount }: ProjectKpiBarProps) 
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-      <div className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-xl p-3">
+      <div className="bg-black/20  border border-white/10 rounded-xl p-3">
         <div className="flex items-center gap-2 text-white/60 text-xs mb-1">
           <Building className="h-3.5 w-3.5" />
           En cours
@@ -37,7 +37,7 @@ export function ProjectKpiBar({ chantiers, filteredCount }: ProjectKpiBarProps) 
         <p className="text-2xl font-bold text-white">{enCours}</p>
         <p className="text-xs text-white/50">{planifies} planifié{planifies > 1 ? 's' : ''} · {termines} terminé{termines > 1 ? 's' : ''}</p>
       </div>
-      <div className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-xl p-3">
+      <div className="bg-black/20  border border-white/10 rounded-xl p-3">
         <div className="flex items-center gap-2 text-white/60 text-xs mb-1">
           <AlertTriangle className="h-3.5 w-3.5" />
           En retard
@@ -45,7 +45,7 @@ export function ProjectKpiBar({ chantiers, filteredCount }: ProjectKpiBarProps) 
         <p className={`text-2xl font-bold ${enRetardCount > 0 ? 'text-red-400' : 'text-green-400'}`}>{enRetardCount}</p>
         <p className="text-xs text-white/50">{enRetardCount > 0 ? 'Projets à traiter en priorité' : 'Aucun retard'}</p>
       </div>
-      <div className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-xl p-3">
+      <div className="bg-black/20  border border-white/10 rounded-xl p-3">
         <div className="flex items-center gap-2 text-white/60 text-xs mb-1">
           <TrendingUp className="h-3.5 w-3.5" />
           CA en cours
@@ -53,7 +53,7 @@ export function ProjectKpiBar({ chantiers, filteredCount }: ProjectKpiBarProps) 
         <p className="text-2xl font-bold text-white">{formatMontantEuro(caEnCours) || '0 €'}</p>
         <p className="text-xs text-white/50">Montant des devis actifs</p>
       </div>
-      <div className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-xl p-3">
+      <div className="bg-black/20  border border-white/10 rounded-xl p-3">
         <div className="flex items-center gap-2 text-white/60 text-xs mb-1">
           <BarChart3 className="h-3.5 w-3.5" />
           Total projets

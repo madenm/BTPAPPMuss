@@ -174,7 +174,7 @@ export default function InvoicesPage() {
           <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0 w-full sm:w-auto flex-wrap">
             <Button
               onClick={handleCreateInvoice}
-              className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30 max-md:min-h-[44px]"
+              className="bg-white/20  text-white border border-white/10 hover:bg-white/30 max-md:min-h-[44px]"
             >
               <Plus className="mr-2 h-4 w-4" />
               Nouvelle facture
@@ -184,7 +184,7 @@ export default function InvoicesPage() {
         </div>
 
         {/* Filtres */}
-        <Card className="bg-black/20 backdrop-blur-xl border border-white/10">
+        <Card className="bg-black/20  border border-white/10">
           <CardContent className="p-4">
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="relative min-w-0">
@@ -193,11 +193,11 @@ export default function InvoicesPage() {
                   placeholder="Rechercher..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50 w-full min-w-0"
+                  className="pl-10 bg-black/20  border-white/10 text-white placeholder:text-white/50 w-full min-w-0"
                 />
               </div>
               <Select value={filterClientId} onValueChange={setFilterClientId}>
-                <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white w-full min-w-0">
+                <SelectTrigger className="bg-black/20  border-white/10 text-white w-full min-w-0">
                   <SelectValue placeholder="Client" />
                 </SelectTrigger>
                 <SelectContent>
@@ -210,7 +210,7 @@ export default function InvoicesPage() {
                 </SelectContent>
               </Select>
               <Select value={filterChantierId} onValueChange={setFilterChantierId}>
-                <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white w-full min-w-0">
+                <SelectTrigger className="bg-black/20  border-white/10 text-white w-full min-w-0">
                   <SelectValue placeholder="Chantier" />
                 </SelectTrigger>
                 <SelectContent>
@@ -223,7 +223,7 @@ export default function InvoicesPage() {
                 </SelectContent>
               </Select>
               <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white w-full min-w-0">
+                <SelectTrigger className="bg-black/20  border-white/10 text-white w-full min-w-0">
                   <SelectValue placeholder="Statut" />
                 </SelectTrigger>
                 <SelectContent>
@@ -236,7 +236,7 @@ export default function InvoicesPage() {
                 </SelectContent>
               </Select>
               <Select value={filterYear} onValueChange={setFilterYear}>
-                <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white w-full min-w-0">
+                <SelectTrigger className="bg-black/20  border-white/10 text-white w-full min-w-0">
                   <SelectValue placeholder="Année" />
                 </SelectTrigger>
                 <SelectContent>
@@ -253,7 +253,7 @@ export default function InvoicesPage() {
         </Card>
 
         {/* Tableau des factures */}
-        <Card className="bg-black/20 backdrop-blur-xl border border-white/10">
+        <Card className="bg-black/20  border border-white/10">
           <CardContent className="p-0">
             {loading ? (
               <div className="p-8 text-center text-white/70">Chargement...</div>

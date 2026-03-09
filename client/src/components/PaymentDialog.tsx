@@ -106,7 +106,7 @@ export function PaymentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-black/90 backdrop-blur-xl border-white/10 text-white">
+      <DialogContent className="bg-black/90  border-white/10 text-white">
         <DialogHeader>
           <DialogTitle className="text-white">Enregistrer un paiement</DialogTitle>
         </DialogHeader>
@@ -117,7 +117,7 @@ export function PaymentDialog({
             <Input
               value={`${remainingAmount.toFixed(2)} €`}
               disabled
-              className="bg-black/10 backdrop-blur-md border-white/10 text-white/70"
+              className="bg-black/10  border-white/10 text-white/70"
             />
           </div>
 
@@ -131,7 +131,7 @@ export function PaymentDialog({
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
                 max={remainingAmount}
-                className="bg-black/10 backdrop-blur-md border-white/10 text-white flex-1"
+                className="bg-black/10  border-white/10 text-white flex-1"
               />
               {remainingAmount > 0 && (
                 <Button
@@ -155,14 +155,14 @@ export function PaymentDialog({
               value={paymentDate}
               onChange={(e) => setPaymentDate(e.target.value)}
               max={dateToISO(new Date())}
-              className="bg-black/10 backdrop-blur-md border-white/10 text-white"
+              className="bg-black/10  border-white/10 text-white"
             />
           </div>
 
           <div>
             <Label className="text-white">Méthode de paiement *</Label>
             <Select value={paymentMethod} onValueChange={(v: any) => setPaymentMethod(v)}>
-              <SelectTrigger className="bg-black/10 backdrop-blur-md border-white/10 text-white">
+              <SelectTrigger className="bg-black/10  border-white/10 text-white">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -181,7 +181,7 @@ export function PaymentDialog({
               value={reference}
               onChange={(e) => setReference(e.target.value)}
               placeholder="Numéro de chèque, virement, etc."
-              className="bg-black/10 backdrop-blur-md border-white/10 text-white"
+              className="bg-black/10  border-white/10 text-white"
             />
           </div>
 
@@ -192,7 +192,7 @@ export function PaymentDialog({
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Notes sur le paiement..."
               rows={3}
-              className="bg-black/10 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+              className="bg-black/10  border-white/10 text-white placeholder:text-white/50"
             />
           </div>
 
@@ -207,7 +207,7 @@ export function PaymentDialog({
             <Button
               onClick={handleSave}
               disabled={saving}
-              className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30"
+              className="bg-white/20  text-white border border-white/10 hover:bg-white/30"
             >
               {saving ? 'Enregistrement...' : 'Enregistrer'}
             </Button>

@@ -221,7 +221,7 @@ function TariffFormModal({ open, onOpenChange, tariff, onSave, isSaving }: Tarif
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[400px] bg-black/20 backdrop-blur-xl border border-white/10 text-white rounded-xl p-6">
+      <DialogContent className="max-w-[400px] bg-black/20  border border-white/10 text-white rounded-xl p-6">
         <DialogHeader>
           <DialogTitle className="text-white">
             {tariff ? "Modifier le tarif" : "Ajouter un tarif"}
@@ -247,7 +247,7 @@ function TariffFormModal({ open, onOpenChange, tariff, onSave, isSaving }: Tarif
               <SelectTrigger className="mt-1 bg-black/20 border-white/10 text-white">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-black/20 backdrop-blur-xl border-white/10">
+              <SelectContent className="bg-black/20  border-white/10">
                 {CATEGORIES.map((c) => (
                   <SelectItem key={c} value={c} className="text-white">
                     {c}
@@ -262,7 +262,7 @@ function TariffFormModal({ open, onOpenChange, tariff, onSave, isSaving }: Tarif
               <SelectTrigger className="mt-1 bg-black/20 border-white/10 text-white">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-black/20 backdrop-blur-xl border-white/10">
+              <SelectContent className="bg-black/20  border-white/10">
                 {UNITS.map((u) => (
                   <SelectItem key={u} value={u} className="text-white">
                     {u}
@@ -506,7 +506,7 @@ export default function TarifsPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
+      <header className="bg-black/20  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
           <div className="min-w-0 w-full sm:flex-1 pl-20">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">Tarifs</h1>
@@ -538,7 +538,7 @@ export default function TarifsPage() {
               variant="outline"
               size="sm"
               onClick={() => setImportOpen(true)}
-              className="rounded-xl bg-white/10 backdrop-blur-md text-white border border-white/20 hover:bg-white/20"
+              className="rounded-xl bg-white/10  text-white border border-white/20 hover:bg-white/20"
             >
               <Upload className="h-4 w-4 mr-2" />
               Importer
@@ -547,14 +547,14 @@ export default function TarifsPage() {
               variant="outline"
               size="sm"
               onClick={handleDownloadTemplate}
-              className="rounded-xl bg-white/10 backdrop-blur-md text-white border border-white/20 hover:bg-white/20"
+              className="rounded-xl bg-white/10  text-white border border-white/20 hover:bg-white/20"
             >
               <Download className="h-4 w-4 mr-2" />
               Modèle CSV
             </Button>
           </div>
 
-          <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl rounded-2xl">
+          <Card className="bg-white/80 dark:bg-gray-800/80  border border-gray-200/50 dark:border-gray-700/50 shadow-xl rounded-2xl">
             <CardHeader className="space-y-0">
               <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                 <CardTitle className="text-gray-900 dark:text-white font-light flex items-center gap-2">
@@ -700,7 +700,7 @@ export default function TarifsPage() {
       />
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent className="bg-black/20 backdrop-blur-xl border border-white/10 text-white">
+        <AlertDialogContent className="bg-black/20  border border-white/10 text-white">
           <AlertDialogHeader>
             <AlertDialogTitle>Supprimer ce tarif ?</AlertDialogTitle>
             <AlertDialogDescription className="text-white/70">
@@ -723,7 +723,7 @@ export default function TarifsPage() {
       </AlertDialog>
 
       <Dialog open={importOpen} onOpenChange={setImportOpen}>
-        <DialogContent className="max-w-[420px] bg-black/20 backdrop-blur-xl border border-white/10 text-white rounded-xl p-6">
+        <DialogContent className="max-w-[420px] bg-black/20  border border-white/10 text-white rounded-xl p-6">
           <DialogHeader>
             <DialogTitle className="text-white">Importer des tarifs</DialogTitle>
             <DialogDescription className="text-white/70">

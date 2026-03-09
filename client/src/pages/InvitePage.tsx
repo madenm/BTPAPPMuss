@@ -115,7 +115,7 @@ export default function InvitePage() {
       </div>
 
       <div className="relative z-10 max-w-md mx-auto px-6 w-full">
-        <Card className="bg-white/10 dark:bg-black/20 backdrop-blur-lg rounded-2xl border border-white/20 p-8 shadow-2xl">
+        <Card className="bg-white/10 dark:bg-black/20  rounded-2xl border border-white/20 p-8 shadow-2xl">
           {loading ? (
             <div className="text-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-white mx-auto mb-4" />

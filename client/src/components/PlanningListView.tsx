@@ -131,7 +131,7 @@ export function PlanningListView({
   );
 
   return (
-    <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white min-w-0 overflow-hidden">
+    <Card className="bg-black/20  border border-white/10 text-white min-w-0 overflow-hidden">
       <CardHeader className="px-4 sm:px-6">
         <CardTitle className="text-base sm:text-lg break-words">
           PROJETS DE {monthLabel.toUpperCase()} {year} ({sortedChantiers.length} projet{sortedChantiers.length !== 1 ? 's' : ''})
@@ -248,7 +248,7 @@ export function PlanningListView({
                             <span className="truncate">Statut</span>
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="bg-black/90 backdrop-blur-xl border border-white/10 text-white shadow-lg">
+                        <DropdownMenuContent align="end" className="bg-black/90  border border-white/10 text-white shadow-lg">
                           <DropdownMenuItem onSelect={() => onStatusChange(chantier, 'planifié')} className="focus:bg-white/10 focus:text-white text-white">
                             {chantier.statut === 'planifié' && <Check className="mr-2 h-4 w-4" />}
                             ⏳ Planifié

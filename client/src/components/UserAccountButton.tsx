@@ -75,7 +75,7 @@ export function UserAccountButton({ variant = 'fixed' }: UserAccountButtonProps)
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={handleToggle}
-        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black/20 backdrop-blur-xl border border-white/10 text-white hover:bg-black/30 transition-colors shadow-lg"
+        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-black/20  border border-white/10 text-white hover:bg-black/30 transition-colors shadow-lg"
       >
         <div className="w-8 h-8 rounded-full bg-violet-500 flex items-center justify-center">
           <User size={16} />
@@ -108,7 +108,7 @@ export function UserAccountButton({ variant = 'fixed' }: UserAccountButtonProps)
             initial={{ opacity: 0, y: -10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            className="fixed w-64 bg-black/20 backdrop-blur-xl border border-white/10 rounded-xl shadow-xl overflow-hidden z-[9999]"
+            className="fixed w-64 bg-black/20  border border-white/10 rounded-xl shadow-xl overflow-hidden z-[9999]"
             style={isInline ? {
               top: `${dropdownPosition.top}px`,
               right: `${dropdownPosition.right}px`,

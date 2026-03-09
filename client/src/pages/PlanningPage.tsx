@@ -272,7 +272,7 @@ export default function PlanningPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
+      <header className="bg-black/20  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
           <div className="min-w-0 w-full sm:flex-1 pl-20">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">Planning des Projets</h1>
@@ -287,7 +287,7 @@ export default function PlanningPage() {
       <main className="flex-1 px-4 py-4 sm:p-6 space-y-4 sm:space-y-5 overflow-x-hidden">
 
         {/* --- Bandeau Aujourd'hui --- */}
-        <Card className="bg-black/30 backdrop-blur-xl border border-white/10 text-white overflow-hidden">
+        <Card className="bg-black/30  border border-white/10 text-white overflow-hidden">
           <CardContent className="px-4 py-3 sm:px-6 sm:py-4">
             <div className="flex items-center gap-2 mb-2">
               <Clock className="h-4 w-4 text-violet-400" />
@@ -359,7 +359,7 @@ export default function PlanningPage() {
         </Card>
 
         {/* --- Contrôles --- */}
-        <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white min-w-0 overflow-hidden">
+        <Card className="bg-black/20  border border-white/10 text-white min-w-0 overflow-hidden">
           <CardHeader className="px-4 sm:px-6 pb-3">
             <div className="flex items-center justify-between flex-wrap gap-3 sm:gap-4 min-w-0">
               {/* Navigation période */}
@@ -374,7 +374,7 @@ export default function PlanningPage() {
                         {periodLabel}
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent align="start" className="w-56 bg-black/90 backdrop-blur-xl border border-white/10 text-white shadow-lg p-3">
+                    <PopoverContent align="start" className="w-56 bg-black/90  border border-white/10 text-white shadow-lg p-3">
                       <div className="flex items-center justify-between gap-2 mb-3">
                         <button type="button" onClick={() => setPickerYear((y) => Math.max(2020, y - 1))} className="p-1 rounded text-white hover:bg-white/10 transition-colors"><ChevronLeft className="h-4 w-4" /></button>
                         <span className="text-sm font-medium tabular-nums">{pickerYear}</span>

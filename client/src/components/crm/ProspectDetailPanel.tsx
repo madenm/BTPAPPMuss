@@ -128,7 +128,7 @@ export function ProspectDetailPanel({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="bg-black/20 backdrop-blur-xl border border-white/10 text-white max-w-lg max-h-[90vh] flex flex-col">
+      <DialogContent className="bg-black/20  border border-white/10 text-white max-w-lg max-h-[90vh] flex flex-col">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             {prospect.stage === 'won' && <Trophy className="h-5 w-5 text-green-400" />}

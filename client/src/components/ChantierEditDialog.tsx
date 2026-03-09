@@ -227,7 +227,7 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-black/20 backdrop-blur-xl border border-white/10 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="bg-black/20  border border-white/10 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-white">Modifier le projet</DialogTitle>
           <DialogDescription className="text-white/70">
@@ -241,7 +241,7 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
               value={editChantier.nom}
               onChange={(e) => setEditChantier({ ...editChantier, nom: e.target.value })}
               placeholder="Ex: Rénovation salle de bain"
-              className="bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+              className="bg-black/20  border-white/10 text-white placeholder:text-white/50"
             />
           </div>
 
@@ -255,10 +255,10 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
                   setEditChantier({ ...editChantier, clientId: value, clientName: client?.name || '' });
                 }}
               >
-                <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white">
+                <SelectTrigger className="bg-black/20  border-white/10 text-white">
                   <SelectValue placeholder="Sélectionner un client" />
                 </SelectTrigger>
-                <SelectContent className="bg-black/20 backdrop-blur-xl border-white/10">
+                <SelectContent className="bg-black/20  border-white/10">
                   {clients.map((client) => (
                     <SelectItem key={client.id} value={client.id} className="text-white">
                       {client.name}
@@ -280,7 +280,7 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
                   <Button
                     type="button"
                     variant="outline"
-                    className="w-full justify-start text-left font-normal h-9 bg-black/20 backdrop-blur-md border-white/10 text-white hover:bg-black/30 hover:border-white/20"
+                    className="w-full justify-start text-left font-normal h-9 bg-black/20  border-white/10 text-white hover:bg-black/30 hover:border-white/20"
                   >
                     <CalendarIcon className="mr-2 h-4 w-4 opacity-70" />
                     {dateInputValue(editChantier.dateDebut || '') || 'JJ/MM/AAAA'}
@@ -315,7 +315,7 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
                 value={editChantier.duree}
                 onChange={(e) => setEditChantier({ ...editChantier, duree: e.target.value })}
                 placeholder="Ex: 2 semaines"
-                className="bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+                className="bg-black/20  border-white/10 text-white placeholder:text-white/50"
               />
             </div>
           </div>
@@ -326,10 +326,10 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
               value={editChantier.typeChantier ?? ''}
               onValueChange={(value) => setEditChantier({ ...editChantier, typeChantier: value || undefined })}
             >
-              <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white">
+              <SelectTrigger className="bg-black/20  border-white/10 text-white">
                 <SelectValue placeholder="Sélectionner le type" />
               </SelectTrigger>
-              <SelectContent className="bg-black/20 backdrop-blur-xl border-white/10">
+              <SelectContent className="bg-black/20  border-white/10">
                 <SelectItem value="piscine" className="text-white">Piscine & Spa</SelectItem>
                 <SelectItem value="paysage" className="text-white">Aménagement Paysager</SelectItem>
                 <SelectItem value="menuiserie" className="text-white">Menuiserie Sur-Mesure</SelectItem>
@@ -354,10 +354,10 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
                 setEditChantier({ ...editChantier, statut: value })
               }
             >
-              <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white">
+              <SelectTrigger className="bg-black/20  border-white/10 text-white">
                 <SelectValue placeholder="Sélectionner un statut" />
               </SelectTrigger>
-              <SelectContent className="bg-black/20 backdrop-blur-xl border-white/10">
+              <SelectContent className="bg-black/20  border-white/10">
                 <SelectItem value="planifié" className="text-white">Planifié</SelectItem>
                 <SelectItem value="en cours" className="text-white">En cours</SelectItem>
                 <SelectItem value="terminé" className="text-white">Terminé</SelectItem>
@@ -373,7 +373,7 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
                 onChange={(e) => setEditChantier({ ...editChantier, notes: e.target.value })}
                 placeholder="Description du projet (reprise dans le devis)."
                 rows={3}
-                className="flex-1 bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+                className="flex-1 bg-black/20  border-white/10 text-white placeholder:text-white/50"
               />
               <VoiceInputButton
                 onTranscript={(text) => {
@@ -394,7 +394,7 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
                 onChange={(e) => setEditChantier({ ...editChantier, notesAvancement: e.target.value })}
                 placeholder="Notes sur l'avancement, points bloquants, remarques..."
                 rows={4}
-                className="flex-1 bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+                className="flex-1 bg-black/20  border-white/10 text-white placeholder:text-white/50"
               />
               <VoiceInputButton
                 onTranscript={(text) => {
@@ -496,7 +496,7 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
                 !dateInputToISO(editChantier.dateDebut || '') ||
                 !editChantier.duree
               }
-              className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30 disabled:opacity-50"
+              className="bg-white/20  text-white border border-white/10 hover:bg-white/30 disabled:opacity-50"
             >
               Enregistrer les modifications
             </Button>

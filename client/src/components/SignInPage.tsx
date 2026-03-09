@@ -40,13 +40,13 @@ interface SignInPageProps {
 // --- SUB-COMPONENTS ---
 
 const GlassInputWrapper = ({ children }: { children: React.ReactNode }) => (
-  <div className="rounded-2xl border border-white/20 bg-black/20 backdrop-blur-sm transition-colors focus-within:border-violet-400/70 focus-within:bg-violet-500/10">
+  <div className="rounded-2xl border border-white/20 bg-black/20  transition-colors focus-within:border-violet-400/70 focus-within:bg-violet-500/10">
     {children}
   </div>
 );
 
 const TestimonialCard = ({ testimonial, delay }: { testimonial: Testimonial, delay: string }) => (
-  <div className={`animate-testimonial ${delay} flex items-start gap-3 rounded-3xl bg-card/40 dark:bg-zinc-800/40 backdrop-blur-xl border border-white/10 p-5 w-64`}>
+  <div className={`animate-testimonial ${delay} flex items-start gap-3 rounded-3xl bg-card/40 dark:bg-zinc-800/40  border border-white/10 p-5 w-64`}>
     <img src={testimonial.avatarSrc} className="h-10 w-10 object-cover rounded-2xl" alt="avatar" />
     <div className="text-sm leading-snug">
       <p className="flex items-center gap-1 font-medium">{testimonial.name}</p>
@@ -183,10 +183,10 @@ export const SignInPage: React.FC<SignInPageProps> = ({
               <>
                 <div className="animate-element animate-delay-700 relative flex items-center justify-center">
                   <span className="w-full border-t border-white/20"></span>
-                  <span className="px-4 text-sm text-white/70 bg-black/20 backdrop-blur-md absolute">Ou continuer avec</span>
+                  <span className="px-4 text-sm text-white/70 bg-black/20  absolute">Ou continuer avec</span>
                 </div>
 
-                <button onClick={onGoogleSignIn} type="button" className="animate-element animate-delay-800 w-full flex items-center justify-center gap-3 border border-white/20 rounded-2xl py-4 hover:bg-white/10 bg-black/20 backdrop-blur-sm text-white transition-colors">
+                <button onClick={onGoogleSignIn} type="button" className="animate-element animate-delay-800 w-full flex items-center justify-center gap-3 border border-white/20 rounded-2xl py-4 hover:bg-white/10 bg-black/20  text-white transition-colors">
                   <GoogleIcon />
                   Continuer avec Google
                 </button>

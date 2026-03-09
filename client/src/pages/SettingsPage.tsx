@@ -347,11 +347,11 @@ export default function SettingsPage() {
     return lines;
   }, [form]);
 
-  const cardClass = "bg-white/10 dark:bg-gray-800/50 border-white/10 backdrop-blur-xl";
+  const cardClass = "bg-white/10 dark:bg-gray-800/50 border-white/10 ";
 
   return (
     <PageWrapper>
-      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
+      <header className="bg-black/20  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
           <div className="min-w-0 w-full sm:flex-1 pl-20">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">Paramètres</h1>
@@ -997,7 +997,7 @@ export default function SettingsPage() {
             {/* Sticky save bar */}
             {isDirty && (
               <div className="sticky bottom-4 z-30">
-                <div className="bg-black/60 backdrop-blur-xl border border-white/15 rounded-2xl px-5 py-3 flex items-center justify-between shadow-2xl">
+                <div className="bg-black/60  border border-white/15 rounded-2xl px-5 py-3 flex items-center justify-between shadow-2xl">
                   <span className="text-white/80 text-sm flex items-center gap-2">
                     <AlertCircle className="h-4 w-4 text-amber-400" />
                     Vous avez des modifications non sauvegardées

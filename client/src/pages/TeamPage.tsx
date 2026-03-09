@@ -360,12 +360,12 @@ export default function TeamPage() {
 
   const chantierById = (id: string) => chantiers.find((c) => c.id === id);
 
-  const modalStyles = 'bg-black/10 backdrop-blur-xl border border-white/10 text-white rounded-2xl max-h-[90vh] overflow-y-auto';
+  const modalStyles = 'bg-black/10  border border-white/10 text-white rounded-2xl max-h-[90vh] overflow-y-auto';
   const inputStyles = 'bg-black/10 border-white/10 text-white';
 
   return (
     <PageWrapper>
-      <header className="bg-black/10 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
+      <header className="bg-black/10  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
           <div className="min-w-0 w-full sm:flex-1 pl-20">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">Gestion de l&apos;Équipe</h1>
@@ -374,7 +374,7 @@ export default function TeamPage() {
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 w-full sm:w-auto">
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen} modal={false}>
               <DialogTrigger asChild>
-                <Button className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30 max-md:min-h-[44px]">
+                <Button className="bg-white/20  text-white border border-white/10 hover:bg-white/30 max-md:min-h-[44px]">
                   <Plus className="h-4 w-4 mr-2" />
                   Ajouter un Membre
                 </Button>
@@ -500,7 +500,7 @@ export default function TeamPage() {
 
       <main className="flex-1 p-4 sm:p-6 space-y-6 overflow-x-hidden">
         {/* Widget Stats */}
-        <Card className="bg-white/5 backdrop-blur-xl border border-white/10 text-white">
+        <Card className="bg-white/5  border border-white/10 text-white">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <span>📊</span> Équipe en coup d&apos;œil
@@ -531,7 +531,7 @@ export default function TeamPage() {
         </Card>
 
         {/* Tableau */}
-        <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+        <Card className="bg-black/10  border border-white/10 text-white">
           <CardHeader>
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
               <CardTitle className="flex items-center gap-2">
@@ -828,7 +828,7 @@ export default function TeamPage() {
         </Card>
 
         {/* Affectation aux Chantiers */}
-        <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+        <Card className="bg-black/10  border border-white/10 text-white">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Building className="h-5 w-5 text-white/70" />

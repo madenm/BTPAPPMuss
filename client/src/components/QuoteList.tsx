@@ -109,7 +109,7 @@ export function QuoteList({
 
   return (
     <>
-      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
+      <header className="bg-black/20  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
           <div className="min-w-0 w-full sm:flex-1 pl-20">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">Devis</h1>
@@ -133,7 +133,7 @@ export function QuoteList({
       </header>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 overflow-x-hidden">
         <main className="space-y-6 py-4 sm:py-6">
-          <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl rounded-2xl">
+          <Card className="bg-white/80 dark:bg-gray-800/80  border border-gray-200/50 dark:border-gray-700/50 shadow-xl rounded-2xl">
             <CardHeader className="space-y-0">
               <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                 <CardTitle className="text-gray-900 dark:text-white font-light flex items-center gap-2">

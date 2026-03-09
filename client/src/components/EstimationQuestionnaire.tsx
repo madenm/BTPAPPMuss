@@ -40,7 +40,7 @@ export function EstimationQuestionnaire({ type, answers, onChange }: EstimationQ
               type="text"
               value={answers[q.id] ?? ''}
               onChange={(e) => onChange(q.id, e.target.value)}
-              className="w-full px-3 py-2 rounded-md border bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+              className="w-full px-3 py-2 rounded-md border bg-black/20  border-white/10 text-white placeholder:text-white/50"
               placeholder={q.id === 'autre_description' ? 'Décrivez votre projet en 20 caractères minimum...' : 'Saisissez...'}
             />
           ) : (

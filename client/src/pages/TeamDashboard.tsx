@@ -230,7 +230,7 @@ export default function TeamDashboard() {
               transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
               className="flex-1 flex flex-col relative z-10 ml-0 md:ml-64 rounded-l-3xl overflow-hidden"
             >
-              <header className="bg-black/10 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
+              <header className="bg-black/10  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
                   <div className="flex items-center gap-2 min-w-0 w-full sm:flex-1">
                     <SheetTrigger asChild>
@@ -263,14 +263,14 @@ export default function TeamDashboard() {
             </header>
 
             {/* Tabs Navigation */}
-            <div className="bg-black/10 backdrop-blur-xl border-b border-white/10 px-4 sm:px-6 rounded-tl-3xl">
+            <div className="bg-black/10  border-b border-white/10 px-4 sm:px-6 rounded-tl-3xl">
               <div className="flex gap-2 overflow-x-auto min-w-0">
                 {/* Vue d'ensemble - toujours accessible */}
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => goToTab('overview')}
-                  className={activeTab === 'overview' ? 'bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}
+                  className={activeTab === 'overview' ? 'bg-white/20  border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}
                 >
                   Vue d'ensemble
                 </Button>
@@ -281,7 +281,7 @@ export default function TeamDashboard() {
                     variant="ghost"
                     size="sm"
                     onClick={() => goToTab('projects')}
-                    className={activeTab === 'projects' ? 'bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}
+                    className={activeTab === 'projects' ? 'bg-white/20  border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}
                   >
                     <Building className="h-4 w-4 mr-2" />
                     Mes Projets
@@ -294,7 +294,7 @@ export default function TeamDashboard() {
                     variant="ghost"
                     size="sm"
                     onClick={() => goToTab('planning')}
-                    className={activeTab === 'planning' ? 'bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}
+                    className={activeTab === 'planning' ? 'bg-white/20  border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}
                   >
                     <Calendar className="h-4 w-4 mr-2" />
                     Planning
@@ -307,29 +307,29 @@ export default function TeamDashboard() {
                     variant="ghost"
                     size="sm"
                     onClick={() => goToTab('quotes')}
-                    className={activeTab === 'quotes' ? 'bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}
+                    className={activeTab === 'quotes' ? 'bg-white/20  border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}
                   >
                     <FileText className="h-4 w-4 mr-2" />
                     Créer un Devis
                   </Button>
                 )}
                 {teamMember?.can_access_crm && (
-                  <Button variant="ghost" size="sm" onClick={() => goToTab('crm')} className={activeTab === 'crm' ? 'bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}>
+                  <Button variant="ghost" size="sm" onClick={() => goToTab('crm')} className={activeTab === 'crm' ? 'bg-white/20  border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}>
                     <LayoutGrid className="h-4 w-4 mr-2" /> CRM
                   </Button>
                 )}
                 {teamMember?.can_manage_invoices && (
-                  <Button variant="ghost" size="sm" onClick={() => goToTab('invoices')} className={activeTab === 'invoices' ? 'bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}>
+                  <Button variant="ghost" size="sm" onClick={() => goToTab('invoices')} className={activeTab === 'invoices' ? 'bg-white/20  border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}>
                     <Receipt className="h-4 w-4 mr-2" /> Factures
                   </Button>
                 )}
                 {teamMember?.can_manage_team && (
-                  <Button variant="ghost" size="sm" onClick={() => goToTab('team')} className={activeTab === 'team' ? 'bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}>
+                  <Button variant="ghost" size="sm" onClick={() => goToTab('team')} className={activeTab === 'team' ? 'bg-white/20  border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}>
                     <Users className="h-4 w-4 mr-2" /> Équipe
                   </Button>
                 )}
                 {teamMember?.can_manage_clients && (
-                  <Button variant="ghost" size="sm" onClick={() => goToTab('clients')} className={activeTab === 'clients' ? 'bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}>
+                  <Button variant="ghost" size="sm" onClick={() => goToTab('clients')} className={activeTab === 'clients' ? 'bg-white/20  border border-white/10 text-white hover:bg-white/30' : 'text-white hover:bg-white/10'}>
                     <UserCircle className="h-4 w-4 mr-2" /> Clients
                   </Button>
                 )}
@@ -345,7 +345,7 @@ export default function TeamDashboard() {
                     // Si le membre n'est pas encore chargé, afficher un message de chargement
                     if (!teamMember) {
                       return (
-                        <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                        <Card className="bg-black/10  border border-white/10 text-white">
                           <CardContent className="py-12 text-center">
                             <p className="text-white/70">Chargement...</p>
                           </CardContent>
@@ -371,7 +371,7 @@ export default function TeamDashboard() {
                     // Si le membre n'a aucune permission, afficher le message d'accès limité
                     if (!hasAnyPermission) {
                       return (
-                        <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                        <Card className="bg-black/10  border border-white/10 text-white">
                           <CardContent className="py-12 text-center">
                             <Building className="h-12 w-12 mx-auto mb-4 text-white/50" />
                             <p className="text-white/70 text-lg font-semibold">Accès limité</p>
@@ -387,7 +387,7 @@ export default function TeamDashboard() {
                         {/* Stats Cards - seulement si permission de voir les projets */}
                         {(teamMember.can_view_all_chantiers || teamMember.can_manage_chantiers) && (
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                            <Card className="bg-black/10  border border-white/10 text-white">
                               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                 <CardTitle className="text-sm font-medium">Mes Projets</CardTitle>
                                 <Building className="h-4 w-4 text-white/70" />
@@ -398,7 +398,7 @@ export default function TeamDashboard() {
                               </CardContent>
                             </Card>
 
-                            <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                            <Card className="bg-black/10  border border-white/10 text-white">
                               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                 <CardTitle className="text-sm font-medium">En Cours</CardTitle>
                                 <Clock className="h-4 w-4 text-white/70" />
@@ -409,7 +409,7 @@ export default function TeamDashboard() {
                               </CardContent>
                             </Card>
 
-                            <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                            <Card className="bg-black/10  border border-white/10 text-white">
                               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                 <CardTitle className="text-sm font-medium">Planifiés</CardTitle>
                                 <Calendar className="h-4 w-4 text-white/70" />
@@ -424,7 +424,7 @@ export default function TeamDashboard() {
 
                         {/* Mes Projets Récents - seulement si permission de voir les projets */}
                         {(teamMember.can_view_all_chantiers || teamMember.can_manage_chantiers) && (
-                          <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                          <Card className="bg-black/10  border border-white/10 text-white">
                             <CardHeader>
                               <CardTitle>Mes Projets Récents</CardTitle>
                             </CardHeader>
@@ -436,7 +436,7 @@ export default function TeamDashboard() {
                                   {chantiers.slice(0, 5).map((chantier) => (
                                     <div
                                       key={chantier.id}
-                                      className="flex items-center justify-between p-3 bg-black/10 backdrop-blur-md border border-white/10 rounded-lg"
+                                      className="flex items-center justify-between p-3 bg-black/10  border border-white/10 rounded-lg"
                                     >
                                       <div>
                                         <p className="font-medium text-white">{chantier.nom}</p>
@@ -466,7 +466,7 @@ export default function TeamDashboard() {
               {activeTab === 'projects' && (
                 <>
                   {!teamMember?.can_view_all_chantiers && !teamMember?.can_manage_chantiers ? (
-                    <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                    <Card className="bg-black/10  border border-white/10 text-white">
                       <CardContent className="py-12 text-center">
                         <Building className="h-12 w-12 mx-auto mb-4 text-white/50" />
                         <p className="text-white/70 text-lg font-semibold">Accès refusé</p>
@@ -474,7 +474,7 @@ export default function TeamDashboard() {
                       </CardContent>
                     </Card>
                   ) : (
-                    <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                    <Card className="bg-black/10  border border-white/10 text-white">
                       <CardHeader>
                         <CardTitle>Mes Projets</CardTitle>
                       </CardHeader>
@@ -492,7 +492,7 @@ export default function TeamDashboard() {
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {chantiers.map((chantier) => (
-                          <Card key={chantier.id} className="bg-black/10 backdrop-blur-lg border border-white/10 text-white">
+                          <Card key={chantier.id} className="bg-black/10  border border-white/10 text-white">
                             <CardHeader>
                               <CardTitle className="text-lg">{chantier.nom}</CardTitle>
                             </CardHeader>
@@ -530,7 +530,7 @@ export default function TeamDashboard() {
                   {teamMember?.can_create_quotes ? (
                     <QuotesPage />
                   ) : (
-                    <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                    <Card className="bg-black/10  border border-white/10 text-white">
                       <CardContent className="py-12 text-center">
                         <FileText className="h-12 w-12 mx-auto mb-4 text-white/50" />
                         <p className="text-white/70 text-lg font-semibold">Accès refusé</p>
@@ -565,7 +565,7 @@ export default function TeamDashboard() {
               {activeTab === 'planning' && (
                 <>
                   {!teamMember?.can_view_planning && !teamMember?.can_manage_planning ? (
-                    <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                    <Card className="bg-black/10  border border-white/10 text-white">
                       <CardContent className="py-12 text-center">
                         <Calendar className="h-12 w-12 mx-auto mb-4 text-white/50" />
                         <p className="text-white/70 text-lg font-semibold">Accès refusé</p>
@@ -575,7 +575,7 @@ export default function TeamDashboard() {
                   ) : (
                     <div className="space-y-4">
                       {!loading && chantiers.length === 0 ? (
-                    <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                    <Card className="bg-black/10  border border-white/10 text-white">
                       <CardContent className="py-12 text-center">
                         <Calendar className="h-12 w-12 mx-auto mb-4 text-white/50" />
                         <p className="text-white/70">Aucun projet assigné</p>
@@ -584,7 +584,7 @@ export default function TeamDashboard() {
                     </Card>
                   ) : (
                     <>
-                  <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                  <Card className="bg-black/10  border border-white/10 text-white">
                     <CardHeader>
                       <div className="flex items-center justify-between flex-wrap gap-2">
                         <CardTitle>Mon Planning</CardTitle>
@@ -620,7 +620,7 @@ export default function TeamDashboard() {
                       </div>
                     </CardHeader>
                   </Card>
-                  <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                  <Card className="bg-black/10  border border-white/10 text-white">
                     <CardContent className="p-6">
                       <div className="grid grid-cols-7 gap-2 mb-4">
                         {DAY_NAMES.map((day) => (
@@ -684,7 +684,7 @@ export default function TeamDashboard() {
                       </div>
                     </CardContent>
                   </Card>
-                  <Card className="bg-black/10 backdrop-blur-xl border border-white/10 text-white">
+                  <Card className="bg-black/10  border border-white/10 text-white">
                     <CardContent className="py-3">
                       <div className="flex flex-wrap gap-4">
                         <div className="flex items-center gap-2">
@@ -712,7 +712,7 @@ export default function TeamDashboard() {
             </TeamEffectiveUserIdProvider>
           </motion.div>
         </AnimatePresence>
-          <SheetContent side="left" className="w-[min(20rem,85vw)] p-0 bg-black/20 backdrop-blur-xl border-white/10 rounded-r-3xl border-r md:hidden">
+          <SheetContent side="left" className="w-[min(20rem,85vw)] p-0 bg-black/20  border-white/10 rounded-r-3xl border-r md:hidden">
             <TeamSidebar variant="drawer" onNavigate={() => setTeamMenuOpen(false)} />
           </SheetContent>
         </Sheet>

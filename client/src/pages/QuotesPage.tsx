@@ -25,6 +25,7 @@ import { useUserSettings } from '@/context/UserSettingsContext';
 import { useToast } from '@/hooks/use-toast';
 import { UserAccountButton } from '@/components/UserAccountButton';
 import { VoiceInputButton } from '@/components/VoiceInputButton';
+import { supabase } from '@/lib/supabaseClient';
 import { insertQuote, updateQuote, deleteQuote, updateQuoteStatus, fetchQuoteById, fetchQuotesForUser, getQuoteDisplayNumber, type QuoteItem, type QuoteSubItem, type SupabaseQuote } from '@/lib/supabaseQuotes';
 import { DEFAULT_THEME_COLOR, QUOTE_STATUS_LABELS, QUOTE_UNIT_NONE, QUOTE_UNIT_OPTIONS, inferUnitFromDescription, backfillUnitOnItems } from '@/lib/quoteConstants';
 import { downloadQuotePdf, fetchLogoDataUrl, getQuotePdfBase64 } from '@/lib/quotePdf';
@@ -192,8 +193,8 @@ export default function QuotesPage() {
     }
     if (hasResetForNewRef.current) return;
     hasResetForNewRef.current = true;
-    // Vérifier si c'est un flux direct depuis estimation
-    const fromDirectEstimation = fromEstimation && searchParams.get('fromEstimation') === '1';
+    // Vérifier si c'est un flux direct depuis estimation (paramètre URL)
+    const fromDirectEstimation = searchParams.get('fromEstimation') === '1';
     isFromDirectEstimationRef.current = fromDirectEstimation;
     
     setStep(1);
@@ -895,7 +896,13 @@ export default function QuotesPage() {
     }
 
     setIsSaving(true);
-    
+    // #region agent log
+    const _log = (loc: string, msg: string, data: Record<string, unknown>) => {
+      (window as any).__quoteDebug = { ...(window as any).__quoteDebug, lastLoc: loc, lastMsg: msg, lastData: data, lastTime: Date.now() };
+      fetch('http://127.0.0.1:7744/ingest/c9e7f7b6-6efe-4cbf-8c2a-4d8bd68532b6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'44037e'},body:JSON.stringify({sessionId:'44037e',location:loc,message:msg,data,timestamp:Date.now()})}).catch(()=>{});
+    };
+    _log('QuotesPage:handleSaveQuote', 'save_start', { userId: user?.id, step, editingQuoteId: editingQuoteId ?? null });
+    // #endregion
     try {
       const currentTotal = currentSubtotalAfterDiscount * (1 + parsedTvaRate / 100);
       
@@ -915,10 +922,18 @@ export default function QuotesPage() {
           items: items,
           // Ne pas définir de statut lors de la sauvegarde
         };
+        // #region agent log
+        _log('QuotesPage:before_insert', 'calling insertQuote', { itemsLen: items.length, total_ht: payload.total_ht, total_ttc: payload.total_ttc });
+        // #endregion
         const newQuote = await insertQuote(user.id, payload);
-        
+        // #region agent log
+        _log('QuotesPage:after_insert', 'insertQuote ok', { newQuoteId: newQuote?.id });
+        // #endregion
         // Generate and save PDF immediately
         try {
+          // #region agent log
+          _log('QuotesPage:pdf_block', 'before fetchLogoDataUrl + getQuotePdfBase64', {});
+          // #endregion
           const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : undefined;
           const pdfBase64 = getQuotePdfBase64({
             clientInfo,
@@ -944,9 +959,17 @@ export default function QuotesPage() {
             companyEmail: profile?.company_email,
             companySiret: profile?.company_siret,
           });
-          await supabase.from("quotes").update({ quote_pdf_base64: pdfBase64 }).eq("id", newQuote.id);
+          await supabase.from("quotes").update({ quote_pdf_base64: pdfBase64 }).eq("id", newQuote.id).eq("user_id", user.id);
+          // #region agent log
+          _log('QuotesPage:after_pdf_update', 'pdf update ok', { quoteId: newQuote.id });
+          // #endregion
         } catch (err) {
           console.error('Error generating PDF for new quote:', err);
+          // #region agent log
+          const pdfErr = err as Error;
+          _log('QuotesPage:pdf_catch', 'pdf_err', { errName: pdfErr?.name, errMessage: pdfErr?.message });
+          (window as any).__quoteDebug = { ...(window as any).__quoteDebug, lastError: pdfErr?.message || String(err) };
+          // #endregion
         }
         
         setEditingQuoteId(newQuote.id);
@@ -995,6 +1018,11 @@ export default function QuotesPage() {
       }
     } catch (error: unknown) {
       console.error('Error saving quote:', error);
+      // #region agent log
+      const errObj = error as Error;
+      _log('QuotesPage:save_catch', 'save_err', { errName: errObj?.name, errMessage: errObj?.message });
+      (window as any).__quoteDebug = { ...(window as any).__quoteDebug, lastError: errObj?.message || String(error) };
+      // #endregion
       const message = error instanceof Error ? error.message : 'Erreur inconnue';
       toast({
         title: 'Erreur lors de la sauvegarde',
@@ -1422,7 +1450,7 @@ export default function QuotesPage() {
         />
       ) : (
         <>
-      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
+      <header className="bg-black/20  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
           <div className="min-w-0 w-full sm:flex-1 pl-20">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
@@ -1728,7 +1756,7 @@ export default function QuotesPage() {
               >
                 <Card
                   ref={clientCardRef}
-                  className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl rounded-2xl"
+                  className="bg-white/80 dark:bg-gray-800/80  border border-gray-200/50 dark:border-gray-700/50 shadow-xl rounded-2xl"
                 >
                   <CardHeader className="space-y-0">
                     <div className="flex flex-wrap items-center gap-3">
@@ -1833,7 +1861,7 @@ export default function QuotesPage() {
                 transition={{ duration: 0.2 }}
                 className="space-y-4"
               >
-                <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl rounded-2xl">
+                <Card className="bg-white/80 dark:bg-gray-800/80  border border-gray-200/50 dark:border-gray-700/50 shadow-xl rounded-2xl">
                   <CardHeader className="space-y-0">
                     <div className="flex flex-wrap items-center gap-3">
                       <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-white font-light">
@@ -2050,7 +2078,7 @@ export default function QuotesPage() {
                 className={splitPreview ? "grid grid-cols-1 xl:grid-cols-2 gap-4" : "space-y-4"}
               >
               <div className="space-y-4">
-                <Card ref={itemsCardRef} className={`bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl rounded-2xl ${highlightMissing.itemsSection ? 'border-amber-400/80 dark:border-amber-500/60' : ''}`}>
+                <Card ref={itemsCardRef} className={`bg-white/80 dark:bg-gray-800/80  border border-gray-200/50 dark:border-gray-700/50 shadow-xl rounded-2xl ${highlightMissing.itemsSection ? 'border-amber-400/80 dark:border-amber-500/60' : ''}`}>
                   <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-white font-light">
                       <Calculator className="h-5 w-5 text-violet-500" />
@@ -2646,7 +2674,7 @@ export default function QuotesPage() {
               </div>
               {splitPreview && (
                 <div className="hidden xl:block sticky top-4 h-fit">
-                  <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl rounded-2xl overflow-hidden">
+                  <Card className="bg-white/80 dark:bg-gray-800/80  border border-gray-200/50 dark:border-gray-700/50 shadow-xl rounded-2xl overflow-hidden">
                     <CardHeader className="py-3 px-4">
                       <CardTitle className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
                         <FileText className="h-4 w-4 text-violet-500" />

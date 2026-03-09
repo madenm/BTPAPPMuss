@@ -81,7 +81,7 @@ export function ProjectCard({
 
   return (
     <Card
-      className={`bg-black/20 backdrop-blur-xl border text-white hover:shadow-lg hover:scale-[1.01] transition-all duration-200 cursor-pointer rounded-lg overflow-hidden ${
+      className={`bg-black/20  border text-white hover:shadow-lg hover:scale-[1.01] transition-all duration-200 cursor-pointer rounded-lg overflow-hidden ${
         enRetard
           ? 'border-l-4 border-l-red-500 border-white/10'
           : chantier.statut === 'en cours'
@@ -109,7 +109,7 @@ export function ProjectCard({
                     />
                   ))}
                 </div>
-                <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm text-white px-2 py-1 rounded text-xs flex items-center gap-1">
+                <div className="absolute top-2 right-2 bg-black/60  text-white px-2 py-1 rounded text-xs flex items-center gap-1">
                   {imageIndex + 1} / {chantier.images.length}
                 </div>
                 <button

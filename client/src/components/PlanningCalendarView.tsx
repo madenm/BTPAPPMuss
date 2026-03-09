@@ -104,7 +104,7 @@ function ChantierBlockCompact({
           </div>
         </div>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="bg-black/90 backdrop-blur-xl border border-white/10 text-white shadow-lg">
+      <DropdownMenuContent align="start" className="bg-black/90  border border-white/10 text-white shadow-lg">
         <DropdownMenuItem onSelect={() => handleStatusChange('planifié')} className="focus:bg-white/10 focus:text-white text-white">
           {chantier.statut === 'planifié' ? <Check className="mr-2 h-4 w-4" /> : null}
           ⏳ Planifié
@@ -186,7 +186,7 @@ function ChantierBlockModal({
                   Changer statut
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="bg-black/90 backdrop-blur-xl border border-white/10 text-white">
+              <DropdownMenuContent align="start" className="bg-black/90  border border-white/10 text-white">
                 <DropdownMenuItem onSelect={() => { onStatusChange(chantier, 'planifié'); onClosePopover(); }} className="text-white focus:bg-white/10">
                   {chantier.statut === 'planifié' ? <Check className="mr-2 h-4 w-4" /> : null}
                   ⏳ Planifié
@@ -253,7 +253,7 @@ export function PlanningCalendarView({
   }, [onSaveNote, draftNote, closeDayPopover]);
 
   return (
-    <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white shadow-none min-w-0 overflow-hidden">
+    <Card className="bg-black/20  border border-white/10 text-white shadow-none min-w-0 overflow-hidden">
       <CardContent className="px-2 py-4 sm:p-5">
         {/* Légende */}
         <div className="flex flex-wrap items-center gap-3 text-xs text-white/70 pb-3 tracking-wide">
@@ -371,7 +371,7 @@ export function PlanningCalendarView({
                 </PopoverTrigger>
                 <PopoverContent
                   align="start"
-                  className="w-80 max-h-[32rem] overflow-y-auto p-5 bg-black/90 backdrop-blur-xl border border-white/10 text-white rounded-lg shadow-xl"
+                  className="w-80 max-h-[32rem] overflow-y-auto p-5 bg-black/90  border border-white/10 text-white rounded-lg shadow-xl"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="flex items-start justify-between gap-2 mb-4">

@@ -103,7 +103,7 @@ export default function LoginPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className="w-full max-w-md bg-black/20 backdrop-blur-xl rounded-3xl border border-white/10 p-8 shadow-2xl text-white"
+          className="w-full max-w-md bg-black/20  rounded-3xl border border-white/10 p-8 shadow-2xl text-white"
         >
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4 relative">
@@ -123,7 +123,7 @@ export default function LoginPage() {
                       <Settings className="h-4 w-4" />
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl text-white">
+                  <DialogContent className="bg-black/20  border border-white/10 rounded-2xl text-white">
                     <DialogHeader>
                       <DialogTitle className="text-white">Gérer le Code Admin</DialogTitle>
                       <DialogDescription className="text-white/70">
@@ -201,7 +201,7 @@ export default function LoginPage() {
                   {teamMembers.map((member) => (
                     <Card
                       key={member.id}
-                      className="bg-black/20 backdrop-blur-sm border-white/10 cursor-pointer hover:bg-white/10 transition-colors"
+                      className="bg-black/20  border-white/10 cursor-pointer hover:bg-white/10 transition-colors"
                       onClick={() => setCode(member.login_code)}
                     >
                       <CardContent className="p-4">
@@ -254,7 +254,7 @@ export default function LoginPage() {
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                   placeholder="Entrez votre code"
-                  className="w-full bg-black/40 backdrop-blur-md border-white/20 text-white placeholder:text-white/50 focus:border-violet-400 focus:ring-violet-400/20 h-12 text-center text-lg tracking-widest font-mono"
+                  className="w-full bg-black/40  border-white/20 text-white placeholder:text-white/50 focus:border-violet-400 focus:ring-violet-400/20 h-12 text-center text-lg tracking-widest font-mono"
                   maxLength={10}
                 />
               </div>

@@ -274,7 +274,7 @@ function OverviewTab() {
 
       {/* Alerts Section */}
       {allAlerts.length > 0 && (
-        <Card className="bg-black/20 backdrop-blur-xl border border-white/10 shadow-xl rounded-2xl text-white overflow-hidden">
+        <Card className="bg-black/20  border border-white/10 shadow-xl rounded-2xl text-white overflow-hidden">
           <CardHeader className="pb-2">
             <CardTitle className="text-white font-light flex items-center gap-2 text-base">
               <Bell className="h-4 w-4 text-amber-400" />
@@ -358,7 +358,7 @@ function OverviewTab() {
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Revenue Chart */}
-        <Card className="bg-black/20 backdrop-blur-xl border border-white/10 shadow-xl rounded-2xl text-white">
+        <Card className="bg-black/20  border border-white/10 shadow-xl rounded-2xl text-white">
           <CardHeader className="pb-2">
             <CardTitle className="text-white font-light text-base">Évolution des Revenus</CardTitle>
           </CardHeader>
@@ -401,7 +401,7 @@ function OverviewTab() {
         </Card>
 
         {/* Conversion Chart */}
-        <Card className="bg-black/20 backdrop-blur-xl border border-white/10 shadow-xl rounded-2xl text-white">
+        <Card className="bg-black/20  border border-white/10 shadow-xl rounded-2xl text-white">
           <CardHeader className="pb-2">
             <CardTitle className="text-white font-light text-base">Taux de Conversion</CardTitle>
           </CardHeader>
@@ -430,7 +430,7 @@ function OverviewTab() {
 
       {/* Pending Invoices - Quick Actions */}
       {visiblePendingInvoices.length > 0 && (
-        <Card className="bg-black/20 backdrop-blur-xl border border-white/10 shadow-xl rounded-2xl text-white">
+        <Card className="bg-black/20  border border-white/10 shadow-xl rounded-2xl text-white">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-white font-light text-base flex items-center gap-2">
@@ -509,7 +509,7 @@ function OverviewTab() {
       {/* Bottom Row: Activity + Contextual Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Activity */}
-        <Card className="lg:col-span-2 bg-black/20 backdrop-blur-xl border border-white/10 shadow-xl rounded-2xl text-white">
+        <Card className="lg:col-span-2 bg-black/20  border border-white/10 shadow-xl rounded-2xl text-white">
           <CardHeader className="pb-2">
             <CardTitle className="text-white font-light text-base flex items-center gap-2">
               <Activity className="h-4 w-4 text-violet-400" />
@@ -560,7 +560,7 @@ function OverviewTab() {
         </Card>
 
         {/* Contextual Actions */}
-        <Card className="bg-black/20 backdrop-blur-xl border border-white/10 shadow-xl rounded-2xl text-white">
+        <Card className="bg-black/20  border border-white/10 shadow-xl rounded-2xl text-white">
           <CardHeader className="pb-2">
             <CardTitle className="text-white font-light text-base">Actions</CardTitle>
           </CardHeader>
@@ -629,7 +629,7 @@ function KpiCard({
 }) {
   return (
     <Card
-      className={`bg-black/20 backdrop-blur-xl border border-white/10 shadow-xl rounded-2xl text-white ${onClick ? "cursor-pointer hover:bg-white/5 active:scale-[0.98]" : ""} transition-all ${className}`}
+      className={`bg-black/20  border border-white/10 shadow-xl rounded-2xl text-white ${onClick ? "cursor-pointer hover:bg-white/5 active:scale-[0.98]" : ""} transition-all ${className}`}
       onClick={onClick}
     >
       <CardContent className="p-3 sm:p-4">

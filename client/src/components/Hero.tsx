@@ -70,7 +70,7 @@ function Hero() {
             <Button size="lg" className="gap-4" variant="outline" data-testid="button-login">
               Se connecter <PhoneCall className="w-4 h-4" />
             </Button>
-            <Button size="lg" className="gap-4 bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30" data-testid="button-signup">
+            <Button size="lg" className="gap-4 bg-white/20  border border-white/10 text-white hover:bg-white/30" data-testid="button-signup">
               S'inscrire <MoveRight className="w-4 h-4" />
             </Button>
           </div>

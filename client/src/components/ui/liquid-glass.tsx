@@ -23,9 +23,9 @@ const shadowClasses = {
 };
 
 const blurClasses = {
-  sm: "backdrop-blur-sm",
-  md: "backdrop-blur-md",
-  lg: "backdrop-blur-lg",
+  sm: "",
+  md: "",
+  lg: "",
 };
 
 export function LiquidGlassCard({

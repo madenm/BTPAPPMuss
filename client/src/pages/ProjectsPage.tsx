@@ -757,7 +757,7 @@ export default function ProjectsPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
+      <header className="bg-black/20  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
           <div className="min-w-0 w-full sm:flex-1 pl-20">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
@@ -783,13 +783,13 @@ export default function ProjectsPage() {
               }}
             >
               <DialogTrigger asChild>
-                <Button size="sm" className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30 h-9 px-2 sm:px-3 text-sm">
+                <Button size="sm" className="bg-white/20  text-white border border-white/10 hover:bg-white/30 h-9 px-2 sm:px-3 text-sm">
                   <Plus className="h-4 w-4 sm:mr-2" />
                   <span className="hidden sm:inline">Ajouter un Projet</span>
                   <span className="sm:hidden">Ajouter</span>
                 </Button>
               </DialogTrigger>
-              <DialogContent className="bg-black/20 backdrop-blur-xl border border-white/10 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogContent className="bg-black/20  border border-white/10 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
 <DialogTitle className="text-white">Nouveau Projet</DialogTitle>
             <DialogDescription className="text-white/70">
@@ -803,7 +803,7 @@ export default function ProjectsPage() {
                       value={newChantier.nom}
                       onChange={(e) => setNewChantier({ ...newChantier, nom: e.target.value })}
                       placeholder="Ex: Rénovation salle de bain"
-                      className="bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+                      className="bg-black/20  border-white/10 text-white placeholder:text-white/50"
                     />
                   </div>
 
@@ -814,10 +814,10 @@ export default function ProjectsPage() {
                         value={newChantier.clientId}
                         onValueChange={(value) => setNewChantier({ ...newChantier, clientId: value })}
                       >
-                        <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white">
+                        <SelectTrigger className="bg-black/20  border-white/10 text-white">
                           <SelectValue placeholder="Sélectionner un client" />
                         </SelectTrigger>
-                        <SelectContent className="bg-black/20 backdrop-blur-xl border-white/10">
+                        <SelectContent className="bg-black/20  border-white/10">
                           {clients.map((client) => (
                             <SelectItem key={client.id} value={client.id} className="text-white">
                               {client.name}
@@ -842,10 +842,10 @@ export default function ProjectsPage() {
                       value={newChantier.typeChantier}
                       onValueChange={(value) => setNewChantier({ ...newChantier, typeChantier: value })}
                     >
-                      <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white">
+                      <SelectTrigger className="bg-black/20  border-white/10 text-white">
                         <SelectValue placeholder="Sélectionner le type" />
                       </SelectTrigger>
-                      <SelectContent className="bg-black/20 backdrop-blur-xl border-white/10">
+                      <SelectContent className="bg-black/20  border-white/10">
                         <SelectItem value="piscine" className="text-white">Piscine & Spa</SelectItem>
                         <SelectItem value="paysage" className="text-white">Aménagement Paysager</SelectItem>
                         <SelectItem value="menuiserie" className="text-white">Menuiserie Sur-Mesure</SelectItem>
@@ -870,7 +870,7 @@ export default function ProjectsPage() {
                           <Button
                             type="button"
                             variant="outline"
-                            className="w-full justify-start text-left font-normal h-9 bg-black/20 backdrop-blur-md border-white/10 text-white hover:bg-black/30 hover:border-white/20"
+                            className="w-full justify-start text-left font-normal h-9 bg-black/20  border-white/10 text-white hover:bg-black/30 hover:border-white/20"
                           >
                             <CalendarIcon className="mr-2 h-4 w-4 opacity-70" />
                             {dateInputValue(newChantier.dateDebut) || 'JJ/MM/AAAA'}
@@ -905,7 +905,7 @@ export default function ProjectsPage() {
                         value={newChantier.duree}
                         onChange={(e) => setNewChantier({ ...newChantier, duree: e.target.value })}
                         placeholder="Ex: 2 semaines"
-                        className="bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+                        className="bg-black/20  border-white/10 text-white placeholder:text-white/50"
                       />
                     </div>
                   </div>
@@ -917,7 +917,7 @@ export default function ProjectsPage() {
                         <Button
                           type="button"
                           variant="outline"
-                          className="w-full justify-start text-left font-normal h-9 bg-black/20 backdrop-blur-md border-white/10 text-white hover:bg-black/30"
+                          className="w-full justify-start text-left font-normal h-9 bg-black/20  border-white/10 text-white hover:bg-black/30"
                         >
                           <CalendarIcon className="mr-2 h-4 w-4 opacity-70" />
                           {dateInputValue(newChantier.dateFin) || 'JJ/MM/AAAA'}
@@ -954,10 +954,10 @@ export default function ProjectsPage() {
                       value={newChantier.statut}
                       onValueChange={(value: 'planifié' | 'en cours' | 'terminé') => setNewChantier({ ...newChantier, statut: value })}
                     >
-                      <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white">
+                      <SelectTrigger className="bg-black/20  border-white/10 text-white">
                         <SelectValue placeholder="Sélectionner un statut" />
                       </SelectTrigger>
-                      <SelectContent className="bg-black/20 backdrop-blur-xl border-white/10">
+                      <SelectContent className="bg-black/20  border-white/10">
                         <SelectItem value="planifié" className="text-white">Planifié</SelectItem>
                         <SelectItem value="en cours" className="text-white">En cours</SelectItem>
                       <SelectItem value="terminé" className="text-white">Terminé</SelectItem>
@@ -977,7 +977,7 @@ export default function ProjectsPage() {
                         setNewChantier({ ...newChantier, montantDevis: v === '' ? undefined : Number(v) });
                       }}
                       placeholder="Ex: 15500"
-                      className="bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+                      className="bg-black/20  border-white/10 text-white placeholder:text-white/50"
                     />
                   </div>
 
@@ -988,7 +988,7 @@ export default function ProjectsPage() {
                       onChange={(e) => setNewChantier({ ...newChantier, notes: e.target.value })}
                       placeholder="Décrivez le projet à réaliser (cette description sera reprise dans le devis)"
                       rows={4}
-                      className="bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+                      className="bg-black/20  border-white/10 text-white placeholder:text-white/50"
                     />
                     <p className="text-xs text-white/60 mt-1">Utilisée pour préremplir la description dans le générateur de devis.</p>
                   </div>
@@ -1000,7 +1000,7 @@ export default function ProjectsPage() {
                       onChange={(e) => setNewChantier({ ...newChantier, notesAvancement: e.target.value })}
                       placeholder="Notes sur l'avancement, points bloquants, remarques..."
                       rows={4}
-                      className="bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+                      className="bg-black/20  border-white/10 text-white placeholder:text-white/50"
                     />
                   </div>
 
@@ -1088,7 +1088,7 @@ export default function ProjectsPage() {
                     <Button
                       onClick={handleAddChantier}
                       disabled={!newChantier.nom || !newChantier.clientId || !dateInputToISO(newChantier.dateDebut) || !newChantier.duree}
-                      className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30 disabled:opacity-50"
+                      className="bg-white/20  text-white border border-white/10 hover:bg-white/30 disabled:opacity-50"
                     >
                       Ajouter
                     </Button>
@@ -1167,7 +1167,7 @@ export default function ProjectsPage() {
 
       {/* Dialog d'édition de chantier */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="bg-black/20 backdrop-blur-xl border border-white/10 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-black/20  border border-white/10 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-white">Modifier le projet</DialogTitle>
             <DialogDescription className="text-white/70">
@@ -1181,7 +1181,7 @@ export default function ProjectsPage() {
                 value={editChantier.nom}
                 onChange={(e) => setEditChantier({ ...editChantier, nom: e.target.value })}
                 placeholder="Ex: Rénovation salle de bain"
-                className="bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+                className="bg-black/20  border-white/10 text-white placeholder:text-white/50"
               />
             </div>
 
@@ -1195,10 +1195,10 @@ export default function ProjectsPage() {
                     setEditChantier({ ...editChantier, clientId: value, clientName: client?.name || '' });
                   }}
                 >
-                  <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white">
+                  <SelectTrigger className="bg-black/20  border-white/10 text-white">
                     <SelectValue placeholder="Sélectionner un client" />
                   </SelectTrigger>
-                  <SelectContent className="bg-black/20 backdrop-blur-xl border-white/10">
+                  <SelectContent className="bg-black/20  border-white/10">
                     {clients.map((client) => (
                       <SelectItem key={client.id} value={client.id} className="text-white">
                         {client.name}
@@ -1225,7 +1225,7 @@ export default function ProjectsPage() {
                     <Button
                       type="button"
                       variant="outline"
-                      className="w-full justify-start text-left font-normal h-9 bg-black/20 backdrop-blur-md border-white/10 text-white hover:bg-black/30 hover:border-white/20"
+                      className="w-full justify-start text-left font-normal h-9 bg-black/20  border-white/10 text-white hover:bg-black/30 hover:border-white/20"
                     >
                       <CalendarIcon className="mr-2 h-4 w-4 opacity-70" />
                       {dateInputValue(editChantier.dateDebut || '') || 'JJ/MM/AAAA'}
@@ -1260,7 +1260,7 @@ export default function ProjectsPage() {
                   value={editChantier.duree}
                   onChange={(e) => setEditChantier({ ...editChantier, duree: e.target.value })}
                   placeholder="Ex: 2 semaines"
-                  className="bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+                  className="bg-black/20  border-white/10 text-white placeholder:text-white/50"
                 />
               </div>
             </div>
@@ -1272,7 +1272,7 @@ export default function ProjectsPage() {
                   <Button
                     type="button"
                     variant="outline"
-                    className="w-full justify-start text-left font-normal h-9 bg-black/20 backdrop-blur-md border-white/10 text-white"
+                    className="w-full justify-start text-left font-normal h-9 bg-black/20  border-white/10 text-white"
                   >
                     <CalendarIcon className="mr-2 h-4 w-4 opacity-70" />
                     {dateInputValue(editChantier.dateFin || '') || 'JJ/MM/AAAA'}
@@ -1309,10 +1309,10 @@ export default function ProjectsPage() {
                 value={editChantier.typeChantier ?? ''}
                 onValueChange={(value) => setEditChantier({ ...editChantier, typeChantier: value || undefined })}
               >
-                <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white">
+                <SelectTrigger className="bg-black/20  border-white/10 text-white">
                   <SelectValue placeholder="Sélectionner le type" />
                 </SelectTrigger>
-                <SelectContent className="bg-black/20 backdrop-blur-xl border-white/10">
+                <SelectContent className="bg-black/20  border-white/10">
                   <SelectItem value="piscine" className="text-white">Piscine & Spa</SelectItem>
                   <SelectItem value="paysage" className="text-white">Aménagement Paysager</SelectItem>
                   <SelectItem value="menuiserie" className="text-white">Menuiserie Sur-Mesure</SelectItem>
@@ -1335,10 +1335,10 @@ export default function ProjectsPage() {
                 value={editChantier.statut}
                 onValueChange={(value: 'planifié' | 'en cours' | 'terminé') => setEditChantier({ ...editChantier, statut: value })}
               >
-                <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white">
+                <SelectTrigger className="bg-black/20  border-white/10 text-white">
                   <SelectValue placeholder="Sélectionner un statut" />
                 </SelectTrigger>
-                <SelectContent className="bg-black/20 backdrop-blur-xl border-white/10">
+                <SelectContent className="bg-black/20  border-white/10">
                   <SelectItem value="planifié" className="text-white">Planifié</SelectItem>
                   <SelectItem value="en cours" className="text-white">En cours</SelectItem>
                 <SelectItem value="terminé" className="text-white">Terminé</SelectItem>
@@ -1358,7 +1358,7 @@ export default function ProjectsPage() {
                   setEditChantier({ ...editChantier, montantDevis: v === '' ? undefined : Number(v) });
                 }}
                 placeholder="Ex: 15500"
-                className="bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+                className="bg-black/20  border-white/10 text-white placeholder:text-white/50"
               />
             </div>
 
@@ -1370,7 +1370,7 @@ export default function ProjectsPage() {
                   onChange={(e) => setEditChantier({ ...editChantier, notes: e.target.value })}
                   placeholder="Description du projet (reprise dans le devis)."
                   rows={4}
-                  className="flex-1 bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+                  className="flex-1 bg-black/20  border-white/10 text-white placeholder:text-white/50"
                 />
                 <VoiceInputButton
                   onTranscript={(text) => {
@@ -1393,7 +1393,7 @@ export default function ProjectsPage() {
                   onChange={(e) => setEditChantier({ ...editChantier, notesAvancement: e.target.value })}
                   placeholder="Notes sur l'avancement, points bloquants, remarques..."
                   rows={4}
-                  className="flex-1 bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+                  className="flex-1 bg-black/20  border-white/10 text-white placeholder:text-white/50"
                 />
                 <VoiceInputButton
                   onTranscript={(text) => {
@@ -1764,7 +1764,7 @@ export default function ProjectsPage() {
               <Button
                 onClick={handleUpdateChantier}
                 disabled={!editChantier.nom || !editChantier.clientId || !dateInputToISO(editChantier.dateDebut || '') || !editChantier.duree}
-                className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30 disabled:opacity-50"
+                className="bg-white/20  text-white border border-white/10 hover:bg-white/30 disabled:opacity-50"
               >
                 Enregistrer les modifications
               </Button>
@@ -1819,9 +1819,9 @@ export default function ProjectsPage() {
           </div>
         ) : chantiers.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <Card className="w-full max-w-md text-center bg-black/20 backdrop-blur-xl border border-white/10 text-white">
+            <Card className="w-full max-w-md text-center bg-black/20  border border-white/10 text-white">
               <CardHeader className="pb-4">
-                <div className="w-16 h-16 mx-auto rounded-xl bg-black/20 backdrop-blur-md border border-white/10 flex items-center justify-center mb-4">
+                <div className="w-16 h-16 mx-auto rounded-xl bg-black/20  border border-white/10 flex items-center justify-center mb-4">
                   <Building className="h-8 w-8 text-white/70" />
                 </div>
                 <CardTitle className="text-xl text-white">Aucun projet</CardTitle>
@@ -1832,7 +1832,7 @@ export default function ProjectsPage() {
                 </p>
                 <Button
                   onClick={() => setIsDialogOpen(true)}
-                  className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30"
+                  className="bg-white/20  text-white border border-white/10 hover:bg-white/30"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Ajouter un projet

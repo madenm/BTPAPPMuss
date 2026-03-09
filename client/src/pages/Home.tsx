@@ -50,7 +50,7 @@ export default function Home() {
               >
                 <button
                   onClick={() => setLocation("/auth")}
-                  className="inline-flex items-center gap-2 px-8 py-4 bg-white/90 hover:bg-white text-violet-600 rounded-2xl font-medium text-lg transition-all shadow-xl hover:shadow-2xl hover:scale-105 backdrop-blur-sm"
+                  className="inline-flex items-center gap-2 px-8 py-4 bg-white/90 hover:bg-white text-violet-600 rounded-2xl font-medium text-lg transition-all shadow-xl hover:shadow-2xl hover:scale-105 "
                 >
                   Se connecter
                   <ArrowRight className="h-5 w-5" />

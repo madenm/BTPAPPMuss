@@ -200,7 +200,7 @@ export default function AuthPage() {
     <div className="relative w-full min-h-screen overflow-hidden">
       <div className="relative z-10">
         {error && (
-          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm backdrop-blur-md max-w-md">
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm  max-w-md">
             <div>{error}</div>
             {showResendEmail && lastEmail && (
               <button

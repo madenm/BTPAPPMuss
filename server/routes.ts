@@ -240,6 +240,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .join("\n")
         : "";
 
+    // Même logique que l'estimation chantier : Artiprix ciblé par type de projet pour des prix réalistes
+    const metier = typeof projectType === "string" && projectType.trim() ? projectType.trim() : "";
+    const artiprixForType = metier ? getArtiprixForMetier(metier) : "";
+
     let userTariffsBlock = "";
     const authHeader = req.headers.authorization;
     const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
@@ -285,8 +289,18 @@ PRIX INDICATIFS ARTIPRIX 2026 (fourniture + pose HT) — à utiliser pour des de
 - Peinture : Peinture mate/satin phase aqueuse m² ~43–62 €/m² | Enduit finition m² ~20–49 €/m² | Travaux complets ravalement peinture m² ~45–59 €/m².
 Unité : m² = mètre carré, ml = mètre linéaire, U = unité, forf = forfait, jour = journée (main d’œuvre ~350–450 € HT/jour).`;
 
+    const artiprixBlock =
+      artiprixForType && artiprixForType.length > 0
+        ? [
+            "",
+            "BARÈME ARTIPRIX (prix de référence du marché français, fourniture + pose HT — même logique que l'estimation chantier) :",
+            artiprixForType,
+            "Main d'œuvre : 350–450 € HT/jour. Si aucun poste Artiprix ne correspond, utiliser un prix cohérent avec ce barème.",
+          ].join("\n")
+        : ARTIPRIX_REF;
+
     const userMessage = [
-      "Tu rédiges un devis SIMPLE et LISIBLE comme un artisan du bâtiment (pas un catalogue technique).",
+      "Tu rédiges un devis SIMPLE et RÉALISTE comme un artisan du bâtiment, en utilisant la MÊME logique de prix que l'estimation chantier.",
       "",
       "TYPE DE PROJET: " + typeLabel,
       "DESCRIPTION: " + trimmed,
@@ -302,21 +316,20 @@ Unité : m² = mètre carré, ml = mètre linéaire, U = unité, forf = forfait,
       "",
       "Exemples de libellés type artisan (à imiter) : Terrasse béton 30 m² | Peinture mate 45 m² | Carrelage 20 m² | Ouverture porte 215×90 | Fenêtre 2 vantaux 135×100 | Ravalement façade 80 m² | Main d'œuvre 5 jours.",
       "À éviter : phrases longues, sous-détail technique inutile, lignes Étude, Coordination, Frais de dossier (sauf si explicitement demandé).",
-      ARTIPRIX_REF,
+      artiprixBlock,
       ...(userTariffsBlock ? [userTariffsBlock] : []),
       "",
       "Réponds UNIQUEMENT par un JSON valide, sans texte avant ou après : { \"lignes\": [ { \"description\": \"string\", \"quantite\": number, \"unite\": \"string\", \"prix_unitaire\": number } ] }",
     ].join("\n");
 
-    const systemInstruction = `Tu es un artisan en estimation de travaux (BTP, rénovation, menuiserie, couverture, façade, carrelage, peinture). Tu produis un devis SIMPLE, comme on en voit en vrai : peu de lignes, libellés courts, prix réalistes France 2026 (référence Artiprix Gros Œuvre / Second Œuvre).
+    const systemInstruction = `Tu es un expert en estimation de chantiers BTP/rénovation en France, comme pour l'estimation chantier. Tu produis un devis réaliste et lisible.
 
 Règles :
 - Réponds UNIQUEMENT par un JSON valide. Aucun texte avant ou après.
 - Format : { "lignes": [ { "description": "libellé court", "quantite": number, "unite": "m²|ml|U|forfait|jour", "prix_unitaire": number } ] }
-- Devis ARTISAN : 8 à 18 lignes max, descriptions courtes (ex. "Terrasse béton 30 m²", "Peinture mate 45 m²"). Pas de décomposition excessive ni de jargon inutile.
-- Quantités : si la description ou le questionnaire donne des dimensions (surfaces, longueurs), les utiliser pour les quantités (m², ml). Sinon utiliser une quantité raisonnable (1 U, 1 forfait, ou surface/journée estimée) avec un libellé court.
-- Prix unitaire HT : utiliser les fourchettes Artiprix 2026 fournies dans le message ; si des tarifs utilisateur sont donnés, les prioriser pour les lignes correspondantes.
-- Chaque ligne doit correspondre à un poste réel du projet décrit. Pas de lignes type "honoraires", "frais de dossier", "étude" ou "coordination" (sauf si explicitement demandé).`;
+- Priorité des prix : 1) tarifs utilisateur fournis, 2) barème Artiprix donné dans le message (même référence que l'estimation chantier), 3) prix marché cohérents. Main d'œuvre : 350–450 € HT/jour.
+- Devis ARTISAN : 8 à 18 lignes, libellés courts. Quantités déduites de la description (surfaces, longueurs) quand c'est possible.
+- Chaque ligne = un poste réel du projet. Pas de lignes « honoraires », « étude », « coordination » sauf si explicitement demandé.`;
 
     const geminiClient = getGeminiClient();
     if (!geminiClient) {

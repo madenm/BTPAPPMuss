@@ -55,7 +55,7 @@ export function QuoteModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <Card className="bg-black/20 backdrop-blur-xl border border-white/10 w-full max-w-2xl max-h-[90vh] overflow-y-auto text-white">
+      <Card className="bg-black/20  border border-white/10 w-full max-w-2xl max-h-[90vh] overflow-y-auto text-white">
         <CardHeader>
           <CardTitle>Visualisation du Devis</CardTitle>
         </CardHeader>
@@ -161,7 +161,7 @@ export function QuoteModal({
             />
           </div>
 
-          <div className="border border-white/10 rounded-lg p-4 bg-black/20 backdrop-blur-md">
+          <div className="border border-white/10 rounded-lg p-4 bg-black/20 ">
             <p className="text-sm font-medium mb-2">Aperçu</p>
             {pdfFile ? (
               <p className="text-sm text-white/70">Fichier : {pdfFile.name}</p>
@@ -229,7 +229,7 @@ export function InvoiceModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <Card className="bg-black/20 backdrop-blur-xl border border-white/10 w-full max-w-2xl max-h-[90vh] overflow-y-auto text-white">
+      <Card className="bg-black/20  border border-white/10 w-full max-w-2xl max-h-[90vh] overflow-y-auto text-white">
         <CardHeader>
           <CardTitle>Envoi de la facture</CardTitle>
         </CardHeader>
@@ -323,7 +323,7 @@ export function FollowupModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <Card className="bg-black/20 backdrop-blur-xl border border-white/10 w-full max-w-2xl m-4 text-white">
+      <Card className="bg-black/20  border border-white/10 w-full max-w-2xl m-4 text-white">
         <CardHeader>
           <CardTitle>Message de Relance</CardTitle>
         </CardHeader>
@@ -339,7 +339,7 @@ export function FollowupModal({
             <textarea
               id="followup-message"
               name="followupMessage"
-              className="w-full px-3 py-2 rounded-md border bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50 min-h-[150px]"
+              className="w-full px-3 py-2 rounded-md border bg-black/20  border-white/10 text-white placeholder:text-white/50 min-h-[150px]"
               value={message}
               onChange={(e) => onMessageChange(e.target.value)}
               onBlur={onMessageBlur}

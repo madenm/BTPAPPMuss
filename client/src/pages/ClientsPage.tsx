@@ -125,7 +125,7 @@ function ClientFormModal({ open, onOpenChange, client, onSave, isSaving }: Clien
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[400px] bg-black/20 backdrop-blur-xl border border-white/10 text-white rounded-xl p-6">
+      <DialogContent className="max-w-[400px] bg-black/20  border border-white/10 text-white rounded-xl p-6">
         <DialogHeader>
           <DialogTitle className="text-white">
             {isEdit ? `Modifier : ${client.name}` : 'Ajouter un nouveau contact'}
@@ -141,7 +141,7 @@ function ClientFormModal({ open, onOpenChange, client, onSave, isSaving }: Clien
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Paul Dupont"
-              className={`mt-1 bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50 ${errors.name ? 'border-red-400' : ''}`}
+              className={`mt-1 bg-black/20  border-white/10 text-white placeholder:text-white/50 ${errors.name ? 'border-red-400' : ''}`}
             />
             {errors.name && <p className="text-xs text-red-300 mt-0.5">{errors.name}</p>}
           </div>
@@ -152,7 +152,7 @@ function ClientFormModal({ open, onOpenChange, client, onSave, isSaving }: Clien
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="dupont@email.com"
-              className={`mt-1 bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50 ${errors.email ? 'border-red-400' : ''}`}
+              className={`mt-1 bg-black/20  border-white/10 text-white placeholder:text-white/50 ${errors.email ? 'border-red-400' : ''}`}
             />
             {errors.email && <p className="text-xs text-red-300 mt-0.5">{errors.email}</p>}
           </div>
@@ -163,7 +163,7 @@ function ClientFormModal({ open, onOpenChange, client, onSave, isSaving }: Clien
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="06 12 34 56 78"
-              className={`mt-1 bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50 ${errors.phone ? 'border-red-400' : ''}`}
+              className={`mt-1 bg-black/20  border-white/10 text-white placeholder:text-white/50 ${errors.phone ? 'border-red-400' : ''}`}
             />
             {errors.phone && <p className="text-xs text-red-300 mt-0.5">{errors.phone}</p>}
           </div>
@@ -173,7 +173,7 @@ function ClientFormModal({ open, onOpenChange, client, onSave, isSaving }: Clien
               value={streetAddress}
               onChange={(e) => setStreetAddress(e.target.value)}
               placeholder="15 rue de la Paix..."
-              className="mt-1 bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+              className="mt-1 bg-black/20  border-white/10 text-white placeholder:text-white/50"
             />
           </div>
           <div>
@@ -183,7 +183,7 @@ function ClientFormModal({ open, onOpenChange, client, onSave, isSaving }: Clien
               onChange={(e) => setPostalCode(e.target.value)}
               placeholder="75000"
               maxLength={10}
-              className={`mt-1 bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50 ${errors.postalCode ? 'border-red-400' : ''}`}
+              className={`mt-1 bg-black/20  border-white/10 text-white placeholder:text-white/50 ${errors.postalCode ? 'border-red-400' : ''}`}
             />
             {errors.postalCode && <p className="text-xs text-red-300 mt-0.5">{errors.postalCode}</p>}
           </div>
@@ -193,7 +193,7 @@ function ClientFormModal({ open, onOpenChange, client, onSave, isSaving }: Clien
               value={city}
               onChange={(e) => setCity(e.target.value)}
               placeholder="Paris"
-              className="mt-1 bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+              className="mt-1 bg-black/20  border-white/10 text-white placeholder:text-white/50"
             />
           </div>
         </div>
@@ -201,7 +201,7 @@ function ClientFormModal({ open, onOpenChange, client, onSave, isSaving }: Clien
           <Button variant="outline" onClick={() => onOpenChange(false)} className="border-white/20 text-white hover:bg-white/10">
             Annuler
           </Button>
-          <Button onClick={handleSave} disabled={isSaving} className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30 disabled:opacity-50">
+          <Button onClick={handleSave} disabled={isSaving} className="bg-white/20  text-white border border-white/10 hover:bg-white/30 disabled:opacity-50">
             {isSaving ? 'Enregistrement...' : 'Sauvegarder'}
           </Button>
         </DialogFooter>
@@ -323,7 +323,7 @@ export default function ClientsPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
+      <header className="bg-black/20  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
           <div className="min-w-0 w-full sm:flex-1 pl-20">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">Gestion des contacts</h1>
@@ -351,7 +351,7 @@ export default function ClientsPage() {
               <SelectTrigger className="w-full sm:w-[160px] h-9 max-md:h-[44px] bg-black/20 border-white/10 text-white min-w-0">
                 <SelectValue placeholder="Filtre" />
               </SelectTrigger>
-              <SelectContent className="bg-black/20 backdrop-blur-xl border-white/10">
+              <SelectContent className="bg-black/20  border-white/10">
                 <SelectItem value="all" className="text-white">Tous</SelectItem>
                 <SelectItem value="actifs" className="text-white">Actifs</SelectItem>
                 <SelectItem value="terminés" className="text-white">Terminés</SelectItem>
@@ -362,7 +362,7 @@ export default function ClientsPage() {
                 setEditingClient(null);
                 setIsModalOpen(true);
               }}
-              className="h-9 max-md:h-[44px] bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30"
+              className="h-9 max-md:h-[44px] bg-white/20  text-white border border-white/10 hover:bg-white/30"
             >
               <Plus className="h-4 w-4 mr-2" />
               Ajouter contact
@@ -371,7 +371,7 @@ export default function ClientsPage() {
               onClick={handleCreateShareLink}
               disabled={shareLinkLoading}
               variant="outline"
-              className="h-9 max-md:h-[44px] bg-white/10 backdrop-blur-md text-white border border-white/20 hover:bg-white/20"
+              className="h-9 max-md:h-[44px] bg-white/10  text-white border border-white/20 hover:bg-white/20"
             >
               <Link2 className="h-4 w-4 mr-2" />
               {shareLinkLoading ? 'Création...' : 'Partager un lien'}
@@ -380,9 +380,9 @@ export default function ClientsPage() {
         </div>
 
         {filteredClients.length === 0 ? (
-          <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white p-12 text-center">
+          <Card className="bg-black/20  border border-white/10 text-white p-12 text-center">
             <p className="text-white/70">Aucun contact trouvé.</p>
-            <Button className="mt-4 min-h-[44px] max-md:min-h-[44px] bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30" onClick={() => setIsModalOpen(true)}>
+            <Button className="mt-4 min-h-[44px] max-md:min-h-[44px] bg-white/20  text-white border border-white/10 hover:bg-white/30" onClick={() => setIsModalOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Ajouter un contact
             </Button>
@@ -392,7 +392,7 @@ export default function ClientsPage() {
             {filteredClients.map((client) => (
               <Card
                 key={client.id}
-                className="bg-black/20 backdrop-blur-xl border border-white/10 text-white rounded-lg p-4 transition-all duration-200 hover:shadow-lg hover:scale-[1.01]"
+                className="bg-black/20  border border-white/10 text-white rounded-lg p-4 transition-all duration-200 hover:shadow-lg hover:scale-[1.01]"
               >
                 <CardContent className="p-0">
                   <p className="font-semibold text-base text-white truncate">{client.name}</p>
@@ -450,7 +450,7 @@ export default function ClientsPage() {
       />
 
       <Dialog open={shareLinkOpen} onOpenChange={setShareLinkOpen}>
-        <DialogContent className="max-w-[480px] bg-black/20 backdrop-blur-xl border border-white/10 text-white">
+        <DialogContent className="max-w-[480px] bg-black/20  border border-white/10 text-white">
           <DialogHeader>
             <DialogTitle className="text-white">Lien formulaire contact</DialogTitle>
             <DialogDescription className="text-white/70">
@@ -467,7 +467,7 @@ export default function ClientsPage() {
               <DialogFooter>
                 <Button
                   onClick={copyShareLink}
-                  className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30"
+                  className="bg-white/20  text-white border border-white/10 hover:bg-white/30"
                 >
                   Copier le lien
                 </Button>
@@ -478,7 +478,7 @@ export default function ClientsPage() {
       </Dialog>
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent className="max-w-[380px] bg-black/20 backdrop-blur-xl border border-white/10 text-white">
+        <AlertDialogContent className="max-w-[380px] bg-black/20  border border-white/10 text-white">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white">Supprimer ce contact ?</AlertDialogTitle>
             <AlertDialogDescription className="text-white/70">

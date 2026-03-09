@@ -130,7 +130,7 @@ export default function ClientFormPage() {
       </div>
 
       <div className="relative z-10 max-w-md mx-auto px-6 w-full">
-        <Card className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl">
+        <Card className="bg-black/20  border border-white/10 rounded-2xl p-6 shadow-2xl">
           {success ? (
             <div className="text-center py-6">
               <CheckCircle className="h-14 w-14 text-green-400 mx-auto mb-4" />

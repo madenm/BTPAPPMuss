@@ -118,7 +118,7 @@ function CollapsibleSection({
   const [open, setOpen] = useState(defaultOpen);
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="p-4 bg-black/20 backdrop-blur-md border border-white/10 rounded-lg">
+      <div className="p-4 bg-black/20  border border-white/10 rounded-lg">
         <CollapsibleTrigger asChild>
           <button className="flex items-center justify-between w-full text-left">
             <h3 className="text-base font-semibold text-white flex items-center gap-2">
@@ -467,11 +467,11 @@ export default function EstimationPage() {
     });
   }, [step, photoAnalysis?.suggestions, suggestionLabelToMetier]);
 
-  const cardClass = "bg-black/20 backdrop-blur-xl border border-white/10 text-white";
+  const cardClass = "bg-black/20  border border-white/10 text-white";
 
   return (
     <PageWrapper>
-      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
+      <header className="bg-black/20  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
           <div className="min-w-0 w-full sm:flex-1 pl-20">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
@@ -714,7 +714,7 @@ export default function EstimationPage() {
             <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="max-w-6xl mx-auto space-y-4">
               {/* KPI Cards */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <Card className="bg-black/40 backdrop-blur-xl border-2 border-emerald-500/40 shadow-lg shadow-emerald-500/10">
+                <Card className="bg-black/40  border-2 border-emerald-500/40 shadow-lg shadow-emerald-500/10">
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
@@ -726,7 +726,7 @@ export default function EstimationPage() {
                     <p className="text-xs text-white/60 mt-1">{fourchetteBasse.toLocaleString('fr-FR')} – {fourchetteHaute.toLocaleString('fr-FR')} €</p>
                   </CardContent>
                 </Card>
-                <Card className="bg-black/40 backdrop-blur-xl border-2 border-blue-500/40 shadow-lg shadow-blue-500/10">
+                <Card className="bg-black/40  border-2 border-blue-500/40 shadow-lg shadow-blue-500/10">
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
@@ -737,7 +737,7 @@ export default function EstimationPage() {
                     <p className="text-2xl font-extrabold text-white">{safeTempsRealisation}</p>
                   </CardContent>
                 </Card>
-                <Card className="bg-black/40 backdrop-blur-xl border-2 border-violet-500/40 shadow-lg shadow-violet-500/10">
+                <Card className="bg-black/40  border-2 border-violet-500/40 shadow-lg shadow-violet-500/10">
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center">
@@ -748,7 +748,7 @@ export default function EstimationPage() {
                     <p className="text-2xl font-extrabold text-white">{safeNombreOuvriers} ouvrier{safeNombreOuvriers > 1 ? 's' : ''}</p>
                   </CardContent>
                 </Card>
-                <Card className="bg-black/40 backdrop-blur-xl border-2 border-amber-500/40 shadow-lg shadow-amber-500/10">
+                <Card className="bg-black/40  border-2 border-amber-500/40 shadow-lg shadow-amber-500/10">
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">

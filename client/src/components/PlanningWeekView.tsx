@@ -119,7 +119,7 @@ export function PlanningWeekView({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white shadow-none min-w-0 overflow-hidden">
+      <Card className="bg-black/20  border border-white/10 text-white shadow-none min-w-0 overflow-hidden">
         <CardContent className="p-0">
           <div className="grid grid-cols-1 lg:grid-cols-7 divide-y lg:divide-y-0 lg:divide-x divide-white/10">
             {weekDays.map((day) => {
@@ -210,7 +210,7 @@ export function PlanningWeekView({
                                   {isLate && <p className="text-[11px] text-red-400 mt-0.5">⚠ En retard</p>}
                                 </TooltipContent>
                               </Tooltip>
-                              <DropdownMenuContent align="start" className="bg-black/90 backdrop-blur-xl border border-white/10 text-white shadow-lg w-48">
+                              <DropdownMenuContent align="start" className="bg-black/90  border border-white/10 text-white shadow-lg w-48">
                                 <DropdownMenuItem onSelect={() => onStatusChange(c, 'planifié')} className="focus:bg-white/10 focus:text-white text-white text-xs">
                                   {c.statut === 'planifié' && <Check className="mr-2 h-3 w-3" />}
                                   ⏳ Planifié

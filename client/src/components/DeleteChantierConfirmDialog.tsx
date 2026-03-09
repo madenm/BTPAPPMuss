@@ -31,7 +31,7 @@ export function DeleteChantierConfirmDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="bg-black/20 backdrop-blur-xl border border-white/10 text-white">
+      <AlertDialogContent className="bg-black/20  border border-white/10 text-white">
         <AlertDialogHeader>
           <AlertDialogTitle className="text-white">Archiver ce projet ?</AlertDialogTitle>
           <AlertDialogDescription className="text-white/70">

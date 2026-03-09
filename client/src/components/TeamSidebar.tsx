@@ -113,7 +113,7 @@ export default function TeamSidebar({ variant = 'fixed', onNavigate }: TeamSideb
               className={cn(
                 "w-full justify-start gap-3 h-10 text-white min-h-[44px] max-md:min-h-[44px]",
                 !isDrawer && collapsed && "justify-center",
-                item.active && "bg-white/20 backdrop-blur-md border border-white/10 text-white hover:bg-white/30",
+                item.active && "bg-white/20  border border-white/10 text-white hover:bg-white/30",
                 !item.active && "hover:bg-white/10"
               )}
             >
@@ -128,7 +128,7 @@ export default function TeamSidebar({ variant = 'fixed', onNavigate }: TeamSideb
 
   if (isDrawer) {
     return (
-      <div className="flex flex-col h-full bg-black/20 backdrop-blur-xl border-r border-white/10 rounded-r-3xl">
+      <div className="flex flex-col h-full bg-black/20  border-r border-white/10 rounded-r-3xl">
         {content}
       </div>
     );
@@ -136,7 +136,7 @@ export default function TeamSidebar({ variant = 'fixed', onNavigate }: TeamSideb
 
   return (
     <div className={cn(
-      "fixed left-0 top-0 h-screen bg-black/20 backdrop-blur-xl border-r border-white/10 transition-all duration-300 flex flex-col z-50 rounded-r-3xl max-md:hidden",
+      "fixed left-0 top-0 h-screen bg-black/20  border-r border-white/10 transition-all duration-300 flex flex-col z-50 rounded-r-3xl max-md:hidden",
       collapsed ? "w-16" : "w-64"
     )}>
       {content}

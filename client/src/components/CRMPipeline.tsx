@@ -920,7 +920,7 @@ export function CRMPipeline() {
 
       {/* Delete confirmation */}
       <AlertDialog open={!!prospectToRemove} onOpenChange={(open) => !open && setProspectToRemove(null)}>
-        <AlertDialogContent className="bg-black/20 backdrop-blur-xl border border-white/10 text-white">
+        <AlertDialogContent className="bg-black/20  border border-white/10 text-white">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white">Retirer le prospect du pipeline ?</AlertDialogTitle>
             <AlertDialogDescription className="text-white/70">

@@ -400,7 +400,7 @@ export default function ProjectDetailPage() {
 
             {/* Onglet Informations */}
             <TabsContent value="info">
-              <Card className="bg-black/20 backdrop-blur-xl border border-white/10">
+              <Card className="bg-black/20  border border-white/10">
                 <CardContent className="p-6 space-y-4">
                   <div>
                     <Label className="text-white">Nom du projet</Label>
@@ -408,7 +408,7 @@ export default function ProjectDetailPage() {
                       value={editChantier.nom}
                       onChange={(e) => setEditChantier({ ...editChantier, nom: e.target.value })}
                       placeholder="Ex: Rénovation salle de bain"
-                      className="bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+                      className="bg-black/20  border-white/10 text-white placeholder:text-white/50"
                     />
                   </div>
 
@@ -421,10 +421,10 @@ export default function ProjectDetailPage() {
                         setEditChantier({ ...editChantier, clientId: value, clientName: client?.name || '' });
                       }}
                     >
-                      <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white">
+                      <SelectTrigger className="bg-black/20  border-white/10 text-white">
                         <SelectValue placeholder="Sélectionner un client" />
                       </SelectTrigger>
-                      <SelectContent className="bg-black/20 backdrop-blur-xl border-white/10">
+                      <SelectContent className="bg-black/20  border-white/10">
                         {clients.map((client) => (
                           <SelectItem key={client.id} value={client.id} className="text-white">
                             {client.name}
@@ -442,7 +442,7 @@ export default function ProjectDetailPage() {
                           <Button
                             type="button"
                             variant="outline"
-                            className="w-full justify-start text-left font-normal h-9 bg-black/20 backdrop-blur-md border-white/10 text-white hover:bg-black/30"
+                            className="w-full justify-start text-left font-normal h-9 bg-black/20  border-white/10 text-white hover:bg-black/30"
                           >
                             <CalendarIcon className="mr-2 h-4 w-4 opacity-70" />
                             {dateInputValue(editChantier.dateDebut || '') || 'JJ/MM/AAAA'}
@@ -476,7 +476,7 @@ export default function ProjectDetailPage() {
                         value={editChantier.duree}
                         onChange={(e) => setEditChantier({ ...editChantier, duree: e.target.value })}
                         placeholder="Ex: 2 semaines"
-                        className="bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+                        className="bg-black/20  border-white/10 text-white placeholder:text-white/50"
                       />
                     </div>
                   </div>
@@ -487,10 +487,10 @@ export default function ProjectDetailPage() {
                       value={editChantier.typeChantier ?? ''}
                       onValueChange={(value) => setEditChantier({ ...editChantier, typeChantier: value || undefined })}
                     >
-                      <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white">
+                      <SelectTrigger className="bg-black/20  border-white/10 text-white">
                         <SelectValue placeholder="Sélectionner le type" />
                       </SelectTrigger>
-                      <SelectContent className="bg-black/20 backdrop-blur-xl border-white/10">
+                      <SelectContent className="bg-black/20  border-white/10">
                         <SelectItem value="piscine" className="text-white">Piscine & Spa</SelectItem>
                         <SelectItem value="paysage" className="text-white">Aménagement Paysager</SelectItem>
                         <SelectItem value="menuiserie" className="text-white">Menuiserie Sur-Mesure</SelectItem>
@@ -513,10 +513,10 @@ export default function ProjectDetailPage() {
                       value={editChantier.statut}
                       onValueChange={(value: 'planifié' | 'en cours' | 'terminé') => setEditChantier({ ...editChantier, statut: value })}
                     >
-                      <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white">
+                      <SelectTrigger className="bg-black/20  border-white/10 text-white">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent className="bg-black/20 backdrop-blur-xl border-white/10">
+                      <SelectContent className="bg-black/20  border-white/10">
                         <SelectItem value="planifié" className="text-white">Planifié</SelectItem>
                         <SelectItem value="en cours" className="text-white">En cours</SelectItem>
                         <SelectItem value="terminé" className="text-white">Terminé</SelectItem>
@@ -536,7 +536,7 @@ export default function ProjectDetailPage() {
                         setEditChantier({ ...editChantier, montantDevis: v === '' ? undefined : Number(v) });
                       }}
                       placeholder="Ex: 15500"
-                      className="bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+                      className="bg-black/20  border-white/10 text-white placeholder:text-white/50"
                     />
                   </div>
 
@@ -548,7 +548,7 @@ export default function ProjectDetailPage() {
                         onChange={(e) => setEditChantier({ ...editChantier, notes: e.target.value })}
                         placeholder="Description du projet"
                         rows={4}
-                        className="flex-1 bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+                        className="flex-1 bg-black/20  border-white/10 text-white placeholder:text-white/50"
                       />
                       <VoiceInputButton
                         onTranscript={(text) => {
@@ -570,7 +570,7 @@ export default function ProjectDetailPage() {
                         onChange={(e) => setEditChantier({ ...editChantier, notesAvancement: e.target.value })}
                         placeholder="Notes sur l'avancement, points bloquants..."
                         rows={4}
-                        className="flex-1 bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+                        className="flex-1 bg-black/20  border-white/10 text-white placeholder:text-white/50"
                       />
                       <VoiceInputButton
                         onTranscript={(text) => {
@@ -589,7 +589,7 @@ export default function ProjectDetailPage() {
 
             {/* Onglet Devis */}
             <TabsContent value="quotes">
-              <Card className="bg-black/20 backdrop-blur-xl border border-white/10">
+              <Card className="bg-black/20  border border-white/10">
                 <CardContent className="p-6">
                   {chantierQuotesLoading ? (
                     <p className="text-white/70">Chargement...</p>
@@ -796,7 +796,7 @@ export default function ProjectDetailPage() {
 
             {/* Onglet Factures */}
             <TabsContent value="invoices">
-              <Card className="bg-black/20 backdrop-blur-xl border border-white/10">
+              <Card className="bg-black/20  border border-white/10">
                 <CardContent className="p-6">
                   <div className="text-center py-8">
                     <Receipt className="h-12 w-12 mx-auto mb-4 text-white/50" />
@@ -816,7 +816,7 @@ export default function ProjectDetailPage() {
 
             {/* Onglet Équipe */}
             <TabsContent value="team">
-              <Card className="bg-black/20 backdrop-blur-xl border border-white/10">
+              <Card className="bg-black/20  border border-white/10">
                 <CardContent className="p-6">
                   <h3 className="text-lg font-semibold text-white mb-4">Membres affectés au projet</h3>
                   {loadingAssignments ? (
@@ -850,7 +850,7 @@ export default function ProjectDetailPage() {
 
             {/* Onglet Documents */}
             <TabsContent value="documents">
-              <Card className="bg-black/20 backdrop-blur-xl border border-white/10">
+              <Card className="bg-black/20  border border-white/10">
                 <CardContent className="p-6">
                   <div className="mb-4">
                     <input
@@ -906,7 +906,7 @@ export default function ProjectDetailPage() {
 
       {/* Dialog de prévisualisation de devis */}
       <Dialog open={isQuotePreviewOpen} onOpenChange={setIsQuotePreviewOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] bg-black/20 backdrop-blur-xl border border-white/10">
+        <DialogContent className="max-w-2xl max-h-[90vh] bg-black/20  border border-white/10">
           <DialogHeader>
             <DialogTitle className="text-white">Aperçu du devis</DialogTitle>
           </DialogHeader>

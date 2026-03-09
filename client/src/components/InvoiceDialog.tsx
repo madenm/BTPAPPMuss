@@ -327,7 +327,7 @@ export function InvoiceDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-black/90 backdrop-blur-xl border-white/10 text-white">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-black/90  border-white/10 text-white">
         <DialogHeader>
           <DialogTitle className="text-white">
             {invoice ? 'Modifier la facture' : 'Nouvelle facture'}
@@ -340,7 +340,7 @@ export function InvoiceDialog({
             <div>
               <Label className="text-white">Client *</Label>
               <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-                <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white">
+                <SelectTrigger className="bg-black/20  border-white/10 text-white">
                   <SelectValue placeholder="Sélectionner un client" />
                 </SelectTrigger>
                 <SelectContent>
@@ -359,7 +359,7 @@ export function InvoiceDialog({
                 onValueChange={(v) => setSelectedChantierId(v === "none" ? "" : v)}
                 disabled={!selectedClientId}
               >
-                <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white">
+                <SelectTrigger className="bg-black/20  border-white/10 text-white">
                   <SelectValue placeholder="Sélectionner un projet" />
                 </SelectTrigger>
                 <SelectContent>
@@ -385,7 +385,7 @@ export function InvoiceDialog({
                   <Button
                     type="button"
                     variant="outline"
-                    className="w-full justify-start text-left font-normal h-9 bg-black/20 backdrop-blur-md border-white/10 text-white hover:bg-black/30 hover:border-white/20"
+                    className="w-full justify-start text-left font-normal h-9 bg-black/20  border-white/10 text-white hover:bg-black/30 hover:border-white/20"
                   >
                     <CalendarIcon className="mr-2 h-4 w-4 opacity-70" />
                     {invoiceDate ? formatDateToDDMMYYYY(invoiceDate) : 'JJ/MM/AAAA'}
@@ -418,7 +418,7 @@ export function InvoiceDialog({
             <div>
               <Label className="text-white">Conditions de paiement</Label>
               <Select value={paymentTerms} onValueChange={setPaymentTerms}>
-                <SelectTrigger className="bg-black/20 backdrop-blur-md border-white/10 text-white">
+                <SelectTrigger className="bg-black/20  border-white/10 text-white">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -438,7 +438,7 @@ export function InvoiceDialog({
                   <Button
                     type="button"
                     variant="outline"
-                    className="w-full justify-start text-left font-normal h-9 bg-black/20 backdrop-blur-md border-white/10 text-white hover:bg-black/30 hover:border-white/20"
+                    className="w-full justify-start text-left font-normal h-9 bg-black/20  border-white/10 text-white hover:bg-black/30 hover:border-white/20"
                   >
                     <CalendarIcon className="mr-2 h-4 w-4 opacity-70" />
                     {dueDate ? formatDateToDDMMYYYY(dueDate) : 'JJ/MM/AAAA'}
@@ -492,7 +492,7 @@ export function InvoiceDialog({
                       placeholder="Description"
                       value={item.description}
                       onChange={(e) => updateItem(item.id, 'description', e.target.value)}
-                      className="bg-black/20 backdrop-blur-md border-white/10 text-white mb-2"
+                      className="bg-black/20  border-white/10 text-white mb-2"
                     />
                     <div className="grid grid-cols-3 gap-2">
                       <Input
@@ -500,20 +500,20 @@ export function InvoiceDialog({
                         placeholder="Quantité"
                         value={item.quantity}
                         onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                        className="bg-black/20 backdrop-blur-md border-white/10 text-white"
+                        className="bg-black/20  border-white/10 text-white"
                       />
                       <Input
                         type="number"
                         placeholder="Prix unitaire HT"
                         value={item.unitPrice}
                         onChange={(e) => updateItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                        className="bg-black/20 backdrop-blur-md border-white/10 text-white"
+                        className="bg-black/20  border-white/10 text-white"
                       />
                       <div className="flex items-center gap-2">
                         <Input
                           value={getItemTotal(item).toFixed(2) + ' €'}
                           disabled
-                          className="bg-black/20 backdrop-blur-md border-white/10 text-white/70"
+                          className="bg-black/20  border-white/10 text-white/70"
                         />
                         <Button
                           type="button"
@@ -558,7 +558,7 @@ export function InvoiceDialog({
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Notes internes..."
               rows={3}
-              className="bg-black/20 backdrop-blur-md border-white/10 text-white placeholder:text-white/50"
+              className="bg-black/20  border-white/10 text-white placeholder:text-white/50"
             />
           </div>
 
@@ -583,7 +583,7 @@ export function InvoiceDialog({
             <Button
               onClick={handleSave}
               disabled={saving}
-              className="bg-white/20 backdrop-blur-md text-white border border-white/10 hover:bg-white/30"
+              className="bg-white/20  text-white border border-white/10 hover:bg-white/30"
             >
               {saving ? 'Enregistrement...' : invoice ? 'Modifier' : 'Créer'}
             </Button>

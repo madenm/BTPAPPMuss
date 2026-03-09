@@ -202,7 +202,7 @@ export default function AIVisualizationPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4">
+      <header className="bg-black/20  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0 sm:flex-nowrap">
           <div className="min-w-0 w-full sm:flex-1 pl-20">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
@@ -227,9 +227,9 @@ export default function AIVisualizationPage() {
           {/* Step 1: Upload */}
           {step === 'upload' && (
             <div className="max-w-2xl mx-auto space-y-6">
-              <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white hover-elevate">
+              <Card className="bg-black/20  border border-white/10 text-white hover-elevate">
                 <CardHeader className="text-center">
-                  <div className="w-16 h-16 mx-auto rounded-xl bg-black/20 backdrop-blur-md border border-white/10 flex items-center justify-center mb-4">
+                  <div className="w-16 h-16 mx-auto rounded-xl bg-black/20  border border-white/10 flex items-center justify-center mb-4">
                     <ImageIcon className="h-8 w-8 text-white" />
                   </div>
                   <CardTitle>Uploadez votre photo de terrain</CardTitle>
@@ -271,7 +271,7 @@ export default function AIVisualizationPage() {
             <div className="max-w-4xl mx-auto space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Image Preview */}
-                <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white hover-elevate">
+                <Card className="bg-black/20  border border-white/10 text-white hover-elevate">
                   <CardHeader>
                     <CardTitle>Image téléchargée</CardTitle>
                   </CardHeader>
@@ -297,7 +297,7 @@ export default function AIVisualizationPage() {
                 {/* Configuration */}
                 <div className="space-y-6">
                   {/* Project Type */}
-                  <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white hover-elevate">
+                  <Card className="bg-black/20  border border-white/10 text-white hover-elevate">
                     <CardHeader>
                       <CardTitle>Type de projet</CardTitle>
                       <p className="text-sm text-muted-foreground">Sélectionnez le type d'aménagement souhaité</p>
@@ -328,7 +328,7 @@ export default function AIVisualizationPage() {
 
                   {/* Style */}
                   {selectedProjectType && (
-                    <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white hover-elevate">
+                    <Card className="bg-black/20  border border-white/10 text-white hover-elevate">
                       <CardHeader>
                         <CardTitle>Style de rendu</CardTitle>
                         <p className="text-sm text-muted-foreground">Choisissez l'ambiance désirée</p>
@@ -371,7 +371,7 @@ export default function AIVisualizationPage() {
           {/* Step 3: Generating */}
           {step === 'generating' && (
             <div className="max-w-2xl mx-auto space-y-6">
-              <Card className="hover-elevate text-center bg-black/20 backdrop-blur-xl border border-white/10 text-white">
+              <Card className="hover-elevate text-center bg-black/20  border border-white/10 text-white">
                 {generationError ? (
                   <>
                     <CardHeader>
@@ -394,7 +394,7 @@ export default function AIVisualizationPage() {
                 ) : (
                   <>
                     <CardHeader>
-                      <div className="w-16 h-16 mx-auto rounded-xl bg-black/20 backdrop-blur-md border border-white/10 flex items-center justify-center mb-4">
+                      <div className="w-16 h-16 mx-auto rounded-xl bg-black/20  border border-white/10 flex items-center justify-center mb-4">
                         <RefreshCw className="h-8 w-8 text-white animate-spin" />
                       </div>
                       <CardTitle>Préparation de l'aperçu...</CardTitle>
@@ -415,7 +415,7 @@ export default function AIVisualizationPage() {
           {/* Step 4: Result */}
           {step === 'result' && uploadedImage && (
             <div className="max-w-6xl mx-auto space-y-6">
-              <Card className="bg-black/20 backdrop-blur-xl border border-white/10 text-white hover-elevate">
+              <Card className="bg-black/20  border border-white/10 text-white hover-elevate">
                 <CardHeader className="flex flex-row items-center justify-between">
                   <div className="flex items-center gap-3">
                     <CheckCircle className="h-6 w-6 text-green-500" />
@@ -454,7 +454,7 @@ export default function AIVisualizationPage() {
                     {/* After */}
                     <div className="space-y-3">
                       <h3 className="text-lg font-semibold">Après - Aperçu</h3>
-                      <div className="w-full h-80 bg-black/20 backdrop-blur-xl border border-white/10 rounded-lg flex items-center justify-center overflow-hidden">
+                      <div className="w-full h-80 bg-black/20  border border-white/10 rounded-lg flex items-center justify-center overflow-hidden">
                         {generatedImageUrl ? (
                           <img
                             src={generatedImageUrl}
@@ -477,14 +477,14 @@ export default function AIVisualizationPage() {
                           </div>
                         )}
                       </div>
-                      <Badge className="bg-black/20 backdrop-blur-md border border-white/10 text-white">
+                      <Badge className="bg-black/20  border border-white/10 text-white">
                         Visualisation
                       </Badge>
                     </div>
                   </div>
 
                   {/* Project Details */}
-                  <div className="mt-6 p-4 bg-black/20 backdrop-blur-md border border-white/10 rounded-lg">
+                  <div className="mt-6 p-4 bg-black/20  border border-white/10 rounded-lg">
                     <h4 className="font-semibold mb-2 text-white">Détails du projet</h4>
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
