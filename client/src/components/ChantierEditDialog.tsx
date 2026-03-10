@@ -14,6 +14,7 @@ import { fetchTeamMembers, fetchChantierAssignmentsByChantier, addChantierAssign
 import { uploadFile, removeFile, publicUrlToPath } from '@/lib/supabaseStorage';
 import { VoiceInputButton } from '@/components/VoiceInputButton';
 import { Building, Plus, Calendar as CalendarIcon, Image as ImageIcon, X } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 function formatDateToDDMMYYYY(iso?: string): string {
   if (!iso) return '';
@@ -71,6 +72,7 @@ export interface ChantierEditDialogProps {
 
 export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: ChantierEditDialogProps) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const { clients, addClient, updateChantier } = useChantiers();
   const fileInputId = useRef(`edit-chantier-images-${Math.random().toString(36).slice(2)}`).current;
 
@@ -127,6 +129,9 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
       name: `Client ${clients.length + 1}`,
       email: '',
       phone: '',
+    }).catch((err) => {
+      const msg = err?.message || 'Erreur inconnue';
+      toast({ title: 'Impossible d\'ajouter le client', description: msg, variant: 'destructive' });
     });
   };
 
@@ -258,7 +263,7 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
                 <SelectTrigger className="bg-black/20  border-white/10 text-white">
                   <SelectValue placeholder="Sélectionner un client" />
                 </SelectTrigger>
-                <SelectContent className="bg-black/20  border-white/10">
+                <SelectContent className="bg-gray-900 border-white/10">
                   {clients.map((client) => (
                     <SelectItem key={client.id} value={client.id} className="text-white">
                       {client.name}
@@ -329,7 +334,7 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
               <SelectTrigger className="bg-black/20  border-white/10 text-white">
                 <SelectValue placeholder="Sélectionner le type" />
               </SelectTrigger>
-              <SelectContent className="bg-black/20  border-white/10">
+              <SelectContent className="bg-gray-900 border-white/10">
                 <SelectItem value="piscine" className="text-white">Piscine & Spa</SelectItem>
                 <SelectItem value="paysage" className="text-white">Aménagement Paysager</SelectItem>
                 <SelectItem value="menuiserie" className="text-white">Menuiserie Sur-Mesure</SelectItem>
@@ -357,7 +362,7 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
               <SelectTrigger className="bg-black/20  border-white/10 text-white">
                 <SelectValue placeholder="Sélectionner un statut" />
               </SelectTrigger>
-              <SelectContent className="bg-black/20  border-white/10">
+              <SelectContent className="bg-gray-900 border-white/10">
                 <SelectItem value="planifié" className="text-white">Planifié</SelectItem>
                 <SelectItem value="en cours" className="text-white">En cours</SelectItem>
                 <SelectItem value="terminé" className="text-white">Terminé</SelectItem>

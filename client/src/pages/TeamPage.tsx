@@ -937,7 +937,7 @@ export default function TeamPage() {
                     <SelectTrigger className={inputStyles}>
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-black/30 border-white/10">
+                    <SelectContent className="bg-gray-900 border-white/10">
                       <SelectItem value="actif">Actif</SelectItem>
                       <SelectItem value="inactif">Inactif</SelectItem>
                     </SelectContent>

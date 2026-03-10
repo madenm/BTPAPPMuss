@@ -98,7 +98,7 @@ function mapFromSupabase(row: SupabaseClientRow): Client {
     phone: row.phone ?? undefined,
     company: row.company ?? undefined,
     notes: row.notes ?? undefined,
-    stage: row.stage,
+    stage: (row as Record<string, unknown>).stage ?? 'all',
     createdAt: row.created_at,
     linkedQuoteId: row.linked_quote_id ?? undefined,
     linkedInvoiceId: row.linked_invoice_id ?? undefined,
@@ -203,9 +203,6 @@ export async function insertClient(
       name: payload.name,
       email: payload.email,
       phone: payload.phone ?? null,
-      company: payload.company ?? null,
-      notes: payload.notes ?? null,
-      stage: "all",
       street_address: payload.street_address ?? null,
       postal_code: payload.postal_code ?? null,
       city: payload.city ?? null,
@@ -231,7 +228,6 @@ export async function updateClient(
   if (updates.name !== undefined) updateData.name = updates.name;
   if (updates.email !== undefined) updateData.email = updates.email;
   if (updates.phone !== undefined) updateData.phone = updates.phone ?? null;
-  if (updates.company !== undefined) updateData.company = updates.company ?? null;
   if (updates.notes !== undefined) updateData.notes = updates.notes ?? null;
   if (updates.linked_quote_id !== undefined) updateData.linked_quote_id = updates.linked_quote_id;
   if (updates.linked_invoice_id !== undefined) updateData.linked_invoice_id = updates.linked_invoice_id;

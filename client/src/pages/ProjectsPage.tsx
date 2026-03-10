@@ -466,12 +466,17 @@ export default function ProjectsPage() {
   };
 
   const handleAddClient = async () => {
-    const created = await addClient({
-      name: `Client ${clients.length + 1}`,
-      email: '',
-      phone: ''
-    });
-    setNewChantier(prev => ({ ...prev, clientId: created.id }));
+    try {
+      const created = await addClient({
+        name: `Client ${clients.length + 1}`,
+        email: '',
+        phone: ''
+      });
+      setNewChantier(prev => ({ ...prev, clientId: created.id }));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erreur lors de l\'ajout du client';
+      toast({ title: 'Impossible d\'ajouter le client', description: msg, variant: 'destructive' });
+    }
   };
 
   const handleDuplicateChantier = async (chantier: Chantier) => {
@@ -817,7 +822,7 @@ export default function ProjectsPage() {
                         <SelectTrigger className="bg-black/20  border-white/10 text-white">
                           <SelectValue placeholder="Sélectionner un client" />
                         </SelectTrigger>
-                        <SelectContent className="bg-black/20  border-white/10">
+                        <SelectContent className="bg-gray-900 border-white/10">
                           {clients.map((client) => (
                             <SelectItem key={client.id} value={client.id} className="text-white">
                               {client.name}
@@ -845,7 +850,7 @@ export default function ProjectsPage() {
                       <SelectTrigger className="bg-black/20  border-white/10 text-white">
                         <SelectValue placeholder="Sélectionner le type" />
                       </SelectTrigger>
-                      <SelectContent className="bg-black/20  border-white/10">
+                      <SelectContent className="bg-gray-900 border-white/10">
                         <SelectItem value="piscine" className="text-white">Piscine & Spa</SelectItem>
                         <SelectItem value="paysage" className="text-white">Aménagement Paysager</SelectItem>
                         <SelectItem value="menuiserie" className="text-white">Menuiserie Sur-Mesure</SelectItem>
@@ -957,7 +962,7 @@ export default function ProjectsPage() {
                       <SelectTrigger className="bg-black/20  border-white/10 text-white">
                         <SelectValue placeholder="Sélectionner un statut" />
                       </SelectTrigger>
-                      <SelectContent className="bg-black/20  border-white/10">
+                      <SelectContent className="bg-gray-900 border-white/10">
                         <SelectItem value="planifié" className="text-white">Planifié</SelectItem>
                         <SelectItem value="en cours" className="text-white">En cours</SelectItem>
                       <SelectItem value="terminé" className="text-white">Terminé</SelectItem>
@@ -1118,7 +1123,7 @@ export default function ProjectsPage() {
               <SelectTrigger className="w-full sm:w-[140px] h-9 bg-black/20 border-white/10 text-white">
                 <SelectValue placeholder="Statut" />
               </SelectTrigger>
-              <SelectContent className="bg-black/20 border-white/10">
+              <SelectContent className="bg-gray-900 border-white/10">
                 <SelectItem value="tous" className="text-white">Tous</SelectItem>
                 <SelectItem value="planifié" className="text-white">Planifié</SelectItem>
                 <SelectItem value="en cours" className="text-white">En cours</SelectItem>
@@ -1129,7 +1134,7 @@ export default function ProjectsPage() {
               <SelectTrigger className="w-full sm:w-[160px] h-9 bg-black/20 border-white/10 text-white min-w-0">
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
-              <SelectContent className="bg-black/20 border-white/10">
+              <SelectContent className="bg-gray-900 border-white/10">
                 <SelectItem value="tous" className="text-white">Tous</SelectItem>
                 {Object.entries(TYPE_CHANTIER_LABELS).map(([k, v]) => (
                   <SelectItem key={k} value={k} className="text-white">{v}</SelectItem>
@@ -1140,7 +1145,7 @@ export default function ProjectsPage() {
               <SelectTrigger className="w-full sm:w-[160px] h-9 bg-black/20 border-white/10 text-white min-w-0">
                 <SelectValue placeholder="Client" />
               </SelectTrigger>
-              <SelectContent className="bg-black/20 border-white/10">
+              <SelectContent className="bg-gray-900 border-white/10">
                 <SelectItem value="tous" className="text-white">Tous</SelectItem>
                 {clients.map((c) => (
                   <SelectItem key={c.id} value={c.id} className="text-white">{c.name}</SelectItem>
@@ -1151,7 +1156,7 @@ export default function ProjectsPage() {
               <SelectTrigger className="w-full sm:w-[160px] h-9 bg-black/20 border-white/10 text-white min-w-0">
                 <SelectValue placeholder="Tri" />
               </SelectTrigger>
-              <SelectContent className="bg-black/20 border-white/10">
+              <SelectContent className="bg-gray-900 border-white/10">
                 <SelectItem value="date_desc" className="text-white">Date récente ↓</SelectItem>
                 <SelectItem value="date_asc" className="text-white">Date ancienne ↑</SelectItem>
                 <SelectItem value="montant_desc" className="text-white">Montant ↓</SelectItem>
@@ -1198,7 +1203,7 @@ export default function ProjectsPage() {
                   <SelectTrigger className="bg-black/20  border-white/10 text-white">
                     <SelectValue placeholder="Sélectionner un client" />
                   </SelectTrigger>
-                  <SelectContent className="bg-black/20  border-white/10">
+                  <SelectContent className="bg-gray-900 border-white/10">
                     {clients.map((client) => (
                       <SelectItem key={client.id} value={client.id} className="text-white">
                         {client.name}
@@ -1312,7 +1317,7 @@ export default function ProjectsPage() {
                 <SelectTrigger className="bg-black/20  border-white/10 text-white">
                   <SelectValue placeholder="Sélectionner le type" />
                 </SelectTrigger>
-                <SelectContent className="bg-black/20  border-white/10">
+                <SelectContent className="bg-gray-900 border-white/10">
                   <SelectItem value="piscine" className="text-white">Piscine & Spa</SelectItem>
                   <SelectItem value="paysage" className="text-white">Aménagement Paysager</SelectItem>
                   <SelectItem value="menuiserie" className="text-white">Menuiserie Sur-Mesure</SelectItem>
@@ -1338,7 +1343,7 @@ export default function ProjectsPage() {
                 <SelectTrigger className="bg-black/20  border-white/10 text-white">
                   <SelectValue placeholder="Sélectionner un statut" />
                 </SelectTrigger>
-                <SelectContent className="bg-black/20  border-white/10">
+                <SelectContent className="bg-gray-900 border-white/10">
                   <SelectItem value="planifié" className="text-white">Planifié</SelectItem>
                   <SelectItem value="en cours" className="text-white">En cours</SelectItem>
                 <SelectItem value="terminé" className="text-white">Terminé</SelectItem>

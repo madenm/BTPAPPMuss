@@ -351,7 +351,7 @@ export default function ClientsPage() {
               <SelectTrigger className="w-full sm:w-[160px] h-9 max-md:h-[44px] bg-black/20 border-white/10 text-white min-w-0">
                 <SelectValue placeholder="Filtre" />
               </SelectTrigger>
-              <SelectContent className="bg-black/20  border-white/10">
+              <SelectContent className="bg-gray-900 border-white/10">
                 <SelectItem value="all" className="text-white">Tous</SelectItem>
                 <SelectItem value="actifs" className="text-white">Actifs</SelectItem>
                 <SelectItem value="terminés" className="text-white">Terminés</SelectItem>
