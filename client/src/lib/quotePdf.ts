@@ -485,6 +485,8 @@ export function buildQuoteEmailHtml(params: {
   items?: QuoteEmailItem[];
   /** Bloc de contact en fin d'email (nom, tél., email, adresse) */
   contactBlock?: ContactBlockParams;
+  /** Lien pour signer le devis en ligne (ajoute un bloc "Pour signer votre devis") */
+  signatureLink?: string;
 }): string {
   const dateStr = new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
   const validityDate = (() => {
@@ -589,6 +591,10 @@ export function buildQuoteEmailHtml(params: {
     <div class="totals-row grey"><strong>Total TTC</strong> ${params.total.toFixed(2)} €</div>
     <div class="validity">Offre valable jusqu'au ${validityDate}</div>
   </div>
+  ${params.signatureLink ? `<div style="margin: 24px 0; padding: 16px; background-color: #f3f4f6; border-radius: 8px; text-align: center;">
+    <p style="margin: 0 0 12px 0; font-weight: 600; color: #374151;">Pour signer votre devis en ligne :</p>
+    <a href="${params.signatureLink.replace(/&/g, "&amp;")}" style="display: inline-block; padding: 12px 24px; background-color: #8b5cf6; color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">✍️ Signer le devis</a>
+  </div>` : ""}
   ${params.contactBlock ? buildContactBlockHtml(params.contactBlock) : ""}
   <div class="footer">${escapeHtml(company)}</div>
 </body>

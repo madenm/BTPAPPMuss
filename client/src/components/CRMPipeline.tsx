@@ -537,8 +537,30 @@ export function CRMPipeline() {
       const customMessageHtml = quoteModalCustomMessage.trim()
         ? "<p>" + quoteModalCustomMessage.trim().replace(/\n/g, "</p><p>") + "</p>"
         : ""
-      // N'envoyer que le message personnalisé, pas les détails du devis (qui sont dans le PDF)
-      const htmlContent = customMessageHtml.trim() || undefined
+      // Générer le lien de signature pour le devis (même flux que relance)
+      let signatureLink = ""
+      if (quoteModalSelectedQuote && userId && session?.access_token) {
+        try {
+          const linkRes = await fetch("/api/generate-quote-signature-link", {
+            method: "POST",
+            headers: getApiPostHeaders(session.access_token),
+            body: JSON.stringify({ quoteId: quoteModalSelectedQuote.id, expirationDays: 30 }),
+          })
+          if (linkRes.ok) {
+            const linkData = await linkRes.json()
+            if (linkData?.signatureLink) signatureLink = linkData.signatureLink
+          }
+        } catch {
+          // continue without signature link
+        }
+      }
+      const signatureLinkHtml = signatureLink
+        ? `<div style="margin: 24px 0; padding: 16px; background-color: #f3f4f6; border-radius: 8px; text-align: center;">
+             <p style="margin: 0 0 12px 0; font-weight: 600; color: #374151;">Pour signer votre devis en ligne :</p>
+             <a href="${signatureLink.replace(/&/g, "&amp;")}" style="display: inline-block; padding: 12px 24px; background-color: #8b5cf6; color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">✍️ Signer le devis</a>
+           </div>`
+        : ""
+      const htmlContent = ((customMessageHtml.trim() || "") + signatureLinkHtml).trim() || undefined
 
       setStoredPipelineMessage(userId, "quote", quoteModalCustomMessage)
 

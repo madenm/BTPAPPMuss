@@ -882,6 +882,20 @@ export default function QuotesPage() {
       const pdfBase64 = getQuotePdfBase64(pdfParams);
       const rectCoords = getSignatureRectangleCoordinates(pdfParams);
       const fileName = `devis-${quoteNum || quote.id}.pdf`;
+      let signatureLink: string | undefined;
+      try {
+        const linkRes = await fetch('/api/generate-quote-signature-link', {
+          method: 'POST',
+          headers: getApiPostHeaders(session?.access_token),
+          body: JSON.stringify({ quoteId: quote.id, expirationDays: 30 }),
+        });
+        if (linkRes.ok) {
+          const linkData = await linkRes.json();
+          if (linkData?.signatureLink) signatureLink = linkData.signatureLink;
+        }
+      } catch {
+        // continue without signature link
+      }
       const htmlContent = buildQuoteEmailHtml({
         clientName: quote.client_name ?? '',
         clientAddress: quote.client_address ?? undefined,
@@ -895,6 +909,7 @@ export default function QuotesPage() {
         quoteNumber: quoteNum || undefined,
         items: (quote.items ?? []).map((i) => ({ description: i.description, quantity: i.quantity, unitPrice: i.unitPrice, total: i.total ?? i.quantity * i.unitPrice, subItems: i.subItems })),
         contactBlock: { contactName: profile?.full_name, phone: profile?.company_phone, email: profile?.company_email, address: profile?.company_address, cityPostal: profile?.company_city_postal },
+        ...(signatureLink && { signatureLink }),
       });
       const body: Record<string, unknown> = {
         to: quote.client_email.trim(),
