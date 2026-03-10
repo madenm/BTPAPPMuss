@@ -30,7 +30,7 @@ import { VoiceInputButton } from '@/components/VoiceInputButton';
 import { supabase } from '@/lib/supabaseClient';
 import { insertQuote, updateQuote, deleteQuote, updateQuoteStatus, fetchQuoteById, fetchQuotesForUser, getQuoteDisplayNumber, type QuoteItem, type QuoteSubItem, type SupabaseQuote } from '@/lib/supabaseQuotes';
 import { DEFAULT_THEME_COLOR, QUOTE_STATUS_LABELS, QUOTE_UNIT_NONE, QUOTE_UNIT_OPTIONS, inferUnitFromDescription, backfillUnitOnItems } from '@/lib/quoteConstants';
-import { downloadQuotePdf, fetchLogoDataUrl, getQuotePdfBase64 } from '@/lib/quotePdf';
+import { downloadQuotePdf, fetchLogoDataUrl, getQuotePdfBase64, buildQuoteEmailHtml, getSignatureRectangleCoordinates } from '@/lib/quotePdf';
 import { QuotePreview } from '@/components/QuotePreview';
 import { QuoteList } from '@/components/QuoteList';
 import { InvoiceDialog } from '@/components/InvoiceDialog';
@@ -831,6 +831,102 @@ export default function QuotesPage() {
     }
   };
 
+  const handleSendEmailFromList = async (quote: SupabaseQuote) => {
+    if (!quote.client_email?.trim()) {
+      toast({ title: 'Email manquant', description: 'Renseignez l\'email du client sur le devis pour envoyer par email.', variant: 'destructive' });
+      return;
+    }
+    if (!user?.id) return;
+    try {
+      const pdfItems = (quote.items ?? []).map((i) => ({
+        description: i.description,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+        total: i.total ?? i.quantity * i.unitPrice,
+        unit: i.unit ?? undefined,
+        subItems: i.subItems?.map((s) => ({
+          description: s.description,
+          quantity: s.quantity,
+          unitPrice: s.unitPrice,
+          total: s.total,
+          unit: s.unit ?? undefined,
+        })),
+      }));
+      const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : undefined;
+      const quoteNum = getQuoteDisplayNumber(listQuotes, quote.id);
+      const pdfParams = {
+        clientInfo: {
+          name: quote.client_name ?? '',
+          email: quote.client_email ?? '',
+          phone: quote.client_phone ?? '',
+          address: quote.client_address ?? '',
+        },
+        projectType: quote.project_type ?? '',
+        projectDescription: quote.project_description ?? '',
+        validityDays: String(quote.validity_days ?? 30),
+        items: pdfItems,
+        subtotal: quote.total_ht,
+        tva: quote.total_ttc - quote.total_ht,
+        total: quote.total_ttc,
+        themeColor: accentColor,
+        quoteNumber: quoteNum || undefined,
+        companyName: profile?.company_name || profile?.full_name || undefined,
+        companyAddress: profile?.company_address ?? undefined,
+        companyCityPostal: profile?.company_city_postal ?? undefined,
+        companyPhone: profile?.company_phone ?? undefined,
+        companyEmail: profile?.company_email ?? undefined,
+        companySiret: profile?.company_siret ?? undefined,
+        companyLegal: [profile?.company_name, profile?.company_siret && `SIRET ${profile.company_siret}`, profile?.company_tva_number && `TVA ${profile.company_tva_number}`, profile?.company_rcs && `RCS ${profile.company_rcs}`, profile?.company_capital && `Capital ${profile.company_capital} €`].filter(Boolean).join(' — ') || undefined,
+        ...(logoDataUrl && { logoDataUrl }),
+      };
+      const pdfBase64 = getQuotePdfBase64(pdfParams);
+      const rectCoords = getSignatureRectangleCoordinates(pdfParams);
+      const fileName = `devis-${quoteNum || quote.id}.pdf`;
+      const htmlContent = buildQuoteEmailHtml({
+        clientName: quote.client_name ?? '',
+        clientAddress: quote.client_address ?? undefined,
+        clientPhone: quote.client_phone ?? undefined,
+        clientEmail: quote.client_email ?? undefined,
+        total: quote.total_ttc ?? 0,
+        subtotal: quote.total_ht ?? undefined,
+        tva: (quote.total_ttc ?? 0) - (quote.total_ht ?? 0),
+        validityDays: String(quote.validity_days ?? 30),
+        companyName: profile?.company_name || profile?.full_name || undefined,
+        quoteNumber: quoteNum || undefined,
+        items: (quote.items ?? []).map((i) => ({ description: i.description, quantity: i.quantity, unitPrice: i.unitPrice, total: i.total ?? i.quantity * i.unitPrice, subItems: i.subItems })),
+        contactBlock: { contactName: profile?.full_name, phone: profile?.company_phone, email: profile?.company_email, address: profile?.company_address, cityPostal: profile?.company_city_postal },
+      });
+      const body: Record<string, unknown> = {
+        to: quote.client_email.trim(),
+        pdfBase64,
+        fileName,
+        htmlContent,
+        quoteId: quote.id,
+        userId: user.id,
+      };
+      if (rectCoords) body.signatureRectCoords = rectCoords;
+      const res = await fetch('/api/send-quote-email', {
+        method: 'POST',
+        headers: getApiPostHeaders(session?.access_token),
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast({ title: 'Erreur d\'envoi', description: (data as { message?: string }).message || 'Impossible d\'envoyer l\'email.', variant: 'destructive' });
+        return;
+      }
+      try {
+        await updateQuoteStatus(quote.id, user.id, 'envoyé');
+      } catch (err) {
+        console.error('Error updating quote status:', err);
+      }
+      toast({ title: 'Email envoyé', description: `Devis envoyé à ${quote.client_email}.` });
+    } catch (e) {
+      console.error(e);
+      toast({ title: 'Erreur', description: 'Impossible d\'envoyer l\'email.', variant: 'destructive' });
+    }
+  };
+
   const filteredListQuotes = useMemo(() => {
     let result = listQuotes;
     if (listProjectFilter && listProjectFilter !== 'all') {
@@ -1426,6 +1522,7 @@ export default function QuotesPage() {
           }}
           onEditQuote={handleEditQuoteFromList}
           onDownloadPdf={handleDownloadPdfFromList}
+          onSendEmail={handleSendEmailFromList}
           onDuplicateQuote={handleDuplicateQuote}
           onDeleteQuote={handleDeleteQuoteFromList}
           onChangeStatus={handleChangeStatusFromList}
