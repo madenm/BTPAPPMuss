@@ -907,15 +907,6 @@ export default function QuotesPage() {
     }
 
     setIsSaving(true);
-    // #region agent log (localhost only - évite CSP/404 en staging/prod)
-    const _log = (loc: string, msg: string, data: Record<string, unknown>) => {
-      (window as any).__quoteDebug = { ...(window as any).__quoteDebug, lastLoc: loc, lastMsg: msg, lastData: data, lastTime: Date.now() };
-      if (typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")) {
-        fetch('http://127.0.0.1:7744/ingest/c9e7f7b6-6efe-4cbf-8c2a-4d8bd68532b6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'44037e'},body:JSON.stringify({sessionId:'44037e',location:loc,message:msg,data,timestamp:Date.now()})}).catch(()=>{});
-      }
-    };
-    _log('QuotesPage:handleSaveQuote', 'save_start', { userId: user?.id, step, editingQuoteId: editingQuoteId ?? null });
-    // #endregion
     try {
       const currentTotal = currentSubtotalAfterDiscount * (1 + parsedTvaRate / 100);
       
