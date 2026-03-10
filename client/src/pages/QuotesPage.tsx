@@ -1,3 +1,4 @@
+/** Cache-buster: build sans debug ingest (staging/prod) - v2 */
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { AnimatePresence, motion } from 'framer-motion';

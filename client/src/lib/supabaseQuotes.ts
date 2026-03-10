@@ -1,3 +1,4 @@
+/** Cache-buster: build sans debug ingest (staging/prod) - v2 */
 import { supabase, isSupabaseTableMissing } from "./supabaseClient";
 import { createClient } from "@supabase/supabase-js";
 
