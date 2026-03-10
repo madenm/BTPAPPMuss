@@ -23,6 +23,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useChantiers } from '@/context/ChantiersContext';
 import { useUserSettings } from '@/context/UserSettingsContext';
 import { useToast } from '@/hooks/use-toast';
+import { useAiUsage } from '@/hooks/useAiUsage';
 import { UserAccountButton } from '@/components/UserAccountButton';
 import { VoiceInputButton } from '@/components/VoiceInputButton';
 import { supabase } from '@/lib/supabaseClient';
@@ -77,6 +78,7 @@ interface ClientInfo {
 
 export default function QuotesPage() {
   const { user, session } = useAuth();
+  const aiUsage = useAiUsage(session?.access_token);
   const { clients, chantiers, addChantier, addClient, updateChantier, refreshChantiers } = useChantiers();
   const { logoUrl, themeColor, profile } = useUserSettings();
   const accentColor = themeColor || DEFAULT_THEME_COLOR;
@@ -603,6 +605,7 @@ export default function QuotesPage() {
         });
         const data = await res.json().catch(() => ({}));
         if (res.ok && Array.isArray(data?.items) && data.items.length > 0) {
+          aiUsage.refetch();
           const baseId = `ai-next-${Date.now()}`;
           const mapped: QuoteItem[] = data.items.map(
             (row: { description?: string; quantity?: number; unitPrice?: number; subItems?: Array<{ description?: string; quantity?: number; unitPrice?: number }> }, index: number) => {
@@ -650,7 +653,15 @@ export default function QuotesPage() {
           }
         } else {
           const msg = (data?.message && typeof data.message === 'string') ? data.message : 'L\'analyse IA est indisponible.';
-          if (res.status === 503) {
+          if (res.status === 429) {
+            aiUsage.refetch();
+            toast({
+              title: 'Quota IA atteint',
+              description: msg,
+              variant: 'destructive',
+            });
+            setItems([{ id: '1', description: '', quantity: 1, unitPrice: 0, total: 0, unit: '' }]);
+          } else if (res.status === 503) {
             toast({
               title: 'Analyse IA requise',
               description: msg,
@@ -2020,6 +2031,7 @@ export default function QuotesPage() {
                           id="use-ai-prefill"
                           checked={useAiForPrefill}
                           onCheckedChange={(v) => setUseAiForPrefill(v === true)}
+                          disabled={aiUsage.remaining === 0}
                           className="mt-0.5"
                           data-testid="checkbox-use-ai-prefill"
                         />
@@ -2032,6 +2044,13 @@ export default function QuotesPage() {
                               ? "Remplissez la « Description du projet » ci‑dessus puis cliquez sur Suivant pour que l'IA préremplisse le devis."
                               : "Si la coche est décochée, le devis ne sera pas prérempli : vous pourrez saisir les lignes manuellement à l'étape 3."}
                           </p>
+                          {!aiUsage.loading && (
+                            <p className={`text-xs ${aiUsage.remaining === 0 ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
+                              {aiUsage.remaining === 0
+                                ? "Vous avez consommé votre utilisation journalière d'IA. Réessayez demain."
+                                : `${aiUsage.used} / ${aiUsage.limit} utilisations IA aujourd'hui`}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2058,7 +2077,7 @@ export default function QuotesPage() {
                       onClick={handleNext}
                       className="rounded-xl bg-violet-500 hover:bg-violet-600 text-white"
                       data-testid="button-next-step2"
-                      disabled={isAiParsing}
+                      disabled={isAiParsing || (useAiForPrefill && aiUsage.remaining === 0)}
                     >
                       Suivant
                       <ArrowRight className="h-4 w-4 ml-2" />

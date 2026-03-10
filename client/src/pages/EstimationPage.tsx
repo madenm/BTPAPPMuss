@@ -17,6 +17,7 @@ import { useLocation } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { getApiPostHeaders } from '@/lib/apiHeaders';
+import { useAiUsage } from '@/hooks/useAiUsage';
 import { useAuth } from '@/context/AuthContext';
 import { useChantiers } from '@/context/ChantiersContext';
 import { useUserSettings } from '@/context/UserSettingsContext';
@@ -138,6 +139,7 @@ function CollapsibleSection({
 
 export default function EstimationPage() {
   const { user, session } = useAuth();
+  const aiUsage = useAiUsage(session?.access_token);
   const { clients: existingClients } = useChantiers();
   const { profile, logoUrl, themeColor } = useUserSettings();
   const [, setLocation] = useLocation();
@@ -264,9 +266,11 @@ export default function EstimationPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (res.status === 429) aiUsage.refetch();
         setPhotoAnalysisError(typeof data?.message === 'string' ? data.message : 'L\'analyse de la photo a échoué.');
         return null;
       }
+      aiUsage.refetch();
       const result = { descriptionZone: data.descriptionZone, suggestions: data.suggestions };
       setPhotoAnalysis(result);
       return result;
@@ -313,9 +317,11 @@ export default function EstimationPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (res.status === 429) aiUsage.refetch();
         setEstimateError(typeof data?.message === 'string' ? data.message : 'L\'estimation IA est indisponible.');
         return;
       }
+      aiUsage.refetch();
       setAnalysisResults(data);
       setEditableMaterials((data.materiaux ?? []).map((m: any) => ({
         nom: m.nom ?? '', quantite: m.quantite ?? '', prix: m.prix ?? 0, prixUnitaire: m.prixUnitaire, notes: m.notes
@@ -696,11 +702,19 @@ export default function EstimationPage() {
                     <div className="p-3 rounded-xl bg-red-500/15 border border-red-400/25 text-red-200 text-sm">{estimateError}</div>
                   )}
 
+                  {!aiUsage.loading && (
+                    <p className={`text-xs mt-2 ${aiUsage.remaining === 0 ? 'text-amber-300 font-medium' : 'text-white/60'}`}>
+                      {aiUsage.remaining === 0
+                        ? "Vous avez consommé votre utilisation journalière d'IA. Réessayez demain."
+                        : `${aiUsage.used} / ${aiUsage.limit} utilisations IA aujourd'hui`}
+                    </p>
+                  )}
+
                   <div className="flex justify-between mt-4">
                     <Button variant="outline" onClick={() => { setEstimateError(null); setStep(1); }} disabled={isEstimating} className="text-white/70 border-white/20 hover:bg-white/10">
                       <ArrowLeft className="h-4 w-4 mr-2" />Retour
                     </Button>
-                    <Button onClick={handleLaunchAnalysis} disabled={!chantierInfo.surface || !chantierInfo.metier || !allQuestionnaireAnswersFilled || isEstimating} className="bg-white/20 text-white border border-white/10 hover:bg-white/30 disabled:opacity-50">
+                    <Button onClick={handleLaunchAnalysis} disabled={!chantierInfo.surface || !chantierInfo.metier || !allQuestionnaireAnswersFilled || isEstimating || aiUsage.remaining === 0} className="bg-white/20 text-white border border-white/10 hover:bg-white/30 disabled:opacity-50">
                       {isEstimating ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Estimation en cours...</> : <><Wand2 className="h-4 w-4 mr-2" />Obtenir l&apos;estimation</>}
                     </Button>
                   </div>

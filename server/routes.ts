@@ -7,6 +7,8 @@ import { storage } from "./storage";
 
 import { generateInvoicePdfBuffer } from "./lib/invoicePdfServer";
 import { getArtiprixForMetier } from "./lib/artiprixCatalog";
+import { getAiUsage, incrementAiUsage, getDailyLimit } from "./lib/aiUsage";
+import { getCacheKey, getCached, setCached } from "./lib/aiCache";
 
 import { Resend } from "resend";
 import { GoogleGenAI } from "@google/genai";
@@ -97,6 +99,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       available: !!getGeminiClient(),
       visualizationAvailable: !!getOpenAIClient(),
     });
+  });
+
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "https://hvnjlxxcxfxvuwlmnwtw.supabase.co";
+  const supabaseServiceKey = (process.env.SUPABASE_SERVICE_KEY || "").trim();
+
+  async function getSupabaseAndUser(req: Request): Promise<{ supabase: ReturnType<typeof createClient>; userId: string } | null> {
+    if (!supabaseServiceKey) return null;
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+    if (!token) return null;
+    try {
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+      const { data: { user } } = await supabase.auth.getUser(token);
+      if (user?.id) return { supabase, userId: user.id };
+    } catch {
+      // ignore
+    }
+    return null;
+  }
+
+  app.get("/api/ai-usage", async (req: Request, res: Response) => {
+    const auth = await getSupabaseAndUser(req);
+    if (!auth) {
+      res.status(401).json({ message: "Authentification requise.", used: 0, limit: getDailyLimit(), remaining: getDailyLimit() });
+      return;
+    }
+    const usage = await getAiUsage(auth.supabase, auth.userId);
+    res.status(200).json({ used: usage.used, limit: usage.limit, remaining: usage.remaining });
   });
 
   app.post("/api/generate-visualization", async (req: Request, res: Response) => {
@@ -210,6 +240,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/parse-quote-description", async (req: Request, res: Response) => {
+    const auth = await getSupabaseAndUser(req);
+    if (!auth) {
+      res.status(401).json({
+        message: "Authentification requise pour utiliser l'analyse IA.",
+        remainingDailyUsage: 0,
+        dailyLimit: getDailyLimit(),
+      });
+      return;
+    }
     const { description, projectType, localisation, questionnaireAnswers } = req.body as {
       description?: unknown;
       projectType?: unknown;
@@ -220,7 +259,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(400).json({ message: "Le champ description (texte) est requis et ne doit pas être vide." });
       return;
     }
-    const trimmed = description.trim();
+    const trimmed = description.trim().slice(0, 2000);
     const typeLabel =
       typeof projectType === "string" && projectType.trim()
         ? PROJECT_TYPE_LABELS[projectType.trim()] ?? projectType.trim()
@@ -238,38 +277,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .filter(([, v]) => v != null && String(v).trim() !== "")
             .map(([k, v]) => `${k}: ${String(v).trim()}`)
             .join("\n")
+            .slice(0, 1500)
         : "";
+
+    const usage = await getAiUsage(auth.supabase, auth.userId);
+    if (!usage.allowed) {
+      res.status(429).json({
+        message: "Vous avez consommé votre utilisation journalière d'IA. Réessayez demain.",
+        remainingDailyUsage: 0,
+        dailyLimit: usage.limit,
+      });
+      return;
+    }
+
+    const cachePayload = { description: trimmed, projectType: typeof projectType === "string" ? projectType : "", localisation: locValue, questionnaireAnswers: questionnaireAnswers ?? {} };
+    const cacheKey = getCacheKey("devis", cachePayload);
+    const cached = await getCached<{ items: unknown[] }>(auth.supabase, cacheKey, "devis");
+    if (cached && Array.isArray(cached.items) && cached.items.length > 0) {
+      res.status(200).json({
+        items: cached.items,
+        remainingDailyUsage: usage.remaining,
+        dailyLimit: usage.limit,
+      });
+      return;
+    }
 
     // Même logique que l'estimation chantier : Artiprix ciblé par type de projet pour des prix réalistes
     const metier = typeof projectType === "string" && projectType.trim() ? projectType.trim() : "";
     const artiprixForType = metier ? getArtiprixForMetier(metier) : "";
 
     let userTariffsBlock = "";
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "https://hvnjlxxcxfxvuwlmnwtw.supabase.co";
-    const supabaseServiceKey = (process.env.SUPABASE_SERVICE_KEY || "").trim();
-    if (token && supabaseServiceKey) {
+    if (auth.userId) {
       try {
-        const supabaseServer = createClient(supabaseUrl, supabaseServiceKey);
-        const { data: { user: authUser } } = await supabaseServer.auth.getUser(token);
-        if (authUser?.id) {
-          const { data: tariffs } = await supabaseServer
-            .from("user_tariffs")
-            .select("label, category, unit, price_ht")
-            .eq("user_id", authUser.id);
-          if (Array.isArray(tariffs) && tariffs.length > 0) {
-            const lines = (tariffs as { label?: string; category?: string; unit?: string; price_ht?: number }[])
-              .map((t) => `- ${t.label ?? ""} | ${t.category ?? ""} | ${t.unit ?? "u"} | ${Number(t.price_ht ?? 0)} € HT`)
-              .join("\n");
-            userTariffsBlock = [
-              "",
-              "--- LISTE DES TARIFS DE L'UTILISATEUR (à utiliser en priorité pour les prix unitaires) ---",
-              lines,
-              "",
-              "Pour chaque ligne du devis, si un tarif correspond (même libellé ou très proche), utilise le prix HT indiqué. Sinon utilise un prix réaliste France 2026 HT.",
-            ].join("\n");
-          }
+        const { data: tariffs } = await auth.supabase
+          .from("user_tariffs")
+          .select("label, category, unit, price_ht")
+          .eq("user_id", auth.userId);
+        if (Array.isArray(tariffs) && tariffs.length > 0) {
+          const lines = (tariffs as { label?: string; category?: string; unit?: string; price_ht?: number }[])
+            .map((t) => `- ${t.label ?? ""} | ${t.category ?? ""} | ${t.unit ?? "u"} | ${Number(t.price_ht ?? 0)} € HT`)
+            .join("\n");
+          userTariffsBlock = [
+            "",
+            "--- LISTE DES TARIFS DE L'UTILISATEUR (à utiliser en priorité pour les prix unitaires) ---",
+            lines,
+            "",
+            "Pour chaque ligne du devis, si un tarif correspond (même libellé ou très proche), utilise le prix HT indiqué. Sinon utilise un prix réaliste France 2026 HT.",
+          ].join("\n");
         }
       } catch {
         // ignore: continue without user tariffs
@@ -340,7 +394,6 @@ Règles :
       return;
     }
     try {
-      // Modèles supportés par l'API (v1beta) : gemini-2.5-flash, gemini-2.0-flash (1.5-flash n'existe pas → 404)
       const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash"] as const;
       let raw = "";
       let lastErr: unknown = null;
@@ -394,7 +447,14 @@ Règles :
           };
         })
         .filter((row) => row.description.length > 0);
-      res.status(200).json({ items });
+      await incrementAiUsage(auth.supabase, auth.userId);
+      await setCached(auth.supabase, cacheKey, "devis", { items });
+      const usageAfter = await getAiUsage(auth.supabase, auth.userId);
+      res.status(200).json({
+        items,
+        remainingDailyUsage: usageAfter.remaining,
+        dailyLimit: usageAfter.limit,
+      });
     } catch (err: unknown) {
       const status = err && typeof (err as { status?: number }).status === "number" ? (err as { status: number }).status : undefined;
       const errMessage = err instanceof Error ? err.message : String(err ?? "");
@@ -420,6 +480,15 @@ Règles :
   });
 
   app.post("/api/analyze-estimation-photo", async (req: Request, res: Response) => {
+    const auth = await getSupabaseAndUser(req);
+    if (!auth) {
+      res.status(401).json({
+        message: "Authentification requise pour utiliser l'analyse photo IA.",
+        remainingDailyUsage: 0,
+        dailyLimit: getDailyLimit(),
+      });
+      return;
+    }
     const { imageBase64, mimeType } = req.body as { imageBase64?: string; mimeType?: string };
     if (typeof imageBase64 !== "string" || !imageBase64.trim()) {
       res.status(400).json({ message: "imageBase64 (string) est requis." });
@@ -427,6 +496,30 @@ Règles :
     }
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "").trim();
     const mime = typeof mimeType === "string" && mimeType.trim() ? mimeType.trim() : "image/jpeg";
+
+    const usage = await getAiUsage(auth.supabase, auth.userId);
+    if (!usage.allowed) {
+      res.status(429).json({
+        message: "Vous avez consommé votre utilisation journalière d'IA. Réessayez demain.",
+        remainingDailyUsage: 0,
+        dailyLimit: usage.limit,
+      });
+      return;
+    }
+
+    const cacheKey = getCacheKey("photo", base64Data.slice(0, 5000));
+    const cached = await getCached<{ descriptionZone: string; suggestions?: unknown }>(auth.supabase, cacheKey, "photo");
+    if (cached && cached.descriptionZone) {
+      const usageAfter = await getAiUsage(auth.supabase, auth.userId);
+      res.status(200).json({
+        descriptionZone: cached.descriptionZone,
+        suggestions: cached.suggestions,
+        remainingDailyUsage: usageAfter.remaining,
+        dailyLimit: usageAfter.limit,
+      });
+      return;
+    }
+
     const geminiClient = getGeminiClient();
     if (!geminiClient) {
       res.status(503).json({
@@ -542,7 +635,10 @@ Règles :
             pointsAttention: pointsArr && pointsArr.length > 0 ? pointsArr : undefined,
           }
         : undefined;
-      res.status(200).json({ descriptionZone, suggestions });
+      await incrementAiUsage(auth.supabase, auth.userId);
+      await setCached(auth.supabase, cacheKey, "photo", { descriptionZone, suggestions });
+      const usageAfter = await getAiUsage(auth.supabase, auth.userId);
+      res.status(200).json({ descriptionZone, suggestions, remainingDailyUsage: usageAfter.remaining, dailyLimit: usageAfter.limit });
     } catch (err: unknown) {
       const status = err && typeof (err as { status?: number }).status === "number" ? (err as { status: number }).status : undefined;
       const errMessage = err instanceof Error ? err.message : String(err ?? "");
@@ -566,6 +662,15 @@ Règles :
   });
 
   app.post("/api/estimate-chantier", async (req: Request, res: Response) => {
+    const auth = await getSupabaseAndUser(req);
+    if (!auth) {
+      res.status(401).json({
+        message: "Authentification requise pour utiliser l'estimation IA.",
+        remainingDailyUsage: 0,
+        dailyLimit: getDailyLimit(),
+      });
+      return;
+    }
     const { client, chantierInfo, photoAnalysis, questionnaireAnswers, userTariffs: userTariffsStr } = req.body as {
       client?: { name?: string; email?: string; phone?: string };
       chantierInfo?: { surface?: string | number; materiaux?: string; localisation?: string; delai?: string; metier?: string };
@@ -579,6 +684,26 @@ Règles :
       res.status(400).json({ message: "Surface et type de chantier sont requis." });
       return;
     }
+
+    const usage = await getAiUsage(auth.supabase, auth.userId);
+    if (!usage.allowed) {
+      res.status(429).json({
+        message: "Vous avez consommé votre utilisation journalière d'IA. Réessayez demain.",
+        remainingDailyUsage: 0,
+        dailyLimit: usage.limit,
+      });
+      return;
+    }
+
+    const cachePayload = { chantierInfo, photoAnalysis: typeof photoAnalysis === "string" ? photoAnalysis : "", questionnaireAnswers: questionnaireAnswers ?? {}, userTariffs: typeof userTariffsStr === "string" ? userTariffsStr : "" };
+    const cacheKey = getCacheKey("estimation", cachePayload);
+    const cached = await getCached<Record<string, unknown>>(auth.supabase, cacheKey, "estimation");
+    if (cached && cached.tempsRealisation !== undefined) {
+      const usageAfter = await getAiUsage(auth.supabase, auth.userId);
+      res.status(200).json({ ...cached, remainingDailyUsage: usageAfter.remaining, dailyLimit: usageAfter.limit });
+      return;
+    }
+
     const typeLabel = TYPE_CHANTIER_LABELS[metier] ?? metier;
     const materiauxStr = typeof chantierInfo?.materiaux === "string" ? chantierInfo.materiaux.trim() : "";
     const localisationStr = typeof chantierInfo?.localisation === "string" ? chantierInfo.localisation.trim() : "";
@@ -586,7 +711,7 @@ Règles :
     const clientName = typeof client?.name === "string" ? client.name.trim() : "";
     const clientEmail = typeof client?.email === "string" ? client.email.trim() : "";
     const clientPhone = typeof client?.phone === "string" ? client.phone.trim() : "";
-    const photoAnalysisStr = typeof photoAnalysis === "string" ? photoAnalysis.trim() : "";
+    const photoAnalysisStr = (typeof photoAnalysis === "string" ? photoAnalysis.trim() : "").slice(0, 500);
     const questionnaireObj =
       questionnaireAnswers && typeof questionnaireAnswers === "object" && !Array.isArray(questionnaireAnswers)
         ? questionnaireAnswers
@@ -838,7 +963,10 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
       if (hypotheses?.length) analysisResults.hypotheses = hypotheses;
       if (confiance != null) analysisResults.confiance = confiance;
       if (confiance_explication) analysisResults.confiance_explication = confiance_explication;
-      res.status(200).json(analysisResults);
+      await incrementAiUsage(auth.supabase, auth.userId);
+      await setCached(auth.supabase, cacheKey, "estimation", analysisResults);
+      const usageAfter = await getAiUsage(auth.supabase, auth.userId);
+      res.status(200).json({ ...analysisResults, remainingDailyUsage: usageAfter.remaining, dailyLimit: usageAfter.limit });
     } catch (err: unknown) {
       const status = err && typeof (err as { status?: number }).status === "number" ? (err as { status: number }).status : undefined;
       const errMessage = err instanceof Error ? err.message : String(err ?? "");
