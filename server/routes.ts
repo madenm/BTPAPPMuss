@@ -101,20 +101,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "https://hvnjlxxcxfxvuwlmnwtw.supabase.co";
+  const supabaseUrl = (
+    process.env.SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
+    "https://hvnjlxxcxfxvuwlmnwtw.supabase.co"
+  ).replace(/\/$/, "");
   const supabaseServiceKey = (process.env.SUPABASE_SERVICE_KEY || "").trim();
 
   async function getSupabaseAndUser(req: Request): Promise<{ supabase: ReturnType<typeof createClient>; userId: string } | null> {
-    if (!supabaseServiceKey) return null;
+    if (!supabaseServiceKey) {
+      console.warn("[api/ai-usage] SUPABASE_SERVICE_KEY est vide. Définissez-la dans Vercel (Settings → Environment Variables) avec la clé service_role du projet Supabase (Dashboard → Settings → API).");
+      return null;
+    }
     const authHeader = req.headers.authorization;
     const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
     if (!token) return null;
     try {
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
-      const { data: { user } } = await supabase.auth.getUser(token);
+      const { data: { user }, error } = await supabase.auth.getUser(token);
+      if (error) {
+        console.warn("[api/ai-usage] getUser failed:", error.message);
+        return null;
+      }
       if (user?.id) return { supabase, userId: user.id };
-    } catch {
-      // ignore
+    } catch (e) {
+      console.warn("[api/ai-usage] getSupabaseAndUser error:", e instanceof Error ? e.message : String(e));
     }
     return null;
   }
