@@ -1369,6 +1369,68 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
     }
   });
 
+  // GET /api/quote-by-signature-token - Récupère le résumé du devis pour la page de signature (public)
+  app.get("/api/quote-by-signature-token", async (req: Request, res: Response) => {
+    const token =
+      typeof req.query.token === "string" ? req.query.token.trim() : "";
+    if (!token) {
+      res.status(400).json({ message: "Token manquant." });
+      return;
+    }
+    try {
+      const supabase = getSupabaseClient();
+      const { data: linkRow, error: linkError } = await supabase
+        .from("quote_signature_links")
+        .select("quote_id, expires_at")
+        .eq("token", token)
+        .maybeSingle();
+
+      if (linkError) {
+        console.error("[quote-by-signature-token] link lookup error:", linkError);
+        res.status(500).json({ message: "Erreur lors de la vérification du lien." });
+        return;
+      }
+      if (!linkRow?.quote_id) {
+        res.status(404).json({ message: "Lien de signature invalide ou expiré." });
+        return;
+      }
+      const expiresAt = linkRow.expires_at ? new Date(linkRow.expires_at).getTime() : 0;
+      if (Date.now() > expiresAt) {
+        res.status(410).json({ message: "Ce lien de signature a expiré." });
+        return;
+      }
+
+      const { data: quote, error: quoteError } = await supabase
+        .from("quotes")
+        .select("id, client_name, client_email, project_description, total_ht, total_ttc, items, validity_days, created_at, status")
+        .eq("id", linkRow.quote_id)
+        .maybeSingle();
+
+      if (quoteError || !quote) {
+        res.status(404).json({ message: "Devis introuvable." });
+        return;
+      }
+
+      res.status(200).json({
+        id: quote.id,
+        client_name: quote.client_name ?? "",
+        client_email: quote.client_email ?? null,
+        project_description: quote.project_description ?? "",
+        total_ht: Number(quote.total_ht) ?? 0,
+        total_ttc: Number(quote.total_ttc) ?? 0,
+        items: quote.items ?? [],
+        validity_days: quote.validity_days ?? null,
+        created_at: quote.created_at,
+        status: quote.status,
+        expires_at: linkRow.expires_at ?? null,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur serveur";
+      console.error("[quote-by-signature-token]", err);
+      res.status(500).json({ message });
+    }
+  });
+
   // POST /api/submit-quote-signature - Soumission signature électronique (page publique /sign-quote/:token)
   app.post("/api/submit-quote-signature", async (req: Request, res: Response) => {
     const body = req.body as {

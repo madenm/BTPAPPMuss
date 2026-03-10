@@ -3,24 +3,28 @@ import { useRoute } from "wouter";
 import { motion } from "framer-motion";
 import { QuoteSignatureForm } from "@/components/QuoteSignatureForm";
 
+interface QuoteItem {
+  id?: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+  unit?: string;
+  subItems?: Array<{ description: string; quantity: number; unitPrice: number; total: number }>;
+}
+
 interface Quote {
   id: string;
   client_name: string;
-  client_email: string;
+  client_email: string | null;
   project_description: string;
   total_ht: number;
   total_ttc: number;
-  items: Array<{
-    description: string;
-    quantity: number;
-    unitPrice: number;
-    subItems?: Array<{
-      description: string;
-      quantity: number;
-      unitPrice: number;
-      total: number;
-    }>;
-  }>;
+  items: QuoteItem[];
+  validity_days: number | null;
+  created_at: string;
+  status: string;
+  expires_at: string | null;
 }
 
 export default function SignQuotePage() {
@@ -41,10 +45,48 @@ export default function SignQuotePage() {
       return;
     }
 
-    // On bypasse l'API - l'utilisateur remplira l'email manuellement
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setQuote(null);
     setProspectEmail("");
     setQuoteId("");
-    setLoading(false);
+
+    fetch(`/api/quote-by-signature-token?token=${encodeURIComponent(signatureToken)}`)
+      .then((res) => {
+        if (cancelled) return;
+        if (res.status === 404) {
+          setError("Lien de signature invalide ou expiré.");
+          setLoading(false);
+          return;
+        }
+        if (res.status === 410) {
+          setError("Ce lien de signature a expiré.");
+          setLoading(false);
+          return;
+        }
+        if (!res.ok) {
+          return res.json().then((data) => {
+            setError((data?.message as string) || "Impossible de charger le devis.");
+            setLoading(false);
+          });
+        }
+        return res.json().then((data: Quote) => {
+          if (cancelled) return;
+          setQuote(data);
+          setQuoteId(data.id);
+          setProspectEmail(data.client_email ?? "");
+          setLoading(false);
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError("Impossible de charger le devis. Vérifiez votre connexion.");
+          setLoading(false);
+        }
+      });
+
+    return () => { cancelled = true; };
   }, [signatureToken]);
 
   if (!match) {
@@ -148,21 +190,82 @@ export default function SignQuotePage() {
           <div className="lg:col-span-1">
             <div className="bg-white rounded-xl shadow-lg p-6 sticky top-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Devis</h3>
-              <div className="space-y-3 text-sm">
-                <div>
-                  <p className="text-gray-500">Type</p>
-                  <p className="text-gray-900 font-medium">Signature électronique</p>
+              {quote ? (
+                <div className="space-y-3 text-sm">
+                  {quote.status === "signé" && (
+                    <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+                      Ce devis a déjà été signé.
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-gray-500">Client</p>
+                    <p className="text-gray-900 font-medium">{quote.client_name || "—"}</p>
+                  </div>
+                  {quote.client_email && (
+                    <div>
+                      <p className="text-gray-500">Email</p>
+                      <p className="text-gray-900 break-all">{quote.client_email}</p>
+                    </div>
+                  )}
+                  {quote.project_description && (
+                    <div>
+                      <p className="text-gray-500">Objet</p>
+                      <p className="text-gray-900 line-clamp-3">{quote.project_description}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-gray-500">Montant TTC</p>
+                    <p className="text-gray-900 font-semibold">
+                      {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(quote.total_ttc)}
+                    </p>
+                  </div>
+                  {quote.validity_days != null && (
+                    <div>
+                      <p className="text-gray-500">Validité</p>
+                      <p className="text-gray-900">{quote.validity_days} jours</p>
+                    </div>
+                  )}
+                  {quote.items && quote.items.length > 0 && (
+                    <div className="pt-2 border-t border-gray-200">
+                      <p className="text-gray-500 mb-1">Prestations ({quote.items.length})</p>
+                      <ul className="space-y-1 text-gray-700 max-h-32 overflow-y-auto">
+                        {quote.items.slice(0, 8).map((item, i) => (
+                          <li key={item.id ?? i} className="text-xs line-clamp-2">
+                            {item.description}
+                            {item.quantity > 0 && (
+                              <span className="text-gray-500"> — {item.quantity} × {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(item.unitPrice ?? 0)}</span>
+                            )}
+                          </li>
+                        ))}
+                        {quote.items.length > 8 && (
+                          <li className="text-gray-500 italic">+ {quote.items.length - 8} autre(s)</li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                  <div className="pt-3 border-t border-gray-200">
+                    <p className="text-gray-600 text-xs">
+                      💡 Une fois signé, ce devis sera marqué comme signé dans notre système.
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-gray-500">Lien unique</p>
-                  <p className="text-gray-900 font-mono text-xs break-all">{signatureToken.slice(0, 16)}...</p>
+              ) : (
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <p className="text-gray-500">Type</p>
+                    <p className="text-gray-900 font-medium">Signature électronique</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Lien unique</p>
+                    <p className="text-gray-900 font-mono text-xs break-all">{signatureToken.slice(0, 16)}...</p>
+                  </div>
+                  <div className="pt-3 border-t border-gray-200">
+                    <p className="text-gray-600 text-xs">
+                      💡 Une fois signé, ce devis sera marqué comme signé dans notre système.
+                    </p>
+                  </div>
                 </div>
-                <div className="pt-3 border-t border-gray-200">
-                  <p className="text-gray-600 text-xs">
-                    💡 Une fois signé, ce devis sera marqué comme signé dans notre système.
-                  </p>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
