@@ -202,12 +202,20 @@ export async function updateQuote(
   return data as SupabaseQuote;
 }
 
+function isLocalHost(): boolean {
+  if (typeof window === "undefined") return false;
+  const h = window.location.hostname;
+  return h === "localhost" || h === "127.0.0.1";
+}
+
 export async function insertQuote(
   userId: string,
   payload: NewQuotePayload,
 ): Promise<SupabaseQuote> {
-  // #region agent log
-  fetch('http://127.0.0.1:7744/ingest/c9e7f7b6-6efe-4cbf-8c2a-4d8bd68532b6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'44037e'},body:JSON.stringify({sessionId:'44037e',location:'supabaseQuotes:insertQuote',message:'insert_start',data:{userId,itemsLen:payload.items?.length,status:payload.status},timestamp:Date.now()})}).catch(()=>{});
+  // #region agent log (localhost only - évite CSP/404 en staging/prod)
+  if (isLocalHost()) {
+    fetch('http://127.0.0.1:7744/ingest/c9e7f7b6-6efe-4cbf-8c2a-4d8bd68532b6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'44037e'},body:JSON.stringify({sessionId:'44037e',location:'supabaseQuotes:insertQuote',message:'insert_start',data:{userId,itemsLen:payload.items?.length,status:payload.status},timestamp:Date.now()})}).catch(()=>{});
+  }
   // #endregion
   const insertData: any = {
     user_id: userId,
@@ -240,9 +248,11 @@ export async function insertQuote(
 
   if (error || !data) {
     console.error("Error inserting quote:", error);
-    // #region agent log
-    const errAny = error as { code?: string; message?: string; details?: string };
-    fetch('http://127.0.0.1:7744/ingest/c9e7f7b6-6efe-4cbf-8c2a-4d8bd68532b6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'44037e'},body:JSON.stringify({sessionId:'44037e',location:'supabaseQuotes:insertQuote_error',message:'insert_failed',data:{code:errAny?.code,message:errAny?.message,details:errAny?.details},timestamp:Date.now()})}).catch(()=>{});
+    // #region agent log (localhost only)
+    if (isLocalHost()) {
+      const errAny = error as { code?: string; message?: string; details?: string };
+      fetch('http://127.0.0.1:7744/ingest/c9e7f7b6-6efe-4cbf-8c2a-4d8bd68532b6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'44037e'},body:JSON.stringify({sessionId:'44037e',location:'supabaseQuotes:insertQuote_error',message:'insert_failed',data:{code:errAny?.code,message:errAny?.message,details:errAny?.details},timestamp:Date.now()})}).catch(()=>{});
+    }
     // #endregion
     throw error;
   }
