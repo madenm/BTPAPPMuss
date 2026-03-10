@@ -213,7 +213,10 @@ function OverviewTab() {
     ? Math.round(((totalRevenue - previousMonthRevenue) / previousMonthRevenue) * 100)
     : totalRevenue > 0 ? 100 : 0;
 
-  const userName = profile?.full_name?.split(" ")[0] || "";
+  const userName = profile?.full_name?.split(" ")[0]
+    || user?.user_metadata?.full_name?.split(" ")[0]
+    || user?.email?.split("@")[0]
+    || "";
 
   // Merge planning notes into alerts
   const allAlerts = useMemo(() => {
