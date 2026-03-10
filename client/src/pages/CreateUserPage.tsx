@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getApiPostHeaders } from "@/lib/apiHeaders";
+import { isValidEmail } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { UserPlus, Loader2, Eye, EyeOff } from "lucide-react";
 
@@ -55,6 +56,10 @@ export default function CreateUserPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!session?.access_token || !email.trim() || password.length < 6) return;
+    if (!isValidEmail(email.trim())) {
+      toast({ title: "Email invalide", description: "Veuillez saisir une adresse email valide.", variant: "destructive" });
+      return;
+    }
     setSubmitting(true);
     try {
       const res = await fetch("/api/admin/create-user", {

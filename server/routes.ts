@@ -1003,6 +1003,11 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
   });
 
   app.post("/api/send-quote-email", async (req: Request, res: Response) => {
+    const auth = await getSupabaseAndUser(req);
+    if (!auth) {
+      res.status(401).json({ message: "Non autorisé." });
+      return;
+    }
     const { to, fromEmail, replyTo, pdfBase64, fileName, htmlContent } = req.body as {
       to?: string;
       fromEmail?: string | null;
@@ -1086,6 +1091,11 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
 
   // POST /api/send-followup-email - Envoyer un email de relance (sans pièce jointe)
   app.post("/api/send-followup-email", async (req: Request, res: Response) => {
+    const auth = await getSupabaseAndUser(req);
+    if (!auth) {
+      res.status(401).json({ message: "Non autorisé." });
+      return;
+    }
     const { to, subject, htmlContent, fromEmail, replyTo } = req.body as {
       to?: string;
       subject?: string;
@@ -1178,11 +1188,12 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
 
   // POST /api/invoice-reminders - Send overdue invoice reminder email to the artisan
   app.post("/api/invoice-reminders", async (req: Request, res: Response) => {
-    const { userId } = req.body as { userId?: string };
-    if (!userId || typeof userId !== "string") {
-      res.status(400).json({ message: "userId requis." });
+    const auth = await getSupabaseAndUser(req);
+    if (!auth) {
+      res.status(401).json({ message: "Non autorisé." });
       return;
     }
+    const userId = auth.userId;
 
     try {
       const supabase = getSupabaseClient();
@@ -1369,6 +1380,68 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
     }
   });
 
+  // GET /api/quote-by-signature-token - Récupère le résumé du devis pour la page de signature (public)
+  app.get("/api/quote-by-signature-token", async (req: Request, res: Response) => {
+    const token =
+      typeof req.query.token === "string" ? req.query.token.trim() : "";
+    if (!token) {
+      res.status(400).json({ message: "Token manquant." });
+      return;
+    }
+    try {
+      const supabase = getSupabaseClient();
+      const { data: linkRow, error: linkError } = await supabase
+        .from("quote_signature_links")
+        .select("quote_id, expires_at")
+        .eq("token", token)
+        .maybeSingle();
+
+      if (linkError) {
+        console.error("[quote-by-signature-token] link lookup error:", linkError);
+        res.status(500).json({ message: "Erreur lors de la vérification du lien." });
+        return;
+      }
+      if (!linkRow?.quote_id) {
+        res.status(404).json({ message: "Lien de signature invalide ou expiré." });
+        return;
+      }
+      const expiresAt = linkRow.expires_at ? new Date(linkRow.expires_at).getTime() : 0;
+      if (Date.now() > expiresAt) {
+        res.status(410).json({ message: "Ce lien de signature a expiré." });
+        return;
+      }
+
+      const { data: quote, error: quoteError } = await supabase
+        .from("quotes")
+        .select("id, client_name, client_email, project_description, total_ht, total_ttc, items, validity_days, created_at, status")
+        .eq("id", linkRow.quote_id)
+        .maybeSingle();
+
+      if (quoteError || !quote) {
+        res.status(404).json({ message: "Devis introuvable." });
+        return;
+      }
+
+      res.status(200).json({
+        id: quote.id,
+        client_name: quote.client_name ?? "",
+        client_email: quote.client_email ?? null,
+        project_description: quote.project_description ?? "",
+        total_ht: Number(quote.total_ht) ?? 0,
+        total_ttc: Number(quote.total_ttc) ?? 0,
+        items: quote.items ?? [],
+        validity_days: quote.validity_days ?? null,
+        created_at: quote.created_at,
+        status: quote.status,
+        expires_at: linkRow.expires_at ?? null,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur serveur";
+      console.error("[quote-by-signature-token]", err);
+      res.status(500).json({ message });
+    }
+  });
+
   // POST /api/submit-quote-signature - Soumission signature électronique (page publique /sign-quote/:token)
   app.post("/api/submit-quote-signature", async (req: Request, res: Response) => {
     const body = req.body as {
@@ -1536,18 +1609,18 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
 
   // GET /api/invoices - Liste des factures avec filtres
   app.get("/api/invoices", async (req: Request, res: Response) => {
-    const { userId, clientId, chantierId, status, year } = req.query as {
-      userId?: string;
+    const auth = await getSupabaseAndUser(req);
+    if (!auth) {
+      res.status(401).json({ message: "Non autorisé." });
+      return;
+    }
+    const userId = auth.userId;
+    const { clientId, chantierId, status, year } = req.query as {
       clientId?: string;
       chantierId?: string;
       status?: string;
       year?: string;
     };
-
-    if (!userId) {
-      res.status(400).json({ message: "userId requis" });
-      return;
-    }
 
     try {
       const supabase = getSupabaseClient();
@@ -1602,13 +1675,13 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
 
   // GET /api/invoices/:id - Détail d'une facture
   app.get("/api/invoices/:id", async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const { userId } = req.query as { userId?: string };
-
-    if (!userId) {
-      res.status(400).json({ message: "userId requis" });
+    const auth = await getSupabaseAndUser(req);
+    if (!auth) {
+      res.status(401).json({ message: "Non autorisé." });
       return;
     }
+    const userId = auth.userId;
+    const { id } = req.params;
 
     try {
       const supabase = getSupabaseClient();
@@ -1647,8 +1720,13 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
 
   // POST /api/invoices - Créer une facture
   app.post("/api/invoices", async (req: Request, res: Response) => {
-    const { userId, ...payload } = req.body as {
-      userId: string;
+    const auth = await getSupabaseAndUser(req);
+    if (!auth) {
+      res.status(401).json({ message: "Non autorisé." });
+      return;
+    }
+    const userId = auth.userId;
+    const payload = req.body as {
       quote_id?: string | null;
       chantier_id?: string | null;
       client_id?: string | null;
@@ -1666,11 +1744,6 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
       status?: string;
       notes?: string | null;
     };
-
-    if (!userId) {
-      res.status(400).json({ message: "userId requis" });
-      return;
-    }
 
     try {
       const supabase = getSupabaseClient();
@@ -1724,16 +1797,14 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
 
   // PUT /api/invoices/:id - Modifier une facture
   app.put("/api/invoices/:id", async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const { userId, ...payload } = req.body as {
-      userId: string;
-      [key: string]: any;
-    };
-
-    if (!userId) {
-      res.status(400).json({ message: "userId requis" });
+    const auth = await getSupabaseAndUser(req);
+    if (!auth) {
+      res.status(401).json({ message: "Non autorisé." });
       return;
     }
+    const userId = auth.userId;
+    const { id } = req.params;
+    const payload = req.body as { [key: string]: any };
 
     try {
       const supabase = getSupabaseClient();
@@ -1795,9 +1866,14 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
 
   // POST /api/invoices/:id/payments - Enregistrer un paiement
   app.post("/api/invoices/:id/payments", async (req: Request, res: Response) => {
+    const auth = await getSupabaseAndUser(req);
+    if (!auth) {
+      res.status(401).json({ message: "Non autorisé." });
+      return;
+    }
+    const userId = auth.userId;
     const { id } = req.params;
-    const { userId, amount, payment_date, payment_method, reference, notes } = req.body as {
-      userId: string;
+    const { amount, payment_date, payment_method, reference, notes } = req.body as {
       amount: number;
       payment_date: string;
       payment_method: string;
@@ -1805,8 +1881,8 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
       notes?: string | null;
     };
 
-    if (!userId) {
-      res.status(400).json({ message: "userId requis" });
+    if (amount == null || payment_date == null || payment_method == null) {
+      res.status(400).json({ message: "amount, payment_date et payment_method requis" });
       return;
     }
 
@@ -1877,13 +1953,13 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
 
   // DELETE /api/invoices/:id/payments/:paymentId - Supprimer un paiement
   app.delete("/api/invoices/:id/payments/:paymentId", async (req: Request, res: Response) => {
-    const { id, paymentId } = req.params;
-    const { userId } = req.query as { userId?: string };
-
-    if (!userId) {
-      res.status(400).json({ message: "userId requis" });
+    const auth = await getSupabaseAndUser(req);
+    if (!auth) {
+      res.status(401).json({ message: "Non autorisé." });
       return;
     }
+    const userId = auth.userId;
+    const { id, paymentId } = req.params;
 
     try {
       const supabase = getSupabaseClient();
@@ -1927,21 +2003,20 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
     res.status(405).json({ message: "Use POST to send the invoice by email." });
   });
   app.post("/api/invoices/:id/send-email", async (req: Request, res: Response) => {
+    const auth = await getSupabaseAndUser(req);
+    if (!auth) {
+      res.status(401).json({ message: "Non autorisé." });
+      return;
+    }
+    const userIdVal = auth.userId;
     const { id } = req.params;
-    const { userId, to, subject, message, pdfBase64, replyTo } = req.body as {
-      userId: string;
+    const { to, subject, message, pdfBase64, replyTo } = req.body as {
       to?: string;
       subject?: string;
       message?: string;
       pdfBase64?: string;
       replyTo?: string | null;
     };
-
-    const userIdVal = typeof userId === "string" ? userId.trim() : userId;
-    if (!userIdVal) {
-      res.status(400).json({ message: "userId requis" });
-      return;
-    }
 
     try {
       const supabase = getSupabaseClient();
@@ -2016,13 +2091,13 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
 
   // GET /api/invoices/:id/pdf - Générer PDF (retourne base64)
   app.get("/api/invoices/:id/pdf", async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const { userId } = req.query as { userId?: string };
-
-    if (!userId) {
-      res.status(400).json({ message: "userId requis" });
+    const auth = await getSupabaseAndUser(req);
+    if (!auth) {
+      res.status(401).json({ message: "Non autorisé." });
       return;
     }
+    const userId = auth.userId;
+    const { id } = req.params;
 
     try {
       const supabase = getSupabaseClient();
@@ -2054,13 +2129,13 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
 
   // POST /api/invoices/:id/cancel - Annuler une facture
   app.post("/api/invoices/:id/cancel", async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const { userId } = req.body as { userId: string };
-
-    if (!userId) {
-      res.status(400).json({ message: "userId requis" });
+    const auth = await getSupabaseAndUser(req);
+    if (!auth) {
+      res.status(401).json({ message: "Non autorisé." });
       return;
     }
+    const userId = auth.userId;
+    const { id } = req.params;
 
     try {
       const supabase = getSupabaseClient();
@@ -2102,12 +2177,12 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
 
   // GET /api/invoices/stats - Statistiques facturation
   app.get("/api/invoices/stats", async (req: Request, res: Response) => {
-    const { userId } = req.query as { userId?: string };
-
-    if (!userId) {
-      res.status(400).json({ message: "userId requis" });
+    const auth = await getSupabaseAndUser(req);
+    if (!auth) {
+      res.status(401).json({ message: "Non autorisé." });
       return;
     }
+    const userId = auth.userId;
 
     try {
       const supabase = getSupabaseClient();

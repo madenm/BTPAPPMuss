@@ -20,6 +20,7 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { DevisGeneratingLoader } from '@/components/ui/devis-generating-loader';
 import { getApiPostHeaders } from '@/lib/apiHeaders';
+import { isValidEmail } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { useChantiers } from '@/context/ChantiersContext';
 import { useUserSettings } from '@/context/UserSettingsContext';
@@ -101,6 +102,7 @@ export default function QuotesPage() {
 
   const [listQuotes, setListQuotes] = useState<SupabaseQuote[]>([]);
   const [listLoading, setListLoading] = useState(false);
+  const [listQuotesError, setListQuotesError] = useState<string | null>(null);
   const [listStatusFilter, setListStatusFilter] = useState<string>('all');
   const [listSearchQuery, setListSearchQuery] = useState('');
   const [listProjectFilter, setListProjectFilter] = useState<string>('all');
@@ -174,9 +176,15 @@ export default function QuotesPage() {
   useEffect(() => {
     if (!showForm && user?.id) {
       setListLoading(true);
+      setListQuotesError(null);
       fetchQuotesForUser(user.id, listStatusFilter === 'all' ? undefined : listStatusFilter)
         .then(setListQuotes)
-        .catch(() => setListQuotes([]))
+        .catch((err) => {
+          console.error('Erreur chargement liste devis:', err);
+          setListQuotes([]);
+          setListQuotesError('Impossible de charger la liste des devis.');
+          toast({ title: 'Erreur', description: 'Impossible de charger la liste des devis.', variant: 'destructive' });
+        })
         .finally(() => setListLoading(false));
     }
   }, [showForm, user?.id, listStatusFilter]);
@@ -692,7 +700,7 @@ export default function QuotesPage() {
   const handlePrev = () => {
     setStep((s) => Math.max(1, s - 1));
   };
-  const canGoNextFromStep1 = Boolean(clientInfo.name?.trim() && clientInfo.email?.trim());
+  const canGoNextFromStep1 = Boolean(clientInfo.name?.trim() && clientInfo.email?.trim() && isValidEmail(clientInfo.email));
 
   const handleNewQuote = () => {
     lastAppliedQuoteIdRef.current = null;
@@ -967,12 +975,12 @@ export default function QuotesPage() {
     
     const missingName = !clientInfo.name?.trim();
     const missingEmail = !clientInfo.email?.trim();
+    const invalidEmail = clientInfo.email?.trim() && !isValidEmail(clientInfo.email);
     
-    // Calculer les totaux pour vérifier si le devis est valide
     const currentSubtotal = items.reduce((sum, item) => sum + getItemTotal(item), 0);
     const missingItems = items.length === 0 || currentSubtotal === 0;
     
-    return !missingName && !missingEmail && !missingItems;
+    return !missingName && !missingEmail && !invalidEmail && !missingItems;
   };
 
   // Fonction de sauvegarde manuelle du devis
@@ -981,6 +989,7 @@ export default function QuotesPage() {
     
     const missingName = !clientInfo.name?.trim();
     const missingEmail = !clientInfo.email?.trim();
+    const invalidEmail = clientInfo.email?.trim() && !isValidEmail(clientInfo.email);
     const invalidItemIds = items.filter((i) => !i.description?.trim() || getItemTotal(i) === 0).map((i) => i.id);
     const currentSubtotal = items.reduce((sum, item) => sum + getItemTotal(item), 0);
     const currentDiscountAmt = discountType === 'percent'
@@ -991,17 +1000,18 @@ export default function QuotesPage() {
     const currentSubtotalAfterDiscount = Math.max(0, currentSubtotal - currentDiscountAmt);
     const missingItems = items.length === 0 || currentSubtotal === 0;
     
-    if (missingName || missingEmail || missingItems) {
+    if (missingName || missingEmail || invalidEmail || missingItems) {
       setHighlightMissing({
         clientName: missingName,
-        clientEmail: missingEmail,
+        clientEmail: missingEmail || invalidEmail,
         itemsSection: missingItems,
         itemIds: missingItems ? invalidItemIds : undefined,
       });
-      if (missingName || missingEmail) setStep(1);
+      if (missingName || missingEmail || invalidEmail) setStep(1);
       const parts: string[] = [];
       if (missingName) parts.push('Nom client');
       if (missingEmail) parts.push('Email client');
+      if (invalidEmail) parts.push('Email client invalide');
       if (missingItems) parts.push('Au moins une ligne avec un montant');
       toast({
         title: 'Il manque des informations',

@@ -234,6 +234,12 @@ function OverviewTab() {
     return merged;
   }, [alerts, planningNotes, todayKey]);
 
+  useEffect(() => {
+    if (error) {
+      toast({ title: "Erreur chargement", description: error, variant: "destructive" });
+    }
+  }, [error, toast]);
+
   if (error) {
     return (
       <div className="flex items-center justify-center h-64 text-white">

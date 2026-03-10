@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { uploadFile, removeFile, publicUrlToPath } from "@/lib/supabaseStorage";
+import { isValidEmail } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -303,7 +304,7 @@ export default function SettingsPage() {
   };
 
   const handleChangeEmail = async () => {
-    if (!newEmail.trim() || !newEmail.includes("@")) {
+    if (!newEmail.trim() || !isValidEmail(newEmail)) {
       toast({ title: "Veuillez entrer un email valide", variant: "destructive" });
       return;
     }

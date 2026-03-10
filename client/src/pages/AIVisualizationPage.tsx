@@ -115,9 +115,10 @@ export default function AIVisualizationPage() {
     setProgress(0);
     setGenerationError(null);
     setGeneratedImageUrl(null);
-    const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '::1'
-      ? `http://127.0.0.1:${window.location.port || '5000'}`
-      : window.location.origin;
+    const apiBase = (import.meta.env.VITE_API_URL as string)?.trim()
+      || (window.location.hostname === 'localhost' || window.location.hostname === '::1'
+        ? `http://127.0.0.1:${window.location.port || '5000'}`
+        : window.location.origin);
     const apiUrl = `${apiBase}/api/generate-visualization`;
     try {
       let body: { imageUrl?: string; imageBase64?: string; mimeType?: string; projectType: string; style: string };
@@ -251,16 +252,6 @@ export default function AIVisualizationPage() {
                       Formats supportés: JPG, PNG, WEBP • Max 10MB
                     </p>
                   </div>
-                  <input
-                    id="ai-viz-file-input"
-                    name="aiVizImage"
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="hidden"
-                    data-testid="file-input"
-                  />
                 </CardContent>
               </Card>
             </div>
@@ -502,16 +493,18 @@ export default function AIVisualizationPage() {
             </div>
           )}
 
-          {/* Hidden file input for step 2 */}
-          <input
-            id="ai-viz-file-input-step2"
-            name="aiVizImageStep2"
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleImageUpload}
-            className="hidden"
-          />
+        {/* File input unique (toujours monté pour que la ref soit valide à toutes les étapes) */}
+        <input
+          id="ai-viz-file-input"
+          name="aiVizImage"
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleImageUpload}
+          className="hidden"
+          aria-hidden
+          data-testid="file-input"
+        />
         </main>
     </PageWrapper>
   );
