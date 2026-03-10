@@ -335,7 +335,7 @@ export default function ClientsPage() {
         </div>
       </header>
 
-      <main className="flex-1 p-4 sm:p-6 overflow-x-hidden">
+      <main className="flex-1 p-2 sm:p-4 min-w-0 overflow-x-auto">
         <div className="space-y-4 mb-6 flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-0 w-full sm:min-w-[200px] sm:max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50 pointer-events-none" />

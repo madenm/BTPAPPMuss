@@ -88,7 +88,7 @@ export default function Dashboard() {
     <div className="min-h-screen relative overflow-hidden">
       <div className="relative z-10">
         <Sidebar />
-        <main className="ml-0 lg:ml-0 p-4 sm:p-6 lg:p-8 overflow-x-hidden">
+        <main className="ml-0 lg:ml-0 p-2 sm:p-4 lg:p-6 overflow-x-hidden">
           <AnimatePresence mode="wait">
             <motion.div
               key={location}
@@ -96,7 +96,7 @@ export default function Dashboard() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-              className="max-w-7xl mx-auto min-w-0"
+              className="w-full min-w-0 max-w-none mx-auto"
             >
               <OverviewTab />
             </motion.div>
@@ -191,7 +191,7 @@ function OverviewTab() {
       const res = await fetch("/api/invoice-reminders", {
         method: "POST",
         headers: getApiPostHeaders(session.access_token),
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({}),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {

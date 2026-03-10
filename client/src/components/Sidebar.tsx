@@ -1,9 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { Link, useLocation } from 'wouter';
 import { Menu, X, ChevronLeft, Home, Calculator, Building, Calendar, Workflow, FileText, Users, User, Receipt, UserPlus, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
+
+// #region agent log
+function dbg(p: { hypothesisId?: string; message: string; data?: Record<string, unknown> }) {
+  const payload = { sessionId: '25fd74', location: 'Sidebar.tsx', message: p.message, data: p.data ?? {}, timestamp: Date.now(), hypothesisId: p.hypothesisId ?? null };
+  fetch('http://127.0.0.1:7744/ingest/4049a7e4-f2e4-4826-bbb3-e6959f7886d7', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '25fd74' }, body: JSON.stringify(payload) }).catch(() => {});
+}
+// #endregion
 
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -13,6 +20,19 @@ export default function Sidebar() {
   const { user } = useAuth();
   const adminEmail = (import.meta.env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
   const isAdmin = !!adminEmail && user?.email?.toLowerCase() === adminEmail;
+
+  // #region agent log
+  useEffect(() => {
+    dbg({ hypothesisId: 'A', message: 'isOpen_changed', data: { isOpen, location } });
+  }, [isOpen, location]);
+  useEffect(() => {
+    const h = (ev: ErrorEvent) => {
+      dbg({ hypothesisId: 'C', message: 'window_error', data: { msg: ev.message, source: ev.filename, line: ev.lineno, col: ev.colno, error: String(ev.error), stack: ev.error?.stack } });
+    };
+    window.addEventListener('error', h);
+    return () => window.removeEventListener('error', h);
+  }, []);
+  // #endregion
 
   const menuItems = [
     { icon: Home, label: 'Vue d\'ensemble', path: '/dashboard' },
@@ -73,32 +93,47 @@ export default function Sidebar() {
   const overlayVariants = {
     closed: { 
       opacity: 0,
+      pointerEvents: 'none' as const,
       transition: {
         duration: 0.3,
       },
     },
     open: { 
       opacity: 1,
+      pointerEvents: 'auto' as const,
       transition: {
         duration: 0.4,
       },
     },
   };
 
+  // #region agent log
+  dbg({ hypothesisId: 'D', message: 'Sidebar_render', data: { location, isOpen } });
+  // #endregion
 
   return (
     <>
-      {/* Menu Button - Always visible, aligné avec le contenu sur mobile */}
-      <motion.button
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-6 left-6 z-50 p-3 rounded-xl transition-colors shadow-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 max-md:left-4 max-md:top-[max(1rem,env(safe-area-inset-top))] max-md:min-w-[44px] max-md:min-h-[44px] max-md:flex max-md:items-center max-md:justify-center max-md:[&_svg]:w-5 max-md:[&_svg]:h-5"
+      {/* Bouton menu dans l'arbre (sans portail) pour éviter crash au clic sur Planning */}
+      <button
+        type="button"
+        onClick={() => {
+          // #region agent log
+          dbg({ hypothesisId: 'A', message: 'menu_click_start', data: { location, isOpen } });
+          try {
+            setIsOpen(!isOpen);
+          } catch (err) {
+            dbg({ hypothesisId: 'C', message: 'menu_click_error', data: { error: String(err), stack: err instanceof Error ? err.stack : undefined } });
+            throw err;
+          }
+          // #endregion
+        }}
+        className="fixed top-6 left-6 z-[100] p-3 rounded-xl transition-colors shadow-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 max-md:left-4 max-md:top-[max(1rem,env(safe-area-inset-top))] max-md:min-w-[44px] max-md:min-h-[44px] max-md:flex max-md:items-center max-md:justify-center max-md:[&_svg]:w-5 max-md:[&_svg]:h-5"
+        aria-label={isOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
       >
         {isOpen ? <X size={24} /> : <Menu size={24} />}
-      </motion.button>
+      </button>
 
-      {/* Overlay */}
+      {/* Overlay - sous le menu pour que les liens du menu restent cliquables */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -107,12 +142,12 @@ export default function Sidebar() {
             animate="open"
             exit="closed"
             onClick={() => setIsOpen(false)}
-            className="fixed inset-0 bg-black bg-opacity-50 z-30"
+            className="fixed inset-0 bg-black bg-opacity-50 z-40"
           />
         )}
       </AnimatePresence>
 
-      {/* Side Menu */}
+      {/* Side Menu - au-dessus de l'overlay pour pouvoir cliquer les liens ; pointer-events-none quand fermé pour ne pas bloquer la page */}
       <motion.nav
         variants={menuVariants}
         initial="closed"
@@ -122,7 +157,10 @@ export default function Sidebar() {
         dragElastic={0.2}
         onDragEnd={handleDragEnd}
         style={{ x: dragX }}
-        className="fixed top-0 left-0 h-full w-80 z-40 shadow-2xl bg-white dark:bg-gray-800 flex flex-col rounded-r-3xl"
+        className={cn(
+          "fixed top-0 left-0 h-full w-80 z-50 shadow-2xl bg-white dark:bg-gray-800 flex flex-col rounded-r-3xl",
+          !isOpen && "pointer-events-none"
+        )}
       >
         {/* Drag Indicator */}
         <motion.div

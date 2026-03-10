@@ -1814,7 +1814,7 @@ export default function ProjectsPage() {
         </DialogContent>
       </Dialog>
 
-      <main className="flex-1 p-4 sm:p-6">
+      <main className="flex-1 p-2 sm:p-4">
         {loading ? (
           <div className="flex items-center justify-center h-full text-white">
             Chargement des chantiers...

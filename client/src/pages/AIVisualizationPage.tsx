@@ -115,9 +115,10 @@ export default function AIVisualizationPage() {
     setProgress(0);
     setGenerationError(null);
     setGeneratedImageUrl(null);
-    const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '::1'
-      ? `http://127.0.0.1:${window.location.port || '5000'}`
-      : window.location.origin;
+    const apiBase = (import.meta.env.VITE_API_URL as string)?.trim()
+      || (window.location.hostname === 'localhost' || window.location.hostname === '::1'
+        ? `http://127.0.0.1:${window.location.port || '5000'}`
+        : window.location.origin);
     const apiUrl = `${apiBase}/api/generate-visualization`;
     try {
       let body: { imageUrl?: string; imageBase64?: string; mimeType?: string; projectType: string; style: string };
@@ -223,7 +224,7 @@ export default function AIVisualizationPage() {
         </div>
       </header>
 
-      <main className="flex-1 p-4 sm:p-6 overflow-x-hidden">
+      <main className="flex-1 p-2 sm:p-4 overflow-x-hidden">
           {/* Step 1: Upload */}
           {step === 'upload' && (
             <div className="max-w-2xl mx-auto space-y-6">

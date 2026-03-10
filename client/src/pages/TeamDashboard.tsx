@@ -338,7 +338,7 @@ export default function TeamDashboard() {
 
             {/* Tab Content */}
             <TeamEffectiveUserIdProvider value={teamMember?.user_id ?? null}>
-            <main className="flex-1 p-4 sm:p-6 space-y-6 overflow-auto overflow-x-hidden">
+            <main className="flex-1 p-2 sm:p-4 space-y-6 overflow-auto overflow-x-hidden">
               {activeTab === 'overview' && (
                 <div className="space-y-6">
                   {(() => {

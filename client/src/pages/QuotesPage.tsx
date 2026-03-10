@@ -1838,8 +1838,8 @@ export default function QuotesPage() {
         );
       })()}
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 overflow-x-hidden">
-        <main className="space-y-6 py-4 sm:py-6">
+      <div className="w-full min-w-0 p-2 sm:p-4 pt-0">
+        <main className="space-y-6">
           {quoteLoadState === 'loading' ? (
             <div className="flex flex-col items-center justify-center py-24 text-white/80">
               <p className="text-lg font-medium">Chargement du devis...</p>

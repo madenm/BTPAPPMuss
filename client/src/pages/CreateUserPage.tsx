@@ -47,7 +47,6 @@ export default function CreateUserPage() {
       return;
     }
     if (adminAllowed === false) {
-      toast({ title: "Accès réservé à l'administrateur.", variant: "destructive" });
       setLocation("/dashboard");
     }
   }, [authLoading, session, adminAllowed, setLocation]);

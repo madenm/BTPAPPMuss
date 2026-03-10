@@ -520,8 +520,8 @@ export default function TarifsPage() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 overflow-x-hidden">
-        <main className="space-y-6 py-4 sm:py-6">
+      <div className="w-full min-w-0 p-2 sm:p-4 pt-0 overflow-x-auto">
+        <main className="space-y-6">
           <div className="flex flex-wrap items-center gap-3">
             <Button
               size="sm"
