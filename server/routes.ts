@@ -1358,6 +1358,171 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
     }
   });
 
+  // POST /api/submit-quote-signature - Soumission signature électronique (page publique /sign-quote/:token)
+  app.post("/api/submit-quote-signature", async (req: Request, res: Response) => {
+    const body = req.body as {
+      signatureToken?: string;
+      firstName?: string;
+      lastName?: string;
+      email?: string | null;
+      signatureDataBase64?: string;
+    };
+    const signatureToken = typeof body.signatureToken === "string" ? body.signatureToken.trim() : "";
+    const firstName = typeof body.firstName === "string" ? body.firstName.trim() : "";
+    const lastName = typeof body.lastName === "string" ? body.lastName.trim() : "";
+    const email = typeof body.email === "string" ? body.email.trim() || null : null;
+    const signatureDataBase64 = typeof body.signatureDataBase64 === "string" ? body.signatureDataBase64 : "";
+
+    if (!signatureToken) {
+      res.status(400).json({ message: "Token de signature manquant." });
+      return;
+    }
+    if (!firstName || !lastName) {
+      res.status(400).json({ message: "Prénom et nom sont requis." });
+      return;
+    }
+    if (!signatureDataBase64) {
+      res.status(400).json({ message: "Signature (image) requise." });
+      return;
+    }
+
+    try {
+      const supabase = getSupabaseClient();
+      const { data: linkRow, error: linkError } = await supabase
+        .from("quote_signature_links")
+        .select("quote_id, expires_at")
+        .eq("token", signatureToken)
+        .maybeSingle();
+
+      if (linkError) {
+        console.error("[submit-quote-signature] link lookup error:", linkError);
+        res.status(500).json({ message: "Erreur lors de la vérification du lien." });
+        return;
+      }
+      if (!linkRow?.quote_id) {
+        res.status(404).json({ message: "Lien de signature invalide ou expiré." });
+        return;
+      }
+      const expiresAt = linkRow.expires_at ? new Date(linkRow.expires_at).getTime() : 0;
+      if (Date.now() > expiresAt) {
+        res.status(410).json({ message: "Ce lien de signature a expiré." });
+        return;
+      }
+
+      const ip = (req.headers && (req.headers["x-forwarded-for"] as string)) || req.socket?.remoteAddress || "";
+      const ipAddress = Array.isArray(ip) ? ip[0] : (ip || "").trim();
+      const userAgent = (req.headers && req.headers["user-agent"]) ? String(req.headers["user-agent"]) : null;
+
+      const { error: insertError } = await supabase.from("quote_signatures").insert({
+        quote_id: linkRow.quote_id,
+        signature_token: signatureToken,
+        client_firstname: firstName,
+        client_lastname: lastName,
+        client_email: email,
+        prospect_email: email,
+        signature_data: signatureDataBase64,
+        ip_address: ipAddress || null,
+        user_agent: userAgent,
+      });
+
+      if (insertError) {
+        if (insertError.code === "23505") {
+          res.status(409).json({ message: "Ce devis a déjà été signé avec ce lien." });
+          return;
+        }
+        console.error("[submit-quote-signature] insert error:", insertError);
+        res.status(500).json({ message: "Erreur lors de l'enregistrement de la signature." });
+        return;
+      }
+
+      const { error: updateError } = await supabase
+        .from("quotes")
+        .update({ status: "signé" })
+        .eq("id", linkRow.quote_id);
+
+      if (updateError) {
+        console.error("[submit-quote-signature] quote status update error:", updateError);
+      }
+
+      res.status(200).json({
+        ok: true,
+        message: "Signature enregistrée avec succès.",
+        quoteId: linkRow.quote_id,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur serveur";
+      console.error("[submit-quote-signature]", err);
+      res.status(500).json({ message });
+    }
+  });
+
+  // POST /api/generate-quote-signature-link - Génère un lien de signature (CRM, avec auth)
+  app.post("/api/generate-quote-signature-link", async (req: Request, res: Response) => {
+    const auth = await getSupabaseAndUser(req);
+    if (!auth) {
+      res.status(401).json({ message: "Non autorisé." });
+      return;
+    }
+    const body = req.body as { quoteId?: string; expirationDays?: number };
+    const quoteId = typeof body.quoteId === "string" ? body.quoteId.trim() : "";
+    const expirationDays = typeof body.expirationDays === "number" && body.expirationDays > 0 ? body.expirationDays : 30;
+
+    if (!quoteId) {
+      res.status(400).json({ message: "quoteId requis." });
+      return;
+    }
+
+    try {
+      const supabase = getSupabaseClient();
+      const token =
+        crypto.randomUUID().replace(/-/g, "") + Math.random().toString(36).substring(2, 10);
+      const expiresAt = new Date(Date.now() + expirationDays * 24 * 60 * 60 * 1000).toISOString();
+
+      let prospectEmail: string | null = null;
+      const { data: quote } = await supabase
+        .from("quotes")
+        .select("client_email, user_id")
+        .eq("id", quoteId)
+        .maybeSingle();
+      if (quote?.user_id !== auth.userId) {
+        res.status(404).json({ message: "Devis introuvable ou accès refusé." });
+        return;
+      }
+      prospectEmail = quote?.client_email ?? null;
+
+      const { error } = await supabase.from("quote_signature_links").insert({
+        quote_id: quoteId,
+        token,
+        user_id: auth.userId,
+        prospect_email: prospectEmail,
+        expires_at: expiresAt,
+      });
+
+      if (error) {
+        console.error("[generate-quote-signature-link] insert error:", error);
+        res.status(500).json({ message: "Impossible de créer le lien de signature." });
+        return;
+      }
+
+      const proto = (req.headers && (req.headers["x-forwarded-proto"] as string)) || "https";
+      const host = (req.headers && (req.headers["x-forwarded-host"] as string)) || (req.headers?.host && String(req.headers.host));
+      const originFromHeaders = req.headers?.origin ? String(req.headers.origin) : "";
+      const origin = originFromHeaders || (host ? `${proto}://${host}` : "");
+      const signatureLink = origin ? `${origin.replace(/\/$/, "")}/sign-quote/${token}` : `/sign-quote/${token}`;
+
+      res.status(200).json({
+        ok: true,
+        signatureToken: token,
+        signatureLink,
+        expiresAt,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur serveur";
+      console.error("[generate-quote-signature-link]", err);
+      res.status(500).json({ message });
+    }
+  });
+
   // GET /api/invoices - Liste des factures avec filtres
   app.get("/api/invoices", async (req: Request, res: Response) => {
     const { userId, clientId, chantierId, status, year } = req.query as {
