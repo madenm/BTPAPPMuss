@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Dialog, DialogContent,
+  Dialog, DialogContent, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import {
@@ -95,6 +95,8 @@ export function OnboardingDialog({ open, onDone, userName }: OnboardingDialogPro
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onDone(); }}>
       <DialogContent className="bg-gray-950 border border-white/10 text-white max-w-md p-0 overflow-hidden gap-0 [&>button]:hidden">
+        <DialogTitle className="sr-only">{personalizedTitle}</DialogTitle>
+        <DialogDescription className="sr-only">{slide.description}</DialogDescription>
         {/* Skip button */}
         <button
           type="button"
