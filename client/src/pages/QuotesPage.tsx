@@ -926,18 +926,9 @@ export default function QuotesPage() {
           items: items,
           // Ne pas définir de statut lors de la sauvegarde
         };
-        // #region agent log
-        _log('QuotesPage:before_insert', 'calling insertQuote', { itemsLen: items.length, total_ht: payload.total_ht, total_ttc: payload.total_ttc });
-        // #endregion
         const newQuote = await insertQuote(user.id, payload);
-        // #region agent log
-        _log('QuotesPage:after_insert', 'insertQuote ok', { newQuoteId: newQuote?.id });
-        // #endregion
         // Generate and save PDF immediately
         try {
-          // #region agent log
-          _log('QuotesPage:pdf_block', 'before fetchLogoDataUrl + getQuotePdfBase64', {});
-          // #endregion
           const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : undefined;
           const pdfBase64 = getQuotePdfBase64({
             clientInfo,
@@ -964,16 +955,8 @@ export default function QuotesPage() {
             companySiret: profile?.company_siret,
           });
           await supabase.from("quotes").update({ quote_pdf_base64: pdfBase64 }).eq("id", newQuote.id).eq("user_id", user.id);
-          // #region agent log
-          _log('QuotesPage:after_pdf_update', 'pdf update ok', { quoteId: newQuote.id });
-          // #endregion
         } catch (err) {
           console.error('Error generating PDF for new quote:', err);
-          // #region agent log
-          const pdfErr = err as Error;
-          _log('QuotesPage:pdf_catch', 'pdf_err', { errName: pdfErr?.name, errMessage: pdfErr?.message });
-          (window as any).__quoteDebug = { ...(window as any).__quoteDebug, lastError: pdfErr?.message || String(err) };
-          // #endregion
         }
         
         setEditingQuoteId(newQuote.id);
@@ -1022,11 +1005,6 @@ export default function QuotesPage() {
       }
     } catch (error: unknown) {
       console.error('Error saving quote:', error);
-      // #region agent log
-      const errObj = error as Error;
-      _log('QuotesPage:save_catch', 'save_err', { errName: errObj?.name, errMessage: errObj?.message });
-      (window as any).__quoteDebug = { ...(window as any).__quoteDebug, lastError: errObj?.message || String(error) };
-      // #endregion
       const message = error instanceof Error ? error.message : 'Erreur inconnue';
       toast({
         title: 'Erreur lors de la sauvegarde',
