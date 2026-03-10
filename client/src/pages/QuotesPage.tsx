@@ -78,8 +78,8 @@ interface ClientInfo {
 }
 
 export default function QuotesPage() {
-  const { user, session } = useAuth();
-  const aiUsage = useAiUsage(session?.access_token);
+  const { user, session, loading: authLoading } = useAuth();
+  const aiUsage = useAiUsage(session?.access_token, !authLoading);
   const { clients, chantiers, addChantier, addClient, updateChantier, refreshChantiers } = useChantiers();
   const { logoUrl, themeColor, profile } = useUserSettings();
   const accentColor = themeColor || DEFAULT_THEME_COLOR;

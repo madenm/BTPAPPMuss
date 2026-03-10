@@ -18,10 +18,22 @@ const defaultState: AiUsageState = {
   refetch: async () => {},
 };
 
-export function useAiUsage(accessToken: string | null | undefined): AiUsageState {
+/**
+ * Hook pour le quota d'usage IA.
+ * @param accessToken - Token de session Supabase (session?.access_token)
+ * @param authReady - Si false, n'appelle pas l'API (évite 401 au premier rendu). Passer !loading depuis useAuth().
+ */
+export function useAiUsage(
+  accessToken: string | null | undefined,
+  authReady = true
+): AiUsageState {
   const [state, setState] = useState<AiUsageState>(defaultState);
 
   const refetch = useCallback(async () => {
+    if (!authReady) {
+      setState((s) => ({ ...s, used: 0, limit: 10, remaining: 10, loading: false, error: null }));
+      return;
+    }
     if (!accessToken?.trim()) {
       setState((s) => ({ ...s, used: 0, limit: 10, remaining: 10, loading: false, error: null }));
       return;
@@ -39,7 +51,7 @@ export function useAiUsage(accessToken: string | null | undefined): AiUsageState
           used: data?.used ?? 0,
           limit: data?.limit ?? 10,
           remaining: data?.remaining ?? 0,
-          error: typeof data?.message === 'string' ? data.message : 'Impossible de charger le quota IA.',
+          error: res.status === 401 ? null : (typeof data?.message === 'string' ? data.message : 'Impossible de charger le quota IA.'),
         }));
         return;
       }
@@ -60,7 +72,7 @@ export function useAiUsage(accessToken: string | null | undefined): AiUsageState
         error: 'Erreur réseau',
       }));
     }
-  }, [accessToken]);
+  }, [accessToken, authReady]);
 
   useEffect(() => {
     refetch();

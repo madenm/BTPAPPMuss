@@ -138,8 +138,8 @@ function CollapsibleSection({
 }
 
 export default function EstimationPage() {
-  const { user, session } = useAuth();
-  const aiUsage = useAiUsage(session?.access_token);
+  const { user, session, loading: authLoading } = useAuth();
+  const aiUsage = useAiUsage(session?.access_token, !authLoading);
   const { clients: existingClients } = useChantiers();
   const { profile, logoUrl, themeColor } = useUserSettings();
   const [, setLocation] = useLocation();
