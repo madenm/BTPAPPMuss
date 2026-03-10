@@ -42,6 +42,8 @@ export interface QuotePdfParams {
   companyEmail?: string;
   companySiret?: string;
   companyLegal?: string;
+  /** Image de signature du client (data URL) à afficher dans le rectangle "Bon pour accord" */
+  signatureImageDataUrl?: string;
 }
 
 const MARGIN = 10;
@@ -115,6 +117,7 @@ function buildQuoteDoc(params: QuotePdfParams): jsPDF {
     companyEmail,
     companySiret,
     companyLegal,
+    signatureImageDataUrl,
   } = params;
 
   const doc = new jsPDF();
@@ -317,6 +320,14 @@ function buildQuoteDoc(params: QuotePdfParams): jsPDF {
   const signatureRectW = 48;
   const signatureRectH = 20;
   doc.rect(signatureRectX, signatureRectY, signatureRectW, signatureRectH);
+  
+  if (signatureImageDataUrl) {
+    try {
+      doc.addImage(signatureImageDataUrl, "PNG", signatureRectX, signatureRectY, signatureRectW, signatureRectH);
+    } catch {
+      // ignore invalid image
+    }
+  }
   
   // Stocker les coordonnées dans la variable globale pour getSignatureRectangleCoordinates
   setLastSignatureRectCoords({

@@ -18,7 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { fetchTeamMembers, fetchChantierAssignmentsByChantier, addChantierAssignment, removeChantierAssignment, type TeamMember } from '@/lib/supabase';
-import { fetchQuotesByChantierId, fetchQuotesForUser, getQuoteDisplayNumber, updateQuoteStatus, deleteQuote, type SupabaseQuote } from '@/lib/supabaseQuotes';
+import { fetchQuotesByChantierId, fetchQuotesForUser, getQuoteDisplayNumber, getQuoteSignatureData, updateQuoteStatus, deleteQuote, type SupabaseQuote } from '@/lib/supabaseQuotes';
 import { downloadPdfBase64, downloadQuotePdf, fetchLogoDataUrl, type QuotePdfParams } from '@/lib/quotePdf';
 import { QuotePreview } from '@/components/QuotePreview';
 import { useUserSettings } from '@/context/UserSettingsContext';
@@ -694,6 +694,8 @@ export default function ProjectDetailPage() {
                                       const logoDataUrl = await fetchLogoDataUrl(logoUrl);
                                       if (logoDataUrl) params.logoDataUrl = logoDataUrl;
                                     }
+                                    const signatureImageDataUrl = await getQuoteSignatureData(q.id);
+                                    if (signatureImageDataUrl) params.signatureImageDataUrl = signatureImageDataUrl;
                                     downloadQuotePdf(params);
                                     toast({ title: 'Devis téléchargé' });
                                   } catch (err) {

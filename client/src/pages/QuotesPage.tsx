@@ -28,7 +28,7 @@ import { useAiUsage } from '@/hooks/useAiUsage';
 import { UserAccountButton } from '@/components/UserAccountButton';
 import { VoiceInputButton } from '@/components/VoiceInputButton';
 import { supabase } from '@/lib/supabaseClient';
-import { insertQuote, updateQuote, deleteQuote, updateQuoteStatus, fetchQuoteById, fetchQuotesForUser, getQuoteDisplayNumber, type QuoteItem, type QuoteSubItem, type SupabaseQuote } from '@/lib/supabaseQuotes';
+import { insertQuote, updateQuote, deleteQuote, updateQuoteStatus, fetchQuoteById, fetchQuotesForUser, getQuoteDisplayNumber, getQuoteSignatureData, type QuoteItem, type QuoteSubItem, type SupabaseQuote } from '@/lib/supabaseQuotes';
 import { DEFAULT_THEME_COLOR, QUOTE_STATUS_LABELS, QUOTE_UNIT_NONE, QUOTE_UNIT_OPTIONS, inferUnitFromDescription, backfillUnitOnItems } from '@/lib/quoteConstants';
 import { downloadQuotePdf, fetchLogoDataUrl, getQuotePdfBase64, buildQuoteEmailHtml, getSignatureRectangleCoordinates } from '@/lib/quotePdf';
 import { QuotePreview } from '@/components/QuotePreview';
@@ -799,6 +799,7 @@ export default function QuotesPage() {
       }));
       const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : undefined;
       const quoteNum = getQuoteDisplayNumber(listQuotes, quote.id);
+      const signatureImageDataUrl = await getQuoteSignatureData(quote.id);
       downloadQuotePdf({
         clientInfo: {
           name: quote.client_name ?? '',
@@ -823,6 +824,7 @@ export default function QuotesPage() {
         companySiret: profile?.company_siret ?? undefined,
         companyLegal: [profile?.company_name, profile?.company_siret && `SIRET ${profile.company_siret}`, profile?.company_tva_number && `TVA ${profile.company_tva_number}`, profile?.company_rcs && `RCS ${profile.company_rcs}`, profile?.company_capital && `Capital ${profile.company_capital} €`].filter(Boolean).join(' — ') || undefined,
         ...(logoDataUrl && { logoDataUrl }),
+        ...(signatureImageDataUrl && { signatureImageDataUrl }),
       });
       toast({ title: 'Devis téléchargé', description: 'Le PDF a été téléchargé.' });
     } catch (e) {
@@ -878,6 +880,7 @@ export default function QuotesPage() {
         companySiret: profile?.company_siret ?? undefined,
         companyLegal: [profile?.company_name, profile?.company_siret && `SIRET ${profile.company_siret}`, profile?.company_tva_number && `TVA ${profile.company_tva_number}`, profile?.company_rcs && `RCS ${profile.company_rcs}`, profile?.company_capital && `Capital ${profile.company_capital} €`].filter(Boolean).join(' — ') || undefined,
         ...(logoDataUrl && { logoDataUrl }),
+        ...(await getQuoteSignatureData(quote.id).then((s) => (s ? { signatureImageDataUrl: s } : {}))),
       };
       const pdfBase64 = getQuotePdfBase64(pdfParams);
       const rectCoords = getSignatureRectangleCoordinates(pdfParams);
@@ -1290,6 +1293,7 @@ export default function QuotesPage() {
         const allQuotes = await fetchQuotesForUser(user.id);
         quoteNum = getQuoteDisplayNumber(allQuotes, editingQuoteId);
         const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : undefined;
+        const signatureImageDataUrl = await getQuoteSignatureData(editingQuoteId);
         downloadQuotePdf({
           clientInfo: {
             name: clientInfo.name,
@@ -1314,6 +1318,7 @@ export default function QuotesPage() {
           companySiret: profile?.company_siret ?? undefined,
           companyLegal: [profile?.company_name, profile?.company_siret && `SIRET ${profile.company_siret}`, profile?.company_tva_number && `TVA ${profile.company_tva_number}`, profile?.company_rcs && `RCS ${profile.company_rcs}`, profile?.company_capital && `Capital ${profile.company_capital} €`].filter(Boolean).join(' — ') || undefined,
           ...(logoDataUrl && { logoDataUrl }),
+          ...(signatureImageDataUrl && { signatureImageDataUrl }),
         });
         setIsGenerating(false);
         return;
@@ -1442,6 +1447,7 @@ export default function QuotesPage() {
           const allQuotes = await fetchQuotesForUser(user.id);
           quoteNum = getQuoteDisplayNumber(allQuotes, quoteIdToUse);
         }
+        const signatureImageDataUrl = quoteIdToUse ? await getQuoteSignatureData(quoteIdToUse) : null;
         downloadQuotePdf({
           clientInfo,
           projectType,
@@ -1461,6 +1467,7 @@ export default function QuotesPage() {
           companySiret: profile?.company_siret ?? undefined,
           companyLegal: [profile?.company_name, profile?.company_siret && `SIRET ${profile.company_siret}`, profile?.company_tva_number && `TVA ${profile.company_tva_number}`, profile?.company_rcs && `RCS ${profile.company_rcs}`, profile?.company_capital && `Capital ${profile.company_capital} €`].filter(Boolean).join(' — ') || undefined,
           ...(logoDataUrl && { logoDataUrl }),
+          ...(signatureImageDataUrl && { signatureImageDataUrl }),
         });
         toast({ title: 'Devis téléchargé', description: 'Le PDF a été téléchargé avec succès.' });
       } catch (pdfError: unknown) {

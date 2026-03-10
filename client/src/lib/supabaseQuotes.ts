@@ -355,6 +355,36 @@ export async function hasQuoteBeenSigned(quoteId: string): Promise<boolean> {
 }
 
 /**
+ * Récupère l'image de signature (data URL) pour un devis signé, pour l'inclure dans le PDF.
+ * Retourne null si le devis n'a pas été signé ou en cas d'erreur.
+ */
+export async function getQuoteSignatureData(quoteId: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from("quote_signatures")
+      .select("signature_data")
+      .eq("quote_id", quoteId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error && !isSupabaseTableMissing(error)) {
+      console.error("Error fetching quote signature data:", error);
+      return null;
+    }
+    const raw = data?.signature_data;
+    if (!raw || typeof raw !== "string") return null;
+    const s = raw.trim();
+    if (!s) return null;
+    if (s.startsWith("data:")) return s;
+    return `data:image/png;base64,${s}`;
+  } catch (err) {
+    console.error("Error in getQuoteSignatureData:", err);
+    return null;
+  }
+}
+
+/**
  * Calcule si la validité d'un devis a dépassé
  */
 export function isQuoteValidityExpired(quote: SupabaseQuote): boolean {
