@@ -95,20 +95,18 @@ export function UserAccountButton({ variant = 'fixed' }: UserAccountButtonProps)
       {isOpen && (
         <>
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0, pointerEvents: 'none' }}
+            animate={{ opacity: 1, pointerEvents: 'auto' }}
+            exit={{ opacity: 0, pointerEvents: 'none' }}
+            transition={{ duration: 0.2 }}
             onClick={handleBackdropClick}
-            className="fixed inset-0 z-[9998]"
-            style={{ 
-              pointerEvents: isExiting ? 'none' : (isOpen ? 'auto' : 'none')
-            }}
+            className="fixed inset-0 z-40"
           />
           <motion.div
             initial={{ opacity: 0, y: -10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            className="fixed w-64 bg-black/20  border border-white/10 rounded-xl shadow-xl overflow-hidden z-[9999]"
+            className="fixed w-64 bg-black/20  border border-white/10 rounded-xl shadow-xl overflow-hidden z-50"
             style={isInline ? {
               top: `${dropdownPosition.top}px`,
               right: `${dropdownPosition.right}px`,

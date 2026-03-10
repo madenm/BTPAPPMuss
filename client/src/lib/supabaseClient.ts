@@ -1,7 +1,24 @@
 import { createClient } from '@supabase/supabase-js'
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://hvnjlxxcxfxvuwlmnwtw.supabase.co'
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2bmpseHhjeGZ4dnV3bG1ud3R3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5NzA3ODIsImV4cCI6MjA3OTU0Njc4Mn0.SmL4eqGq8XLfbLOolxGdafLhS6eeTgYGGn1w9gcrWdU'
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? ''
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? ''
+
+// En local, pas de fallback : utiliser .env.local avec les clés du projet (ex. Staging).
+// Sans clés, les appels Supabase échouent et la page Planning peut bugger.
+if (import.meta.env.DEV) {
+  const urlPlaceholder = 'https://your-project-ref.supabase.co'
+  const keyPlaceholder = 'your_anon_or_publishable_key'
+  const urlMissing = !SUPABASE_URL || SUPABASE_URL === urlPlaceholder
+  const keyMissing = !SUPABASE_ANON_KEY || SUPABASE_ANON_KEY === keyPlaceholder
+  if (urlMissing || keyMissing) {
+    console.warn(
+      '[Supabase] Clés manquantes ou placeholder en local. Copie .env.example en .env.local et remplis :\n' +
+      '  VITE_SUPABASE_URL=https://iaadzfvqmjqhalfybxok.supabase.co  (ou ton projet)\n' +
+      '  VITE_SUPABASE_ANON_KEY=<ta clé anon/publishable>\n' +
+      'Voir Supabase > projet > Settings > API.'
+    )
+  }
+}
 
 let useSessionStorage = false
 

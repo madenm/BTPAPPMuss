@@ -51,8 +51,8 @@ export function PageWrapper({ children }: PageWrapperProps) {
           </motion.div>
         </AnimatePresence>
 
-        {/* Sidebar (bouton + overlay + menu) au-dessus du contenu pour être cliquable partout */}
-        <div className="relative z-[100] pointer-events-none [&>*]:pointer-events-auto">
+        {/* Sidebar : couche en pointer-events-none ; le Sidebar réactive les clics uniquement sur le bouton et le menu ouvert */}
+        <div className="relative z-[100] pointer-events-none [&>*]:pointer-events-none">
           <Sidebar />
         </div>
       </div>

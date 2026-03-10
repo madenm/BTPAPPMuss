@@ -146,6 +146,11 @@ export default function PlanningPage() {
     return chantiers.filter((c) => ids.has(c.id));
   }, [chantiers, chantiersInMonth, days, getChantiersForDay]);
 
+  const chantiersInViewKey = useMemo(
+    () => chantiersInView.map((c) => c.id).sort().join(','),
+    [chantiersInView]
+  );
+
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
@@ -159,7 +164,7 @@ export default function PlanningPage() {
     };
     run();
     return () => { cancelled = true; };
-  }, [chantiersInView, assignmentsRefreshKey]);
+  }, [chantiersInViewKey, assignmentsRefreshKey]);
 
   useEffect(() => {
     const start = toNoteDateKey(new Date(year, month, 1));
