@@ -1585,7 +1585,7 @@ export default function QuotesPage() {
           onDuplicateQuote={handleDuplicateQuote}
           onDeleteQuote={handleDeleteQuoteFromList}
           onChangeStatus={handleChangeStatusFromList}
-          onGoToProjects={() => setLocation('/dashboard/projects')}
+          onGoToProjects={(chantierId) => setLocation(`/dashboard/projects/${chantierId}`)}
         />
       ) : (
         <>
