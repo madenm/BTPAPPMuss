@@ -56,6 +56,12 @@ const ESTIMATION_DEVIS_KEY = 'estimationForDevis';
 const ESTIMATION_DEVIS_DIRECT_KEY = 'estimationForDevisDirect';
 const ESTIMATION_PAGE_STATE_KEY = 'estimationPageState';
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_REGEX = /^0[67]\s?\d{2}\s?\d{2}\s?\d{2}\s?\d{2}$/;
+function normalizePhone(s: string): string {
+  return s.replace(/\s/g, '');
+}
+
 const DONUT_COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#06b6d4'];
 
 function StepIndicator({ current, total }: { current: number; total: number }) {
@@ -143,7 +149,7 @@ function CollapsibleSection({
 export default function EstimationPage() {
   const { user, session, loading: authLoading } = useAuth();
   const aiUsage = useAiUsage(session?.access_token, !authLoading);
-  const { clients: existingClients } = useChantiers();
+  const { clients: existingClients, addClient, refreshClients } = useChantiers();
   const { profile, logoUrl, themeColor } = useUserSettings();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -155,6 +161,8 @@ export default function EstimationPage() {
   const [clientSearch, setClientSearch] = useState('');
   const [showNewClientForm, setShowNewClientForm] = useState(false);
   const [newClient, setNewClient] = useState({ name: '', email: '', phone: '' });
+  const [newClientErrors, setNewClientErrors] = useState<{ email?: string; phone?: string }>({});
+  const [creatingClient, setCreatingClient] = useState(false);
   const [chantierInfo, setChantierInfo] = useState({
     surface: '',
     materiaux: '',
@@ -397,10 +405,44 @@ export default function EstimationPage() {
     }
   };
 
-  const handleCreateClient = () => {
-    setSelectedClient({ id: Date.now().toString(), ...newClient });
-    setNewClient({ name: '', email: '', phone: '' });
-    setShowNewClientForm(false);
+  const handleCreateClient = async () => {
+    const name = newClient.name.trim();
+    const email = newClient.email.trim();
+    const phone = newClient.phone.trim();
+    const errors: { email?: string; phone?: string } = {};
+    if (!email) {
+      errors.email = 'Email requis';
+    } else if (!EMAIL_REGEX.test(email)) {
+      errors.email = 'Format email invalide';
+    }
+    if (phone && !PHONE_REGEX.test(normalizePhone(phone))) {
+      errors.phone = 'Format 06/07 XX XX XX XX';
+    }
+    setNewClientErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+    if (!name) {
+      toast({ title: 'Nom requis', description: 'Renseignez le nom du contact.', variant: 'destructive' });
+      return;
+    }
+    setCreatingClient(true);
+    try {
+      const created = await addClient({
+        name,
+        email,
+        phone: phone || undefined,
+      });
+      setSelectedClient({ id: created.id, name: created.name, email: created.email ?? '', phone: created.phone ?? '' });
+      refreshClients();
+      setNewClient({ name: '', email: '', phone: '' });
+      setNewClientErrors({});
+      setShowNewClientForm(false);
+      toast({ title: 'Contact créé', description: `${created.name} a été enregistré et sélectionné.` });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erreur lors de l\'enregistrement';
+      toast({ title: 'Impossible d\'ajouter le contact', description: msg, variant: 'destructive' });
+    } finally {
+      setCreatingClient(false);
+    }
   };
 
   const handleCreateChantierFromEstimation = useCallback(() => {
@@ -785,23 +827,63 @@ export default function EstimationPage() {
                           </Button>
                         ) : (
                           <div className="space-y-3 border-t border-white/10 pt-3">
+                            <p className="text-xs text-white/60">Le contact sera enregistré dans vos Contacts comme les autres.</p>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                               <div className="space-y-1">
-                                <Label className="text-xs text-white/70">Nom</Label>
-                                <Input value={newClient.name} onChange={(e) => setNewClient({ ...newClient, name: e.target.value })} placeholder="Nom" className="bg-black/20 border-white/10 text-white placeholder:text-white/40" />
+                                <Label className="text-xs text-white/70">Nom *</Label>
+                                <Input
+                                  value={newClient.name}
+                                  onChange={(e) => { setNewClient({ ...newClient, name: e.target.value }); }}
+                                  placeholder="Nom"
+                                  className="bg-black/20 border-white/10 text-white placeholder:text-white/40"
+                                />
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs text-white/70">Email</Label>
-                                <Input type="email" value={newClient.email} onChange={(e) => setNewClient({ ...newClient, email: e.target.value })} placeholder="email@ex.fr" className="bg-black/20 border-white/10 text-white placeholder:text-white/40" />
+                                <Label className="text-xs text-white/70">Email *</Label>
+                                <Input
+                                  type="email"
+                                  value={newClient.email}
+                                  onChange={(e) => { setNewClient({ ...newClient, email: e.target.value }); setNewClientErrors((prev) => ({ ...prev, email: undefined })); }}
+                                  placeholder="email@exemple.fr"
+                                  className={`bg-black/20 text-white placeholder:text-white/40 ${newClientErrors.email ? 'border-red-400 focus-visible:ring-red-400' : 'border-white/10'}`}
+                                />
+                                {newClientErrors.email && <p className="text-xs text-red-400">{newClientErrors.email}</p>}
                               </div>
                               <div className="space-y-1">
-                                <Label className="text-xs text-white/70">Téléphone</Label>
-                                <Input type="tel" value={newClient.phone} onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })} placeholder="06..." className="bg-black/20 border-white/10 text-white placeholder:text-white/40" />
+                                <Label className="text-xs text-white/70">Téléphone (optionnel)</Label>
+                                <Input
+                                  type="tel"
+                                  value={newClient.phone}
+                                  onChange={(e) => { setNewClient({ ...newClient, phone: e.target.value }); setNewClientErrors((prev) => ({ ...prev, phone: undefined })); }}
+                                  placeholder="06 12 34 56 78"
+                                  className={`bg-black/20 text-white placeholder:text-white/40 ${newClientErrors.phone ? 'border-red-400 focus-visible:ring-red-400' : 'border-white/10'}`}
+                                />
+                                {newClientErrors.phone && <p className="text-xs text-red-400">{newClientErrors.phone}</p>}
                               </div>
                             </div>
                             <div className="flex gap-2">
-                              <Button size="sm" onClick={handleCreateClient} disabled={!newClient.name || !newClient.email} className="bg-white/20 text-white border border-white/10 hover:bg-white/30"><Plus className="h-3 w-3 mr-1" />Ajouter</Button>
-                              <Button size="sm" variant="outline" className="text-white/60 border-white/15 hover:bg-white/10" onClick={() => { setShowNewClientForm(false); setNewClient({ name: '', email: '', phone: '' }); }}>Annuler</Button>
+                              <Button
+                                size="sm"
+                                onClick={handleCreateClient}
+                                disabled={
+                                  creatingClient ||
+                                  !newClient.name.trim() ||
+                                  !newClient.email.trim() ||
+                                  !EMAIL_REGEX.test(newClient.email.trim()) ||
+                                  (!!newClient.phone.trim() && !PHONE_REGEX.test(normalizePhone(newClient.phone)))
+                                }
+                                className="bg-white/20 text-white border border-white/10 hover:bg-white/30 disabled:opacity-50"
+                              >
+                                {creatingClient ? 'Enregistrement...' : <><Plus className="h-3 w-3 mr-1" />Ajouter</>}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-white/60 border-white/15 hover:bg-white/10"
+                                onClick={() => { setShowNewClientForm(false); setNewClient({ name: '', email: '', phone: '' }); setNewClientErrors({}); }}
+                              >
+                                Annuler
+                              </Button>
                             </div>
                           </div>
                         )}
