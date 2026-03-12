@@ -14,6 +14,7 @@ import { fetchTeamMembers, fetchChantierAssignmentsByChantier, addChantierAssign
 import { uploadFile, removeFile, publicUrlToPath } from '@/lib/supabaseStorage';
 import { VoiceInputButton } from '@/components/VoiceInputButton';
 import { Building, Plus, Calendar as CalendarIcon, Image as ImageIcon, X } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 function formatDateToDDMMYYYY(iso?: string): string {
   if (!iso) return '';
@@ -71,6 +72,7 @@ export interface ChantierEditDialogProps {
 
 export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: ChantierEditDialogProps) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const { clients, addClient, updateChantier } = useChantiers();
   const fileInputId = useRef(`edit-chantier-images-${Math.random().toString(36).slice(2)}`).current;
 
@@ -91,6 +93,12 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
   const [editAssignedMemberIds, setEditAssignedMemberIds] = useState<string[]>([]);
   const [loadingAssignments, setLoadingAssignments] = useState(false);
   const [uploadingEditImages, setUploadingEditImages] = useState(false);
+  const [showNewClientForm, setShowNewClientForm] = useState(false);
+  const [newClientPrenom, setNewClientPrenom] = useState('');
+  const [newClientNom, setNewClientNom] = useState('');
+  const [newClientEmail, setNewClientEmail] = useState('');
+  const [newClientPhone, setNewClientPhone] = useState('');
+  const [creatingClient, setCreatingClient] = useState(false);
 
   useEffect(() => {
     if (!open || !chantier) return;
@@ -123,11 +131,46 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
   }, [open, chantier?.id]);
 
   const handleAddClient = () => {
-    void addClient({
-      name: `Client ${clients.length + 1}`,
-      email: '',
-      phone: '',
-    });
+    setShowNewClientForm(true);
+    setNewClientPrenom('');
+    setNewClientNom('');
+    setNewClientEmail('');
+    setNewClientPhone('');
+  };
+
+  const handleCreateNewClient = async () => {
+    const prenom = newClientPrenom.trim();
+    const nom = newClientNom.trim();
+    const email = newClientEmail.trim();
+    if (!prenom || !nom || !email) {
+      toast({
+        title: 'Champs requis',
+        description: 'Renseignez le prénom, le nom et l\'email du contact.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setCreatingClient(true);
+    try {
+      const fullName = `${prenom} ${nom}`.trim();
+      const created = await addClient({
+        name: fullName,
+        email,
+        phone: newClientPhone.trim() || undefined,
+      });
+      setEditChantier((prev) => ({ ...prev, clientId: created.id, clientName: created.name }));
+      setShowNewClientForm(false);
+      setNewClientPrenom('');
+      setNewClientNom('');
+      setNewClientEmail('');
+      setNewClientPhone('');
+      toast({ title: 'Contact créé', description: `${fullName} a été ajouté.` });
+    } catch (err) {
+      const msg = err?.message || 'Erreur inconnue';
+      toast({ title: 'Impossible d\'ajouter le contact', description: msg, variant: 'destructive' });
+    } finally {
+      setCreatingClient(false);
+    }
   };
 
   const toggleMemberAssignment = (memberId: string, checked: boolean) => {
@@ -258,7 +301,7 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
                 <SelectTrigger className="bg-black/20  border-white/10 text-white">
                   <SelectValue placeholder="Sélectionner un client" />
                 </SelectTrigger>
-                <SelectContent className="bg-black/20  border-white/10">
+                <SelectContent className="bg-gray-900 border-white/10">
                   {clients.map((client) => (
                     <SelectItem key={client.id} value={client.id} className="text-white">
                       {client.name}
@@ -266,10 +309,69 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
                   ))}
                 </SelectContent>
               </Select>
-              <Button type="button" variant="outline" onClick={handleAddClient} className="text-white border-white/20 hover:bg-white/10">
+              <Button type="button" variant="outline" onClick={handleAddClient} className="text-white border-white/20 hover:bg-white/10" title="Nouveau contact">
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
+            {showNewClientForm && (
+              <div className="mt-3 p-3 rounded-lg bg-black/30 border border-white/10 space-y-3">
+                <p className="text-sm font-medium text-white">Nouveau contact — renseignez les champs obligatoires</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-white/80 text-xs">Prénom *</Label>
+                    <Input
+                      value={newClientPrenom}
+                      onChange={(e) => setNewClientPrenom(e.target.value)}
+                      placeholder="Prénom"
+                      className="mt-1 bg-black/20 border-white/10 text-white placeholder:text-white/40"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-white/80 text-xs">Nom *</Label>
+                    <Input
+                      value={newClientNom}
+                      onChange={(e) => setNewClientNom(e.target.value)}
+                      placeholder="Nom"
+                      className="mt-1 bg-black/20 border-white/10 text-white placeholder:text-white/40"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-white/80 text-xs">Email *</Label>
+                  <Input
+                    type="email"
+                    value={newClientEmail}
+                    onChange={(e) => setNewClientEmail(e.target.value)}
+                    placeholder="email@exemple.fr"
+                    className="mt-1 bg-black/20 border-white/10 text-white placeholder:text-white/40"
+                  />
+                </div>
+                <div>
+                  <Label className="text-white/80 text-xs">Téléphone (optionnel)</Label>
+                  <Input
+                    type="tel"
+                    value={newClientPhone}
+                    onChange={(e) => setNewClientPhone(e.target.value)}
+                    placeholder="06..."
+                    className="mt-1 bg-black/20 border-white/10 text-white placeholder:text-white/40"
+                  />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setShowNewClientForm(false)} className="text-white border-white/20 hover:bg-white/10">
+                    Annuler
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleCreateNewClient}
+                    disabled={!newClientPrenom.trim() || !newClientNom.trim() || !newClientEmail.trim() || creatingClient}
+                    className="bg-white/20 text-white border border-white/10 hover:bg-white/30 disabled:opacity-50"
+                  >
+                    {creatingClient ? 'Création...' : 'Créer le contact'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -329,7 +431,7 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
               <SelectTrigger className="bg-black/20  border-white/10 text-white">
                 <SelectValue placeholder="Sélectionner le type" />
               </SelectTrigger>
-              <SelectContent className="bg-black/20  border-white/10">
+              <SelectContent className="bg-gray-900 border-white/10">
                 <SelectItem value="piscine" className="text-white">Piscine & Spa</SelectItem>
                 <SelectItem value="paysage" className="text-white">Aménagement Paysager</SelectItem>
                 <SelectItem value="menuiserie" className="text-white">Menuiserie Sur-Mesure</SelectItem>
@@ -357,7 +459,7 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
               <SelectTrigger className="bg-black/20  border-white/10 text-white">
                 <SelectValue placeholder="Sélectionner un statut" />
               </SelectTrigger>
-              <SelectContent className="bg-black/20  border-white/10">
+              <SelectContent className="bg-gray-900 border-white/10">
                 <SelectItem value="planifié" className="text-white">Planifié</SelectItem>
                 <SelectItem value="en cours" className="text-white">En cours</SelectItem>
                 <SelectItem value="terminé" className="text-white">Terminé</SelectItem>

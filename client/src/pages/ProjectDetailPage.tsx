@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UserAccountButton } from '@/components/UserAccountButton';
-import { Building, Calendar as CalendarIcon, ArrowLeft, Plus, X, Image as ImageIcon, FileText, Pencil, Eye, Download, Check, Trash2, Receipt, User } from 'lucide-react';
+import { Building, Calendar as CalendarIcon, ArrowLeft, Plus, X, Image as ImageIcon, FileText, Pencil, Eye, Download, Check, Trash2, Receipt, User, FileStack, TrendingUp } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useRoute, Link } from 'wouter';
 import { useAuth } from '@/context/AuthContext';
@@ -24,6 +24,16 @@ import { QuotePreview } from '@/components/QuotePreview';
 import { useUserSettings } from '@/context/UserSettingsContext';
 import { VoiceInputButton } from '@/components/VoiceInputButton';
 import { fetchInvoicesForUser, createInvoiceFromQuote, type InvoiceWithPayments } from '@/lib/supabaseInvoices';
+import {
+  fetchChantierDocumentsByChantierId,
+  insertChantierDocument,
+  deleteChantierDocument,
+  getDocumentPublicUrl,
+  getDocumentTypeLabel,
+  COST_DOCUMENT_TYPES,
+  type ChantierDocument,
+  type ChantierDocumentType,
+} from '@/lib/supabaseChantierDocuments';
 import { formatDurationFromDates } from '@/lib/planningUtils';
 import { InvoiceDialog } from '@/components/InvoiceDialog';
 import { useToast } from '@/hooks/use-toast';
@@ -173,6 +183,15 @@ export default function ProjectDetailPage() {
   // Factures
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
 
+  // Documents projet (bons de commande, fournisseurs, etc.)
+  const [chantierDocuments, setChantierDocuments] = useState<ChantierDocument[]>([]);
+  const [chantierDocumentsLoading, setChantierDocumentsLoading] = useState(false);
+  const [chantierInvoices, setChantierInvoices] = useState<InvoiceWithPayments[]>([]);
+  const [newDocType, setNewDocType] = useState<ChantierDocumentType>('doc_fournisseur');
+  const [newDocAmountHt, setNewDocAmountHt] = useState<string>('');
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [docDeletingId, setDocDeletingId] = useState<string | null>(null);
+
   // Charger le chantier
   useEffect(() => {
     if (!chantierId) return;
@@ -236,6 +255,38 @@ export default function ProjectDetailPage() {
     };
     loadQuotes();
   }, [chantierId]);
+
+  // Charger les documents du projet
+  useEffect(() => {
+    if (!chantierId || !user?.id) return;
+    const loadDocs = async () => {
+      setChantierDocumentsLoading(true);
+      try {
+        const docs = await fetchChantierDocumentsByChantierId(chantierId, user.id);
+        setChantierDocuments(docs);
+      } catch (err) {
+        console.error(err);
+        setChantierDocuments([]);
+      } finally {
+        setChantierDocumentsLoading(false);
+      }
+    };
+    loadDocs();
+  }, [chantierId, user?.id]);
+
+  // Charger les factures du chantier (pour rentabilité)
+  useEffect(() => {
+    if (!user?.id || !chantierId) return;
+    const loadInvoices = async () => {
+      try {
+        const list = await fetchInvoicesForUser(user.id, { chantierId });
+        setChantierInvoices(list);
+      } catch {
+        setChantierInvoices([]);
+      }
+    };
+    loadInvoices();
+  }, [chantierId, user?.id]);
 
   const handleSave = async () => {
     if (!chantier || !editChantier.nom || !editChantier.clientId || !editChantier.dateDebut || !editChantier.duree) {
@@ -321,6 +372,65 @@ export default function ProjectDetailPage() {
     }
   };
 
+  const projectDocInputId = 'project-doc-file';
+  const handleAddDocument = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!user?.id || !chantier || !e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    setUploadingDoc(true);
+    const pathPrefix = `${user.id}/chantiers/${chantier.id}/docs/${newDocType}`;
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const storagePath = `${pathPrefix}/${Date.now()}_${safeName}`;
+    try {
+      const url = await uploadFile(storagePath, file);
+      const pathForDb = publicUrlToPath(url);
+      const amountHt = newDocAmountHt.trim() ? parseFloat(newDocAmountHt.replace(',', '.')) : null;
+      await insertChantierDocument(user.id, chantier.id, {
+        document_type: newDocType,
+        file_path: pathForDb,
+        file_name: file.name,
+        amount_ht: amountHt != null && !isNaN(amountHt) ? amountHt : null,
+      });
+      const docs = await fetchChantierDocumentsByChantierId(chantier.id, user.id);
+      setChantierDocuments(docs);
+      setNewDocAmountHt('');
+      toast({ title: 'Document ajouté', description: file.name });
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Erreur', description: err instanceof Error ? err.message : "Erreur lors de l'ajout du document.", variant: 'destructive' });
+    } finally {
+      setUploadingDoc(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveDocument = async (doc: ChantierDocument) => {
+    if (!user?.id) return;
+    setDocDeletingId(doc.id);
+    try {
+      await deleteChantierDocument(user.id, doc.id);
+      setChantierDocuments((prev) => prev.filter((d) => d.id !== doc.id));
+      toast({ title: 'Document supprimé' });
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Erreur', description: 'Impossible de supprimer le document.', variant: 'destructive' });
+    } finally {
+      setDocDeletingId(null);
+    }
+  };
+
+  // Rentabilité : revenus (devis ou factures) - coûts (documents)
+  const revenusFromDevis = (() => {
+    if (editChantier.montantDevis != null && editChantier.montantDevis > 0) return editChantier.montantDevis;
+    const accepted = chantierQuotes.filter((q) => q.status === 'accepté' || q.status === 'validé');
+    if (accepted.length > 0) return accepted.reduce((s, q) => s + (q.total_ttc ?? 0), 0);
+    return chantierInvoices.reduce((s, inv) => s + (inv.total_ttc ?? 0), 0);
+  })();
+  const coutsDocuments = chantierDocuments
+    .filter((d) => COST_DOCUMENT_TYPES.includes(d.document_type) && d.amount_ht != null)
+    .reduce((s, d) => s + (Number(d.amount_ht) || 0), 0);
+  const marge = revenusFromDevis - coutsDocuments;
+  const tauxMarge = revenusFromDevis > 0 ? (marge / revenusFromDevis) * 100 : 0;
+
   const toggleMemberAssignment = (memberId: string, checked: boolean) => {
     setAssignedMemberIds((prev) =>
       checked ? [...prev, memberId] : prev.filter((id) => id !== memberId)
@@ -379,6 +489,40 @@ export default function ProjectDetailPage() {
             </div>
           </div>
 
+          {/* Rentabilité du projet — visible à l'ouverture */}
+          <Card className="bg-black/20 border border-white/10 mb-6">
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                <TrendingUp className="h-5 w-5" />
+                Rentabilité du projet
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="rounded-lg bg-black/30 border border-white/10 p-4">
+                  <p className="text-white/60 text-sm">Chiffre d'affaires</p>
+                  <p className="text-xl font-semibold text-white">{formatMontantEuro(revenusFromDevis)}</p>
+                  <p className="text-xs text-white/50">Devis accepté ou factures</p>
+                </div>
+                <div className="rounded-lg bg-black/30 border border-white/10 p-4">
+                  <p className="text-white/60 text-sm">Coûts (documents)</p>
+                  <p className="text-xl font-semibold text-white">{formatMontantEuro(coutsDocuments)}</p>
+                  <p className="text-xs text-white/50">Bons de commande / fournisseurs</p>
+                </div>
+                <div className="rounded-lg bg-black/30 border border-white/10 p-4">
+                  <p className="text-white/60 text-sm">Marge</p>
+                  <p className={`text-xl font-semibold ${marge >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {formatMontantEuro(marge)}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-black/30 border border-white/10 p-4">
+                  <p className="text-white/60 text-sm">Taux de marge</p>
+                  <p className={`text-xl font-semibold ${tauxMarge >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {revenusFromDevis > 0 ? `${tauxMarge.toFixed(1)} %` : '—'}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <Tabs defaultValue="info" className="w-full">
             <TabsList className="bg-black/20 border border-white/10 mb-6">
               <TabsTrigger value="info" className="text-white data-[state=active]:bg-white/10">
@@ -394,7 +538,7 @@ export default function ProjectDetailPage() {
                 Équipe ({assignedMemberIds.length})
               </TabsTrigger>
               <TabsTrigger value="documents" className="text-white data-[state=active]:bg-white/10">
-                Documents ({editChantier.images.length})
+                Documents ({editChantier.images.length + chantierDocuments.length})
               </TabsTrigger>
             </TabsList>
 
@@ -424,7 +568,7 @@ export default function ProjectDetailPage() {
                       <SelectTrigger className="bg-black/20  border-white/10 text-white">
                         <SelectValue placeholder="Sélectionner un client" />
                       </SelectTrigger>
-                      <SelectContent className="bg-black/20  border-white/10">
+                      <SelectContent className="bg-gray-900 border-white/10">
                         {clients.map((client) => (
                           <SelectItem key={client.id} value={client.id} className="text-white">
                             {client.name}
@@ -490,7 +634,7 @@ export default function ProjectDetailPage() {
                       <SelectTrigger className="bg-black/20  border-white/10 text-white">
                         <SelectValue placeholder="Sélectionner le type" />
                       </SelectTrigger>
-                      <SelectContent className="bg-black/20  border-white/10">
+                      <SelectContent className="bg-gray-900 border-white/10">
                         <SelectItem value="piscine" className="text-white">Piscine & Spa</SelectItem>
                         <SelectItem value="paysage" className="text-white">Aménagement Paysager</SelectItem>
                         <SelectItem value="menuiserie" className="text-white">Menuiserie Sur-Mesure</SelectItem>
@@ -516,7 +660,7 @@ export default function ProjectDetailPage() {
                       <SelectTrigger className="bg-black/20  border-white/10 text-white">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent className="bg-black/20  border-white/10">
+                      <SelectContent className="bg-gray-900 border-white/10">
                         <SelectItem value="planifié" className="text-white">Planifié</SelectItem>
                         <SelectItem value="en cours" className="text-white">En cours</SelectItem>
                         <SelectItem value="terminé" className="text-white">Terminé</SelectItem>
@@ -853,52 +997,164 @@ export default function ProjectDetailPage() {
             {/* Onglet Documents */}
             <TabsContent value="documents">
               <Card className="bg-black/20  border border-white/10">
-                <CardContent className="p-6">
-                  <div className="mb-4">
-                    <input
-                      id="project-images"
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      onChange={handleAddImages}
-                      className="hidden"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => document.getElementById('project-images')?.click()}
-                      disabled={uploadingImages}
-                      className="text-white border-white/20 hover:bg-white/10"
-                    >
-                      <ImageIcon className="h-4 w-4 mr-2" />
-                      {uploadingImages ? 'Upload en cours...' : 'Ajouter des images'}
-                    </Button>
+                <CardContent className="p-6 space-y-8">
+                  {/* Images (existant) */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-3">Photos du projet</h3>
+                    <div className="mb-4">
+                      <input
+                        id="project-images"
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={handleAddImages}
+                        className="hidden"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => document.getElementById('project-images')?.click()}
+                        disabled={uploadingImages}
+                        className="text-white border-white/20 hover:bg-white/10"
+                      >
+                        <ImageIcon className="h-4 w-4 mr-2" />
+                        {uploadingImages ? 'Upload en cours...' : 'Ajouter des images'}
+                      </Button>
+                    </div>
+
+                    {editChantier.images && editChantier.images.length > 0 ? (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {editChantier.images.map((img, index) => (
+                          <div key={index} className="relative group">
+                            <img
+                              src={img}
+                              alt={`Image ${index + 1}`}
+                              className="w-full h-32 object-cover rounded-lg border border-white/20"
+                            />
+                            <button
+                              onClick={() => handleRemoveImage(index)}
+                              className="absolute top-2 right-2 bg-red-500/80 hover:bg-red-500 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 rounded-lg bg-black/20 border border-white/10">
+                        <ImageIcon className="h-10 w-10 mx-auto mb-2 text-white/50" />
+                        <p className="text-white/70 text-sm">Aucune photo</p>
+                      </div>
+                    )}
                   </div>
 
-                  {editChantier.images && editChantier.images.length > 0 ? (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {editChantier.images.map((img, index) => (
-                        <div key={index} className="relative group">
-                          <img
-                            src={img}
-                            alt={`Image ${index + 1}`}
-                            className="w-full h-32 object-cover rounded-lg border border-white/20"
-                          />
-                          <button
-                            onClick={() => handleRemoveImage(index)}
-                            className="absolute top-2 right-2 bg-red-500/80 hover:bg-red-500 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  {/* Documents typés (bon de commande, fournisseur, etc.) */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                      <FileStack className="h-5 w-5" />
+                      Documents du projet (bons de commande, fournisseurs…)
+                    </h3>
+                    <div className="flex flex-wrap items-end gap-3 mb-4 p-4 rounded-lg bg-black/20 border border-white/10">
+                      <input
+                        id={projectDocInputId}
+                        type="file"
+                        accept="image/*,.pdf,.doc,.docx"
+                        onChange={handleAddDocument}
+                        className="hidden"
+                      />
+                      <div className="w-full sm:w-48">
+                        <Label className="text-white/80 text-sm">Type</Label>
+                        <Select value={newDocType} onValueChange={(v) => setNewDocType(v as ChantierDocumentType)}>
+                          <SelectTrigger className="bg-black/20 border-white/10 text-white mt-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-gray-900 border-white/10">
+                            <SelectItem value="bon_commande" className="text-white">Bon de commande</SelectItem>
+                            <SelectItem value="doc_fournisseur" className="text-white">Document fournisseur</SelectItem>
+                            <SelectItem value="autre" className="text-white">Autre</SelectItem>
+                            <SelectItem value="image" className="text-white">Image</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="w-full sm:w-36">
+                        <Label className="text-white/80 text-sm">Montant HT (€)</Label>
+                        <Input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="Optionnel"
+                          value={newDocAmountHt}
+                          onChange={(e) => setNewDocAmountHt(e.target.value)}
+                          className="bg-black/20 border-white/10 text-white placeholder:text-white/50 mt-1"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={uploadingDoc}
+                        onClick={() => document.getElementById(projectDocInputId)?.click()}
+                        className="text-white border-white/20 hover:bg-white/10"
+                      >
+                        {uploadingDoc ? 'Envoi…' : 'Parcourir et ajouter'}
+                      </Button>
+                    </div>
+
+                    {chantierDocumentsLoading ? (
+                      <p className="text-white/70">Chargement des documents…</p>
+                    ) : chantierDocuments.length === 0 ? (
+                      <div className="text-center py-6 rounded-lg bg-black/20 border border-white/10">
+                        <FileText className="h-10 w-10 mx-auto mb-2 text-white/50" />
+                        <p className="text-white/70 text-sm">Aucun document. Ajoutez un bon de commande ou un document fournisseur pour alimenter la rentabilité.</p>
+                      </div>
+                    ) : (
+                      <ul className="space-y-2">
+                        {chantierDocuments.map((doc) => (
+                          <li
+                            key={doc.id}
+                            className="flex items-center justify-between gap-2 p-3 rounded-lg bg-black/20 border border-white/10 text-white"
                           >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <ImageIcon className="h-12 w-12 mx-auto mb-4 text-white/50" />
-                      <p className="text-white/70">Aucune image pour ce projet</p>
-                    </div>
-                  )}
+                            <div className="flex items-center gap-3 min-w-0">
+                              <FileText className="h-5 w-5 text-white/50 shrink-0" />
+                              <div className="min-w-0">
+                                <p className="font-medium truncate">{doc.file_name}</p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <Badge variant="secondary" className="text-xs bg-white/10 text-white border-white/20">
+                                    {getDocumentTypeLabel(doc.document_type)}
+                                  </Badge>
+                                  {doc.amount_ht != null && (
+                                    <span className="text-white/70 text-sm">{formatMontantEuro(doc.amount_ht)} HT</span>
+                                  )}
+                                  <span className="text-white/50 text-xs">
+                                    {new Date(doc.created_at).toLocaleDateString('fr-FR')}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-white hover:bg-white/10"
+                                onClick={() => window.open(getDocumentPublicUrl(doc), '_blank')}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-400 hover:bg-red-500/20"
+                                disabled={docDeletingId === doc.id}
+                                onClick={() => handleRemoveDocument(doc)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>

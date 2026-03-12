@@ -235,6 +235,15 @@ export default function ProjectsPage() {
   const [quoteCounts, setQuoteCounts] = useState<Record<string, { total: number; pending: number; validated: number }>>({});
   const [invoiceCounts, setInvoiceCounts] = useState<Record<string, number>>({});
 
+  const [showNewClientForm, setShowNewClientForm] = useState(false);
+  const [newClientFormFor, setNewClientFormFor] = useState<'new' | 'edit' | null>(null);
+  const [newClientPrenom, setNewClientPrenom] = useState('');
+  const [newClientNom, setNewClientNom] = useState('');
+  const [newClientEmail, setNewClientEmail] = useState('');
+  const [newClientPhone, setNewClientPhone] = useState('');
+  const [creatingClient, setCreatingClient] = useState(false);
+  const newClientFormRef = useRef<HTMLDivElement>(null);
+
   // Debounce search 300ms
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
@@ -465,13 +474,56 @@ export default function ProjectsPage() {
     }
   };
 
-  const handleAddClient = async () => {
-    const created = await addClient({
-      name: `Client ${clients.length + 1}`,
-      email: '',
-      phone: ''
+  const handleAddClient = (forDialog: 'new' | 'edit') => {
+    setNewClientFormFor(forDialog);
+    setShowNewClientForm(true);
+    setNewClientPrenom('');
+    setNewClientNom('');
+    setNewClientEmail('');
+    setNewClientPhone('');
+    requestAnimationFrame(() => {
+      newClientFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
-    setNewChantier(prev => ({ ...prev, clientId: created.id }));
+  };
+
+  const handleCreateNewClient = async () => {
+    const prenom = newClientPrenom.trim();
+    const nom = newClientNom.trim();
+    const email = newClientEmail.trim();
+    if (!prenom || !nom || !email) {
+      toast({
+        title: 'Champs requis',
+        description: 'Renseignez le prénom, le nom et l\'email du contact.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setCreatingClient(true);
+    try {
+      const fullName = `${prenom} ${nom}`.trim();
+      const created = await addClient({
+        name: fullName,
+        email,
+        phone: newClientPhone.trim() || undefined,
+      });
+      if (newClientFormFor === 'new') {
+        setNewChantier((prev) => ({ ...prev, clientId: created.id }));
+      } else if (newClientFormFor === 'edit') {
+        setEditChantier((prev) => ({ ...prev, clientId: created.id, clientName: created.name }));
+      }
+      setShowNewClientForm(false);
+      setNewClientFormFor(null);
+      setNewClientPrenom('');
+      setNewClientNom('');
+      setNewClientEmail('');
+      setNewClientPhone('');
+      toast({ title: 'Contact créé', description: `${fullName} a été ajouté.` });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erreur inconnue';
+      toast({ title: 'Impossible d\'ajouter le contact', description: msg, variant: 'destructive' });
+    } finally {
+      setCreatingClient(false);
+    }
   };
 
   const handleDuplicateChantier = async (chantier: Chantier) => {
@@ -778,6 +830,8 @@ export default function ProjectsPage() {
                 if (!open) {
                   setNewChantier({ nom: '', clientId: '', dateDebut: '', dateFin: '', duree: '', images: [], statut: 'planifié', notes: '', notesAvancement: '', typeChantier: '', montantDevis: undefined });
                   setNewChantierMemberIds([]);
+                  setShowNewClientForm(false);
+                  setNewClientFormFor(null);
                 }
                 setIsDialogOpen(open);
               }}
@@ -817,7 +871,7 @@ export default function ProjectsPage() {
                         <SelectTrigger className="bg-black/20  border-white/10 text-white">
                           <SelectValue placeholder="Sélectionner un client" />
                         </SelectTrigger>
-                        <SelectContent className="bg-black/20  border-white/10">
+                        <SelectContent className="bg-gray-900 border-white/10">
                           {clients.map((client) => (
                             <SelectItem key={client.id} value={client.id} className="text-white">
                               {client.name}
@@ -828,12 +882,76 @@ export default function ProjectsPage() {
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={handleAddClient}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleAddClient('new');
+                        }}
                         className="text-white border-white/20 hover:bg-white/10"
+                        title="Nouveau contact"
                       >
                         <Plus className="h-4 w-4" />
                       </Button>
                     </div>
+                    {showNewClientForm && newClientFormFor === 'new' && (
+                      <div ref={newClientFormRef} className="mt-3 p-3 rounded-lg bg-black/30 border border-white/10 space-y-3">
+                        <p className="text-sm font-medium text-white">Nouveau contact — prénom, nom et email obligatoires</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-white/80 text-xs">Prénom *</Label>
+                            <Input
+                              value={newClientPrenom}
+                              onChange={(e) => setNewClientPrenom(e.target.value)}
+                              placeholder="Prénom"
+                              className="mt-1 bg-black/20 border-white/10 text-white placeholder:text-white/40"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-white/80 text-xs">Nom *</Label>
+                            <Input
+                              value={newClientNom}
+                              onChange={(e) => setNewClientNom(e.target.value)}
+                              placeholder="Nom"
+                              className="mt-1 bg-black/20 border-white/10 text-white placeholder:text-white/40"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-white/80 text-xs">Email *</Label>
+                          <Input
+                            type="email"
+                            value={newClientEmail}
+                            onChange={(e) => setNewClientEmail(e.target.value)}
+                            placeholder="email@exemple.fr"
+                            className="mt-1 bg-black/20 border-white/10 text-white placeholder:text-white/40"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-white/80 text-xs">Téléphone (optionnel)</Label>
+                          <Input
+                            type="tel"
+                            value={newClientPhone}
+                            onChange={(e) => setNewClientPhone(e.target.value)}
+                            placeholder="06..."
+                            className="mt-1 bg-black/20 border-white/10 text-white placeholder:text-white/40"
+                          />
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                          <Button type="button" variant="outline" size="sm" onClick={() => { setShowNewClientForm(false); setNewClientFormFor(null); }} className="text-white border-white/20 hover:bg-white/10">
+                            Annuler
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={handleCreateNewClient}
+                            disabled={!newClientPrenom.trim() || !newClientNom.trim() || !newClientEmail.trim() || creatingClient}
+                            className="bg-white/20 text-white border border-white/10 hover:bg-white/30 disabled:opacity-50"
+                          >
+                            {creatingClient ? 'Création...' : 'Créer le contact'}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -845,7 +963,7 @@ export default function ProjectsPage() {
                       <SelectTrigger className="bg-black/20  border-white/10 text-white">
                         <SelectValue placeholder="Sélectionner le type" />
                       </SelectTrigger>
-                      <SelectContent className="bg-black/20  border-white/10">
+                      <SelectContent className="bg-gray-900 border-white/10">
                         <SelectItem value="piscine" className="text-white">Piscine & Spa</SelectItem>
                         <SelectItem value="paysage" className="text-white">Aménagement Paysager</SelectItem>
                         <SelectItem value="menuiserie" className="text-white">Menuiserie Sur-Mesure</SelectItem>
@@ -957,7 +1075,7 @@ export default function ProjectsPage() {
                       <SelectTrigger className="bg-black/20  border-white/10 text-white">
                         <SelectValue placeholder="Sélectionner un statut" />
                       </SelectTrigger>
-                      <SelectContent className="bg-black/20  border-white/10">
+                      <SelectContent className="bg-gray-900 border-white/10">
                         <SelectItem value="planifié" className="text-white">Planifié</SelectItem>
                         <SelectItem value="en cours" className="text-white">En cours</SelectItem>
                       <SelectItem value="terminé" className="text-white">Terminé</SelectItem>
@@ -1118,7 +1236,7 @@ export default function ProjectsPage() {
               <SelectTrigger className="w-full sm:w-[140px] h-9 bg-black/20 border-white/10 text-white">
                 <SelectValue placeholder="Statut" />
               </SelectTrigger>
-              <SelectContent className="bg-black/20 border-white/10">
+              <SelectContent className="bg-gray-900 border-white/10">
                 <SelectItem value="tous" className="text-white">Tous</SelectItem>
                 <SelectItem value="planifié" className="text-white">Planifié</SelectItem>
                 <SelectItem value="en cours" className="text-white">En cours</SelectItem>
@@ -1129,7 +1247,7 @@ export default function ProjectsPage() {
               <SelectTrigger className="w-full sm:w-[160px] h-9 bg-black/20 border-white/10 text-white min-w-0">
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
-              <SelectContent className="bg-black/20 border-white/10">
+              <SelectContent className="bg-gray-900 border-white/10">
                 <SelectItem value="tous" className="text-white">Tous</SelectItem>
                 {Object.entries(TYPE_CHANTIER_LABELS).map(([k, v]) => (
                   <SelectItem key={k} value={k} className="text-white">{v}</SelectItem>
@@ -1140,7 +1258,7 @@ export default function ProjectsPage() {
               <SelectTrigger className="w-full sm:w-[160px] h-9 bg-black/20 border-white/10 text-white min-w-0">
                 <SelectValue placeholder="Client" />
               </SelectTrigger>
-              <SelectContent className="bg-black/20 border-white/10">
+              <SelectContent className="bg-gray-900 border-white/10">
                 <SelectItem value="tous" className="text-white">Tous</SelectItem>
                 {clients.map((c) => (
                   <SelectItem key={c.id} value={c.id} className="text-white">{c.name}</SelectItem>
@@ -1151,7 +1269,7 @@ export default function ProjectsPage() {
               <SelectTrigger className="w-full sm:w-[160px] h-9 bg-black/20 border-white/10 text-white min-w-0">
                 <SelectValue placeholder="Tri" />
               </SelectTrigger>
-              <SelectContent className="bg-black/20 border-white/10">
+              <SelectContent className="bg-gray-900 border-white/10">
                 <SelectItem value="date_desc" className="text-white">Date récente ↓</SelectItem>
                 <SelectItem value="date_asc" className="text-white">Date ancienne ↑</SelectItem>
                 <SelectItem value="montant_desc" className="text-white">Montant ↓</SelectItem>
@@ -1166,7 +1284,16 @@ export default function ProjectsPage() {
       )}
 
       {/* Dialog d'édition de chantier */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      <Dialog
+        open={isEditDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowNewClientForm(false);
+            setNewClientFormFor(null);
+          }
+          setIsEditDialogOpen(open);
+        }}
+      >
         <DialogContent className="bg-black/20  border border-white/10 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-white">Modifier le projet</DialogTitle>
@@ -1198,7 +1325,7 @@ export default function ProjectsPage() {
                   <SelectTrigger className="bg-black/20  border-white/10 text-white">
                     <SelectValue placeholder="Sélectionner un client" />
                   </SelectTrigger>
-                  <SelectContent className="bg-black/20  border-white/10">
+                  <SelectContent className="bg-gray-900 border-white/10">
                     {clients.map((client) => (
                       <SelectItem key={client.id} value={client.id} className="text-white">
                         {client.name}
@@ -1209,12 +1336,76 @@ export default function ProjectsPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={handleAddClient}
+                  onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleAddClient('edit');
+                }}
                   className="text-white border-white/20 hover:bg-white/10"
+                  title="Nouveau contact"
                 >
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
+              {showNewClientForm && newClientFormFor === 'edit' && (
+                <div ref={newClientFormRef} className="mt-3 p-3 rounded-lg bg-black/30 border border-white/10 space-y-3">
+                  <p className="text-sm font-medium text-white">Nouveau contact — prénom, nom et email obligatoires</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-white/80 text-xs">Prénom *</Label>
+                      <Input
+                        value={newClientPrenom}
+                        onChange={(e) => setNewClientPrenom(e.target.value)}
+                        placeholder="Prénom"
+                        className="mt-1 bg-black/20 border-white/10 text-white placeholder:text-white/40"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-white/80 text-xs">Nom *</Label>
+                      <Input
+                        value={newClientNom}
+                        onChange={(e) => setNewClientNom(e.target.value)}
+                        placeholder="Nom"
+                        className="mt-1 bg-black/20 border-white/10 text-white placeholder:text-white/40"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-white/80 text-xs">Email *</Label>
+                    <Input
+                      type="email"
+                      value={newClientEmail}
+                      onChange={(e) => setNewClientEmail(e.target.value)}
+                      placeholder="email@exemple.fr"
+                      className="mt-1 bg-black/20 border-white/10 text-white placeholder:text-white/40"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-white/80 text-xs">Téléphone (optionnel)</Label>
+                    <Input
+                      type="tel"
+                      value={newClientPhone}
+                      onChange={(e) => setNewClientPhone(e.target.value)}
+                      placeholder="06..."
+                      className="mt-1 bg-black/20 border-white/10 text-white placeholder:text-white/40"
+                    />
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button type="button" variant="outline" size="sm" onClick={() => { setShowNewClientForm(false); setNewClientFormFor(null); }} className="text-white border-white/20 hover:bg-white/10">
+                      Annuler
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleCreateNewClient}
+                      disabled={!newClientPrenom.trim() || !newClientNom.trim() || !newClientEmail.trim() || creatingClient}
+                      className="bg-white/20 text-white border border-white/10 hover:bg-white/30 disabled:opacity-50"
+                    >
+                      {creatingClient ? 'Création...' : 'Créer le contact'}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -1312,7 +1503,7 @@ export default function ProjectsPage() {
                 <SelectTrigger className="bg-black/20  border-white/10 text-white">
                   <SelectValue placeholder="Sélectionner le type" />
                 </SelectTrigger>
-                <SelectContent className="bg-black/20  border-white/10">
+                <SelectContent className="bg-gray-900 border-white/10">
                   <SelectItem value="piscine" className="text-white">Piscine & Spa</SelectItem>
                   <SelectItem value="paysage" className="text-white">Aménagement Paysager</SelectItem>
                   <SelectItem value="menuiserie" className="text-white">Menuiserie Sur-Mesure</SelectItem>
@@ -1338,7 +1529,7 @@ export default function ProjectsPage() {
                 <SelectTrigger className="bg-black/20  border-white/10 text-white">
                   <SelectValue placeholder="Sélectionner un statut" />
                 </SelectTrigger>
-                <SelectContent className="bg-black/20  border-white/10">
+                <SelectContent className="bg-gray-900 border-white/10">
                   <SelectItem value="planifié" className="text-white">Planifié</SelectItem>
                   <SelectItem value="en cours" className="text-white">En cours</SelectItem>
                 <SelectItem value="terminé" className="text-white">Terminé</SelectItem>
@@ -1814,7 +2005,7 @@ export default function ProjectsPage() {
         </DialogContent>
       </Dialog>
 
-      <main className="flex-1 p-4 sm:p-6">
+      <main className="flex-1 p-2 sm:p-4">
         {loading ? (
           <div className="flex items-center justify-center h-full text-white">
             Chargement des chantiers...

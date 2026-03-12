@@ -759,7 +759,13 @@ Règles :
       "3. Localisation: Paris/IDF = +10-15%. Accès difficile = +20-30% délai.",
       "4. Règles par défaut: main-d'œuvre 150€/jour/ouvrier, marge 25%, frais généraux 20%, imprévus 15%.",
       "5. Fournis une FOURCHETTE de prix (basse = conditions optimales, haute = imprévus/complexité).",
-      "6. Minimum 3 matériaux, 3 outils, 3 recommandations. Aucun tableau vide, aucun 0 pour coutTotal.",
+      "6. MATÉRIAUX (OBLIGATOIRE pour un devis exploitable): au minimum 6 à 12 lignes. Chaque ligne = UN poste distinct et réaliste:",
+      "   - Désignation précise (ex: Menuiserie aluminium double vitrage, Quincaillerie et ferrures, Main d'œuvre pose, Échafaudage/location, Évacuation gravats).",
+      "   - quantite: string avec nombre + unité (ex: 45 m², 12 m, 1 Forfait, 3 jours, 1 lot).",
+      "   - prix: total HT de la ligne (number). prixUnitaire: prix par unité (number). Cohérents: prix ≈ quantité × prixUnitaire.",
+      "   - Unités autorisées: m², m, ml, U, Pièce, Forfait, jour, lot. Ne pas mettre une seule ligne Aluminium ou Matériaux: détailler par type (profilés, vitrage, quincaillerie, pose, etc.).",
+      "7. Minimum 3 outils, 3 recommandations. Aucun tableau vide, aucun 0 pour coutTotal.",
+      "8. repartitionCouts doit refléter la somme des lignes materiaux (materiaux = somme des materiaux[].prix), plus mainOeuvre, transport, autres. Total ≈ coutTotal.",
       "",
       "JSON OBLIGATOIRE (pas de texte avant/après):",
       JSON.stringify({
@@ -783,7 +789,7 @@ Règles :
 
 CHAMPS OBLIGATOIRES:
 - tempsRealisation: string (ex "2 semaines")
-- materiaux: tableau ≥3 objets {nom, quantite (string), prix (number), prixUnitaire (number)}
+- materiaux: tableau de 6 à 15 objets minimum. Chaque objet = {nom: string (désignation précise du poste), quantite: string (ex "45 m²", "1 Forfait", "3 jours"), prix: number (total HT de la ligne), prixUnitaire: number (prix par unité)}. Détailler par poste réel (pas une seule ligne Aluminium ou Matériaux: séparer menuiserie, vitrage, quincaillerie, pose, etc.). Unités: m², m, ml, U, Pièce, Forfait, jour, lot.
 - outils: tableau ≥3 strings
 - nombreOuvriers: number ≥1
 - coutTotal: number >0
@@ -1002,6 +1008,523 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
     }
   });
 
+  type QuoteLineItem = {
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    unit?: string;
+    subItems: { description: string; quantity: number; unitPrice: number; total: number }[];
+  };
+
+  /** Normalise l'unité renvoyée par l'IA pour correspondre aux options du client (m², Forfait, m, U, lot, jour). */
+  function normalizeQuoteUnit(unit: string): string {
+    const u = unit.trim().toLowerCase();
+    if (!u) return "";
+    if (u === "m²" || u === "m2") return "m²";
+    if (u === "forfait" || u === "unité") return "Forfait";
+    if (u === "ml" || u === "m" || u === "linéaire" || u === "lineaire") return "m";
+    if (u === "lot") return "lot";
+    if (u === "jour" || u === "j") return "jour";
+    if (u === "piece" || u === "pièce") return "Pièce";
+    if (u === "u") return "U";
+    return u.charAt(0).toUpperCase() + u.slice(1);
+  }
+
+  function getPrestationLabels(metier: string): { prep: string; pose: string; finitions: string; transport: string; divers: string } {
+    const m = (metier || "").trim().toLowerCase();
+    if (m === "peinture") return { prep: "Préparation des supports et sous-couches", pose: "Peinture (pose et passages)", finitions: "Finitions et raccords", transport: "Transport et livraison", divers: "Fournitures et consommables" };
+    if (m === "renovation") return { prep: "Démolition et préparation du chantier", pose: "Travaux de rénovation", finitions: "Finitions et mise en état", transport: "Transport et livraison", divers: "Fournitures et divers" };
+    if (m === "terrasse" || m === "paysage") return { prep: "Préparation et terrassement", pose: "Pose de la terrasse / aménagement", finitions: "Finitions et raccords", transport: "Transport et livraison", divers: "Fournitures et divers" };
+    if (m === "menuiserie") return { prep: "Préparation des ouvrages et mise en place", pose: "Pose et réglage des menuiseries", finitions: "Finitions et quincaillerie", transport: "Transport et livraison", divers: "Fournitures et divers" };
+    if (m === "piscine") return { prep: "Préparation du terrain et terrassement", pose: "Construction / installation piscine", finitions: "Finitions et équipements", transport: "Transport et livraison", divers: "Fournitures et divers" };
+    if (m === "maconnerie" || m === "plomberie" || m === "electricite" || m === "chauffage" || m === "isolation") return { prep: "Préparation et mise en œuvre", pose: "Travaux de réalisation", finitions: "Finitions et raccords", transport: "Transport et livraison", divers: "Fournitures et divers" };
+    return { prep: "Préparation et mise en œuvre", pose: "Pose et réalisation", finitions: "Finitions et divers", transport: "Transport et livraison", divers: "Fournitures et divers" };
+  }
+
+  /** Construit les lignes du devis directement à partir des montants de l'estimation (aucun prix inventé). */
+  function buildQuoteItemsFromEstimation(
+    analysisResults: Record<string, unknown>,
+    coutTotal: number,
+    metier: string
+  ): QuoteLineItem[] | null {
+    const materiauxArr = Array.isArray(analysisResults.materiaux) ? analysisResults.materiaux : [];
+    const rep = (analysisResults.repartitionCouts ?? {}) as { transport?: number; mainOeuvre?: number; materiaux?: number; autres?: number };
+    const mainOeuvre = Math.round(Number(rep.mainOeuvre) || 0);
+    const transport = Math.round(Number(rep.transport) || 0);
+    const autres = Math.round(Number(rep.autres) || 0);
+    const labels = getPrestationLabels(metier);
+
+    type MatLike = { nom?: string; quantite?: string; prix?: number; prixUnitaire?: number };
+    const items: QuoteLineItem[] = [];
+
+    for (const m of materiauxArr as MatLike[]) {
+      const nom = typeof m?.nom === "string" ? m.nom.trim() : "Matériau";
+      const prix = typeof m?.prix === "number" && m.prix >= 0 ? m.prix : (typeof m?.prixUnitaire === "number" ? m.prixUnitaire : 0);
+      if (prix <= 0) continue;
+      const qteStr = typeof m?.quantite === "string" ? m.quantite.trim() : "1";
+      const numMatch = qteStr.match(/[\d.,]+/);
+      const qty = numMatch ? Math.max(0.001, parseFloat((numMatch[0] ?? "1").replace(",", "."))) : 1;
+      const unitMatch = qteStr.match(/\s*(m²|m2|m³|m3|ml|lot|jour|U|u\.?|forfait)/i);
+      const unit = unitMatch ? unitMatch[1].replace("m2", "m²").replace("m3", "m³") : "U";
+      const unitPrice = Math.round((prix / qty) * 100) / 100;
+      items.push({
+        description: nom,
+        quantity: qty,
+        unitPrice,
+        unit,
+        subItems: [],
+      });
+    }
+
+    if (mainOeuvre > 0) {
+      if (mainOeuvre >= 2000) {
+        const p1 = Math.round(mainOeuvre * 0.25);
+        const p2 = Math.round(mainOeuvre * 0.5);
+        const p3 = mainOeuvre - p1 - p2;
+        items.push({ description: labels.prep, quantity: 1, unitPrice: p1, unit: "Forfait", subItems: [] });
+        items.push({ description: labels.pose, quantity: 1, unitPrice: p2, unit: "Forfait", subItems: [] });
+        items.push({ description: labels.finitions, quantity: 1, unitPrice: p3, unit: "Forfait", subItems: [] });
+      } else {
+        const p1 = Math.round(mainOeuvre / 2);
+        const p2 = mainOeuvre - p1;
+        items.push({ description: labels.prep, quantity: 1, unitPrice: p1, unit: "Forfait", subItems: [] });
+        items.push({ description: labels.finitions, quantity: 1, unitPrice: p2, unit: "Forfait", subItems: [] });
+      }
+    }
+
+    if (transport > 0) {
+      items.push({ description: labels.transport, quantity: 1, unitPrice: transport, unit: "Forfait", subItems: [] });
+    }
+
+    let autresMontant = autres;
+    const sumItems = items.reduce((s, it) => s + it.quantity * it.unitPrice, 0);
+    const ecart = coutTotal - sumItems - autresMontant;
+    if (Math.abs(ecart) > 0.5) autresMontant = Math.round(autresMontant + ecart);
+    if (autresMontant > 0) {
+      items.push({ description: labels.divers, quantity: 1, unitPrice: autresMontant, unit: "Forfait", subItems: [] });
+    }
+
+    let total = items.reduce((s, it) => s + it.quantity * it.unitPrice, 0);
+    const gap = Math.round((coutTotal - total) * 100) / 100;
+    if (gap > 10 && mainOeuvre === 0 && transport === 0 && autres === 0) {
+      const pose = Math.round(gap * 0.6);
+      const finitions = gap - pose;
+      items.push({ description: labels.pose, quantity: 1, unitPrice: pose, unit: "Forfait", subItems: [] });
+      items.push({ description: labels.finitions, quantity: 1, unitPrice: finitions, unit: "Forfait", subItems: [] });
+      total = items.reduce((s, it) => s + it.quantity * it.unitPrice, 0);
+    }
+
+    if (items.length === 0) {
+      return null;
+    }
+    if (total <= 0) {
+      return null;
+    }
+    // Toujours aligner le total sur coutTotal (dernière ligne ajustée pour arrondis)
+    if (Math.abs(total - coutTotal) > 0.5) {
+      const last = items[items.length - 1];
+      const sumRest = items.slice(0, -1).reduce((s, it) => s + it.quantity * it.unitPrice, 0);
+      const newLastPrice = Math.round((coutTotal - sumRest) / last.quantity * 100) / 100;
+      if (newLastPrice >= 0) {
+        items[items.length - 1] = { ...last, unitPrice: newLastPrice };
+      }
+    }
+    return items;
+  }
+
+  /** Si la construction déterministe ne suffit pas (pas de repartition), build au moins matériaux + lignes prestations pour atteindre coutTotal. */
+  function buildFallbackQuoteFromEstimation(
+    analysisResults: Record<string, unknown>,
+    coutTotal: number,
+    metier: string
+  ): QuoteLineItem[] | null {
+    const labels = getPrestationLabels(metier);
+    const materiauxArr = Array.isArray(analysisResults.materiaux) ? analysisResults.materiaux : [];
+    type MatLike = { nom?: string; quantite?: string; prix?: number; prixUnitaire?: number };
+    const items: QuoteLineItem[] = [];
+    for (const m of materiauxArr as MatLike[]) {
+      const nom = typeof m?.nom === "string" ? m.nom.trim() : "Matériau";
+      const prix = typeof m?.prix === "number" && m.prix >= 0 ? m.prix : (typeof m?.prixUnitaire === "number" ? m.prixUnitaire : 0);
+      if (prix <= 0) continue;
+      const qteStr = typeof m?.quantite === "string" ? m.quantite.trim() : "1";
+      const numMatch = qteStr.match(/[\d.,]+/);
+      const qty = numMatch ? Math.max(0.001, parseFloat((numMatch[0] ?? "1").replace(",", "."))) : 1;
+      const unitMatch = qteStr.match(/\s*(m²|m2|m³|m3|ml|lot|jour|U|u\.?|forfait)/i);
+      const unit = unitMatch ? unitMatch[1].replace("m2", "m²").replace("m3", "m³") : "U";
+      const unitPrice = Math.round((prix / qty) * 100) / 100;
+      items.push({ description: nom, quantity: qty, unitPrice, unit, subItems: [] });
+    }
+    const sumM = items.reduce((s, it) => s + it.quantity * it.unitPrice, 0);
+    let rest = Math.round((coutTotal - sumM) * 100) / 100;
+    if (rest > 0) {
+      if (rest >= 2000) {
+        const p1 = Math.round(rest * 0.4);
+        const p2 = Math.round(rest * 0.4);
+        const p3 = rest - p1 - p2;
+        items.push({ description: labels.prep, quantity: 1, unitPrice: p1, unit: "Forfait", subItems: [] });
+        items.push({ description: labels.pose, quantity: 1, unitPrice: p2, unit: "Forfait", subItems: [] });
+        items.push({ description: labels.finitions, quantity: 1, unitPrice: p3, unit: "Forfait", subItems: [] });
+      } else if (rest >= 500) {
+        const p1 = Math.round(rest / 2);
+        const p2 = rest - p1;
+        items.push({ description: labels.pose, quantity: 1, unitPrice: p1, unit: "Forfait", subItems: [] });
+        items.push({ description: labels.finitions, quantity: 1, unitPrice: p2, unit: "Forfait", subItems: [] });
+      } else {
+        items.push({ description: "Prestations et main d'œuvre", quantity: 1, unitPrice: rest, unit: "Forfait", subItems: [] });
+      }
+    } else if (rest < 0 && items.length > 0) {
+      const last = items[items.length - 1];
+      const newLast = Math.round((last.unitPrice + rest / last.quantity) * 100) / 100;
+      if (newLast >= 0) items[items.length - 1] = { ...last, unitPrice: newLast };
+    }
+    if (items.length === 0) return null;
+    return items;
+  }
+
+  // Génère les lignes d'un devis détaillé à partir d'une estimation (sans ligne "Main d'œuvre" unique)
+  app.post("/api/generate-quote-from-estimation", async (req: Request, res: Response) => {
+    const auth = await getSupabaseAndUser(req);
+    if (!auth) {
+      res.status(401).json({
+        message: "Authentification requise pour générer le devis.",
+        remainingDailyUsage: 0,
+        dailyLimit: getDailyLimit(),
+      });
+      return;
+    }
+    const { chantierInfo, questionnaireAnswers, analysisResults, photoDescription, tvaRate: tvaRatePercent, editableMaterials } = req.body as {
+      chantierInfo?: { surface?: string | number; materiaux?: string; localisation?: string; metier?: string };
+      questionnaireAnswers?: Record<string, string>;
+      analysisResults?: Record<string, unknown>;
+      photoDescription?: string;
+      tvaRate?: number;
+      editableMaterials?: { nom?: string; quantite?: string; prix?: number; prixUnitaire?: number; notes?: string }[];
+    };
+    if (!analysisResults || typeof analysisResults !== "object") {
+      res.status(400).json({ message: "Données d'estimation (analysisResults) requises." });
+      return;
+    }
+    const coutTotal = Math.round(
+      Number((analysisResults.couts as { prixTTC?: number })?.prixTTC) ?? Number(analysisResults.coutTotal) ?? 0
+    );
+    if (coutTotal <= 0) {
+      res.status(400).json({ message: "L'estimation doit contenir un montant total (coutTotal ou couts.prixTTC)." });
+      return;
+    }
+
+    const tvaRate = typeof tvaRatePercent === "number" && tvaRatePercent >= 0 && tvaRatePercent <= 100 ? tvaRatePercent : 20;
+    const totalHt = Math.round((coutTotal / (1 + tvaRate / 100)) * 100) / 100;
+    const metier = typeof chantierInfo?.metier === "string" ? chantierInfo.metier.trim() : "";
+
+    // Priorité : matériaux détaillés envoyés par le client (liste éditée sur l'estimation) puis construction déterministe
+    const effectiveMateriaux = Array.isArray(editableMaterials) && editableMaterials.length > 0
+      ? editableMaterials
+      : (Array.isArray(analysisResults.materiaux) ? analysisResults.materiaux : []);
+    const analysisWithMateriaux = effectiveMateriaux !== analysisResults.materiaux
+      ? { ...analysisResults, materiaux: effectiveMateriaux }
+      : analysisResults;
+
+    let itemsToReturn = buildQuoteItemsFromEstimation(analysisWithMateriaux, coutTotal, metier);
+    if (!itemsToReturn || itemsToReturn.length === 0) {
+      itemsToReturn = buildFallbackQuoteFromEstimation(analysisWithMateriaux, coutTotal, metier);
+    }
+    if (itemsToReturn && itemsToReturn.length > 0) {
+      const sumTtc = itemsToReturn.reduce((s, it) => s + it.quantity * it.unitPrice, 0);
+      if (sumTtc > 0) {
+        const factorHt = totalHt / sumTtc;
+        itemsToReturn = itemsToReturn.map((it) => ({
+          ...it,
+          unitPrice: Math.round(it.unitPrice * factorHt * 100) / 100,
+        }));
+        const sumHt = itemsToReturn.reduce((s, it) => s + it.quantity * it.unitPrice, 0);
+        if (Math.abs(sumHt - totalHt) > 0.01) {
+          const last = itemsToReturn[itemsToReturn.length - 1];
+          const sumRest = itemsToReturn.slice(0, -1).reduce((s, it) => s + it.quantity * it.unitPrice, 0);
+          itemsToReturn[itemsToReturn.length - 1] = {
+            ...last,
+            unitPrice: last.quantity > 0 ? Math.round((totalHt - sumRest) / last.quantity * 100) / 100 : last.unitPrice,
+          };
+        }
+      }
+      const usageAfter = await getAiUsage(auth.supabase, auth.userId);
+      res.status(200).json({
+        items: itemsToReturn,
+        remainingDailyUsage: usageAfter.remaining,
+        dailyLimit: usageAfter.limit,
+      });
+      return;
+    }
+
+    const usage = await getAiUsage(auth.supabase, auth.userId);
+    if (!usage.allowed) {
+      res.status(429).json({
+        message: "Vous avez consommé votre utilisation journalière d'IA. Réessayez demain.",
+        remainingDailyUsage: 0,
+        dailyLimit: usage.limit,
+      });
+      return;
+    }
+
+    const surface = chantierInfo?.surface != null ? String(chantierInfo.surface).trim() : "";
+    const materiauxArr = Array.isArray(analysisResults.materiaux) ? analysisResults.materiaux : [];
+    const materiauxSummary = materiauxArr
+      .slice(0, 10)
+      .map((m: { nom?: string }) => (m && typeof m === "object" ? String((m as { nom?: string }).nom ?? "").trim() : ""))
+      .filter(Boolean)
+      .join(", ");
+    const cachePayload = {
+      fromEstimation: true,
+      cacheVersion: 2,
+      surface,
+      metier,
+      coutTotal,
+      materiauxSummary: materiauxSummary.slice(0, 500),
+      questionnaireAnswers: questionnaireAnswers ?? {},
+    };
+    const cacheKey = getCacheKey("devis", cachePayload);
+    const cached = await getCached<{ items: unknown[] }>(auth.supabase, cacheKey, "devis");
+    if (cached && Array.isArray(cached.items) && cached.items.length > 0) {
+      type ItemLike = { description: string; quantity: number; unitPrice: number };
+      let cachedItems = cached.items as ItemLike[];
+      let sum = cachedItems.reduce((s, it) => s + (it.quantity ?? 0) * (it.unitPrice ?? 0), 0);
+      if (sum > 0) {
+        const targetSum = totalHt;
+        if (Math.abs(sum - targetSum) > targetSum * 0.01) {
+          const factor = targetSum / sum;
+          cachedItems = cachedItems.map((it) => ({
+            ...it,
+            unitPrice: Math.round((it.unitPrice ?? 0) * factor * 100) / 100,
+          }));
+          const sumExceptLast = cachedItems.slice(0, -1).reduce((s, it) => s + it.quantity * it.unitPrice, 0);
+          const last = cachedItems[cachedItems.length - 1];
+          if (last && last.quantity > 0) {
+            const lastUnitPrice = Math.round((targetSum - sumExceptLast) / last.quantity * 100) / 100;
+            cachedItems = [...cachedItems.slice(0, -1), { ...last, unitPrice: Math.max(0, lastUnitPrice) }];
+          }
+        }
+      }
+      const usageAfter = await getAiUsage(auth.supabase, auth.userId);
+      res.status(200).json({
+        items: cachedItems,
+        remainingDailyUsage: usageAfter.remaining,
+        dailyLimit: usageAfter.limit,
+      });
+      return;
+    }
+
+    const typeLabel = TYPE_CHANTIER_LABELS[metier] ?? metier;
+    const localisationStr = typeof chantierInfo?.localisation === "string" ? chantierInfo.localisation.trim() : "France";
+    const materiauxStr = typeof chantierInfo?.materiaux === "string" ? chantierInfo.materiaux.trim() : "";
+    const photoDescStr = (typeof photoDescription === "string" ? photoDescription.trim() : "").slice(0, 500);
+    const formattedAnswers =
+      questionnaireAnswers && typeof questionnaireAnswers === "object" && Object.keys(questionnaireAnswers).length > 0
+        ? Object.entries(questionnaireAnswers)
+            .filter(([, v]) => v != null && String(v).trim() !== "")
+            .map(([k, v]) => `${k}: ${String(v).trim()}`)
+            .join("\n")
+            .slice(0, 1500)
+        : "";
+    const rep = (analysisResults.repartitionCouts ?? {}) as { transport?: number; mainOeuvre?: number; materiaux?: number; autres?: number };
+    const repartitionStr = [
+      rep.materiaux != null ? `Matériaux: ${rep.materiaux} €` : "",
+      rep.mainOeuvre != null ? `Main d'œuvre: ${rep.mainOeuvre} €` : "",
+      rep.transport != null ? `Transport: ${rep.transport} €` : "",
+      rep.autres != null ? `Autres: ${rep.autres} €` : "",
+    ]
+      .filter(Boolean)
+      .join(" | ");
+    const materiauxLines =
+      materiauxArr
+        .map((m: { nom?: string; quantite?: string; prix?: number }) => {
+          const nom = m && typeof m === "object" ? String((m as { nom?: string }).nom ?? "").trim() : "";
+          const qte = m && typeof m === "object" ? String((m as { quantite?: string }).quantite ?? "") : "";
+          const prix = m && typeof m === "object" && typeof (m as { prix?: number }).prix === "number" ? (m as { prix: number }).prix : 0;
+          return nom ? `- ${nom}${qte ? " (" + qte + ")" : ""}${prix > 0 ? " — " + prix + " €" : ""}` : "";
+        })
+        .filter(Boolean)
+        .slice(0, 25)
+        .join("\n") || "Non détaillé";
+
+    let userTariffsBlock = "";
+    if (auth.userId) {
+      try {
+        const { data: tariffs } = await auth.supabase
+          .from("user_tariffs")
+          .select("label, category, unit, price_ht")
+          .eq("user_id", auth.userId);
+        if (Array.isArray(tariffs) && tariffs.length > 0) {
+          const lines = (tariffs as { label?: string; category?: string; unit?: string; price_ht?: number }[])
+            .map((t) => `- ${t.label ?? ""} | ${t.category ?? ""} | ${t.unit ?? "u"} | ${Number(t.price_ht ?? 0)} € HT`)
+            .join("\n");
+          userTariffsBlock = [
+            "",
+            "--- TARIFS UTILISATEUR (à utiliser en priorité) ---",
+            lines,
+            "",
+          ].join("\n");
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    const artiprixForType = metier ? getArtiprixForMetier(metier) : "";
+    const ARTIPRIX_REF = `
+PRIX INDICATIFS ARTIPRIX 2026 (fourniture + pose HT) — devis réaliste type artisan :
+- Gros œuvre : Terrasse béton ~80–85 €/m² | Ouverture + linteau porte 215×90 ~765 €/U | Plancher poutrelles ~130–160 €/m².
+- Carrelage : Pose 30×30 m² ~47–60 €/m² | Pose 80×80 m² ~43–56 €/m² | Faïence douche ~320 €/U.
+- Peinture : Peinture mate/satin m² ~43–62 €/m² | Ravalement peinture m² ~45–59 €/m².
+- Façade : Ravalement m² ~46–59 €/m² | Enduit taloché m² ~20–28 €/m².
+Unité : m², ml, U, forfait. Main d'œuvre incluse dans chaque poste (fourniture + pose).`;
+    const artiprixBlock =
+      artiprixForType && artiprixForType.length > 0
+        ? ["BARÈME ARTIPRIX (fourniture + pose HT):", artiprixForType].join("\n")
+        : ARTIPRIX_REF;
+
+    const userMessage = [
+      "Tu génères un devis DÉTAILLÉ et RÉALISTE à partir d'une estimation chantier déjà calculée. Le devis doit avoir le même niveau de détail qu'un devis d'artisan (plusieurs lignes concrètes), SANS ligne unique « Main d'œuvre » ou « Main d'œuvre X jours ».",
+      "",
+      "--- CONTEXTE ESTIMATION ---",
+      "Type de projet: " + typeLabel,
+      "Surface: " + (surface || "non précisée") + (surface ? " m²" : ""),
+      "Localisation: " + localisationStr,
+      materiauxStr ? "Précisions matériaux: " + materiauxStr : "",
+      photoDescStr ? "Contexte photo: " + photoDescStr : "",
+      formattedAnswers ? "Réponses questionnaire:\n" + formattedAnswers : "",
+      "",
+      "--- MONTANT CIBLE ET RÉPARTITION ---",
+      "Montant total TTC à respecter (approximatif): " + coutTotal + " €",
+      repartitionStr ? "Répartition: " + repartitionStr : "",
+      "",
+      "--- POSTES MATÉRIAUX / TRAVAUX DE L'ESTIMATION ---",
+      materiauxLines,
+      "",
+      "--- CONSIGNES OBLIGATOIRES ---",
+      "1. Produire 8 à 18 lignes de devis. Chaque ligne = une prestation concrète (ex. « Terrasse béton 30 m² », « Pose carrelage 20 m² », « Peinture mate 45 m² », « Préparation support », « Ravalement façade 80 m² »).",
+      "2. INTERDIT : une ligne unique « Main d'œuvre » ou « Main d'œuvre X jours ». La main d'œuvre doit être incluse dans chaque poste (prix fourniture + pose) ou détaillée en postes concrets (Préparation, Pose, Finitions, etc.).",
+      "3. Chaque ligne DOIT avoir le champ unite rempli : m², ml, U, forfait, lot ou jour. Pas de ligne sans unité. Quantités cohérentes avec la surface et les infos du projet.",
+      "4. Prix : la SOMME des lignes (quantité × prix_unitaire) doit approcher le montant cible " + coutTotal + " € (écart max ~10%). Utiliser le barème Artiprix et les tarifs utilisateur si fournis.",
+      "5. Libellés complets et professionnels, style artisan (pas d'abréviation ni troncature). Ex : « Peinture façade acrylique 2 couches », « Nettoyage fin de chantier », « Préparation (enduit, ponçage) ».",
+      "6. Si le projet comporte peinture extérieure ET intérieure (ex. magasin, local) : prévoir des lignes SÉPARÉES avec les surfaces respectives (ex. « Peinture façade … m² », « Peinture intérieure … m² »). Ne pas mélanger sur une seule ligne.",
+      "",
+      artiprixBlock,
+      userTariffsBlock,
+      "",
+      "Réponds UNIQUEMENT par un JSON valide : { \"lignes\": [ { \"description\": \"string\", \"quantite\": number, \"unite\": \"string\", \"prix_unitaire\": number } ] }",
+    ].join("\n");
+
+    const systemInstruction = `Tu es un expert en devis BTP/rénovation en France. Tu produis un devis détaillé à partir d'une estimation.
+
+Règles :
+- JSON uniquement : { "lignes": [ { "description": "libellé complet (pas de troncature)", "quantite": number, "unite": "m²|ml|U|forfait|lot|jour", "prix_unitaire": number } ] }
+- Chaque ligne DOIT avoir le champ unite (obligatoire). Valeurs autorisées : m², ml, U, forfait, lot, jour.
+- 8 à 18 lignes. Chaque ligne = une prestation concrète (fourniture + pose). INTERDIT : une ligne « Main d'œuvre » seule.
+- Descriptions complètes (ex. « Peinture façade acrylique 2 couches », « Nettoyage fin de chantier »).
+- Si peinture extérieur + intérieur : lignes séparées avec les surfaces (ex. 100 m² façade, 400 m² intérieur).
+- La somme (quantite × prix_unitaire) doit approcher le montant total indiqué. Priorité prix : tarifs utilisateur puis Artiprix.`;
+
+    const geminiClient = getGeminiClient();
+    if (!geminiClient) {
+      res.status(503).json({
+        message: "Génération IA indisponible. Configurez GEMINI_API_KEY dans .env.",
+      });
+      return;
+    }
+    try {
+      const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash"] as const;
+      let raw = "";
+      let lastErr: unknown = null;
+      for (const model of modelsToTry) {
+        try {
+          const response = await geminiClient.models.generateContent({
+            model,
+            contents: userMessage,
+            config: {
+              systemInstruction,
+              responseMimeType: "application/json",
+            },
+          });
+          raw = response.text ?? "";
+          if (raw) break;
+        } catch (e) {
+          lastErr = e;
+          const status = e && typeof (e as { status?: number }).status === "number" ? (e as { status: number }).status : undefined;
+          if (status === 404) continue;
+          throw e;
+        }
+      }
+      if (!raw && lastErr) throw lastErr;
+      raw = raw || "";
+      if (!raw || typeof raw !== "string") {
+        res.status(502).json({ message: "Réponse vide de l'IA." });
+        return;
+      }
+      const jsonStr = extractJsonFromResponse(raw);
+      type LigneRaw = { description?: string; quantite?: number; unite?: string; prix_unitaire?: number };
+      let parsed: { lignes?: LigneRaw[] };
+      try {
+        parsed = JSON.parse(jsonStr) as typeof parsed;
+      } catch {
+        res.status(502).json({ message: "Réponse IA invalide (JSON)." });
+        return;
+      }
+      const lignes = Array.isArray(parsed.lignes) ? parsed.lignes : [];
+      let items = lignes
+        .map((l) => {
+          const desc = typeof l.description === "string" ? l.description.trim() : "";
+          const qty = typeof l.quantite === "number" && l.quantite >= 0 ? l.quantite : 0;
+          const rawUnit = typeof l.unite === "string" ? l.unite.trim() : "";
+          const normalizedUnit = normalizeQuoteUnit(rawUnit) || (qty === 1 ? "Forfait" : "U");
+          const price = typeof l.prix_unitaire === "number" && l.prix_unitaire >= 0 ? l.prix_unitaire : 0;
+          return {
+            description: desc,
+            quantity: qty,
+            unitPrice: price,
+            unit: normalizedUnit,
+            subItems: [] as { description: string; quantity: number; unitPrice: number; total: number }[],
+          };
+        })
+        .filter((row) => row.description.length > 0);
+      if (items.length === 0) {
+        res.status(502).json({ message: "Aucune ligne de devis générée." });
+        return;
+      }
+      // Aligner le total du devis sur le montant de l'estimation (éviter un écart type 3042€ vs 14000€)
+      let currentSum = items.reduce((s, it) => s + it.quantity * it.unitPrice, 0);
+      if (currentSum > 0 && Math.abs(currentSum - coutTotal) > coutTotal * 0.01) {
+        const factor = coutTotal / currentSum;
+        items = items.map((it) => ({
+          ...it,
+          unitPrice: Math.round(it.unitPrice * factor * 100) / 100,
+        }));
+        // Ajuster la dernière ligne pour que la somme soit exactement coutTotal (arrondis)
+        const sumExceptLast = items.slice(0, -1).reduce((s, it) => s + it.quantity * it.unitPrice, 0);
+        const last = items[items.length - 1];
+        if (last && last.quantity > 0 && items.length >= 1) {
+          const lastUnitPrice = Math.round((coutTotal - sumExceptLast) / last.quantity * 100) / 100;
+          items = [...items.slice(0, -1), { ...last, unitPrice: Math.max(0, lastUnitPrice) }];
+        }
+      }
+      await incrementAiUsage(auth.supabase, auth.userId);
+      await setCached(auth.supabase, cacheKey, "devis", { items });
+      const usageAfter = await getAiUsage(auth.supabase, auth.userId);
+      res.status(200).json({
+        items,
+        remainingDailyUsage: usageAfter.remaining,
+        dailyLimit: usageAfter.limit,
+      });
+    } catch (err: unknown) {
+      const status = err && typeof (err as { status?: number }).status === "number" ? (err as { status: number }).status : undefined;
+      const message =
+        status === 429
+          ? "Quota IA dépassé. Réessayez plus tard."
+          : err instanceof Error
+            ? err.message
+            : "Génération du devis détaillé impossible.";
+      res.status(503).json({ message });
+    }
+  });
+
   app.post("/api/send-quote-email", async (req: Request, res: Response) => {
     const auth = await getSupabaseAndUser(req);
     if (!auth) {
@@ -1104,12 +1627,12 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
       replyTo?: string | null;
     };
 
-    if (!to || typeof to !== "string" || !to.trim()) {
-      res.status(400).json({ message: "Destinataire (to) requis." });
+    if (!to || typeof to !== "string" || !String(to).trim()) {
+      res.status(400).json({ message: "Destinataire (to) requis. Vérifiez que le prospect a une adresse email." });
       return;
     }
 
-    // Toujours envoyer au destinataire du prospect (pas de redirection RESEND_TEST_EMAIL) pour que l'UI et l'envoi correspondent
+    // Toujours envoyer au destinataire du prospect
     const toAddress = to.trim();
     const subjectText = subject && String(subject).trim() ? String(subject).trim() : "Relance - Votre devis";
     const html = (htmlContent && String(htmlContent).trim()) ? String(htmlContent).trim() : "<p>Bonjour, je souhaite faire un suivi concernant notre échange précédent.</p>";

@@ -224,7 +224,7 @@ export default function AIVisualizationPage() {
         </div>
       </header>
 
-      <main className="flex-1 p-4 sm:p-6 overflow-x-hidden">
+      <main className="flex-1 p-2 sm:p-4 overflow-x-hidden">
           {/* Step 1: Upload */}
           {step === 'upload' && (
             <div className="max-w-2xl mx-auto space-y-6">

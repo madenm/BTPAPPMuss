@@ -335,7 +335,7 @@ export default function ClientsPage() {
         </div>
       </header>
 
-      <main className="flex-1 p-4 sm:p-6 overflow-x-hidden">
+      <main className="flex-1 p-2 sm:p-4 min-w-0 overflow-x-auto">
         <div className="space-y-4 mb-6 flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-0 w-full sm:min-w-[200px] sm:max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50 pointer-events-none" />
@@ -351,7 +351,7 @@ export default function ClientsPage() {
               <SelectTrigger className="w-full sm:w-[160px] h-9 max-md:h-[44px] bg-black/20 border-white/10 text-white min-w-0">
                 <SelectValue placeholder="Filtre" />
               </SelectTrigger>
-              <SelectContent className="bg-black/20  border-white/10">
+              <SelectContent className="bg-gray-900 border-white/10">
                 <SelectItem value="all" className="text-white">Tous</SelectItem>
                 <SelectItem value="actifs" className="text-white">Actifs</SelectItem>
                 <SelectItem value="terminés" className="text-white">Terminés</SelectItem>

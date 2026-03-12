@@ -146,6 +146,11 @@ export default function PlanningPage() {
     return chantiers.filter((c) => ids.has(c.id));
   }, [chantiers, chantiersInMonth, days, getChantiersForDay]);
 
+  const chantiersInViewKey = useMemo(
+    () => chantiersInView.map((c) => c.id).sort().join(','),
+    [chantiersInView]
+  );
+
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
@@ -159,7 +164,7 @@ export default function PlanningPage() {
     };
     run();
     return () => { cancelled = true; };
-  }, [chantiersInView, assignmentsRefreshKey]);
+  }, [chantiersInViewKey, assignmentsRefreshKey]);
 
   useEffect(() => {
     const start = toNoteDateKey(new Date(year, month, 1));
@@ -284,7 +289,7 @@ export default function PlanningPage() {
         </div>
       </header>
 
-      <main className="flex-1 px-4 py-4 sm:p-6 space-y-4 sm:space-y-5 overflow-x-hidden">
+      <main className="flex-1 p-2 sm:p-4 space-y-4 sm:space-y-5 overflow-x-hidden">
 
         {/* --- Bandeau Aujourd'hui --- */}
         <Card className="bg-black/30  border border-white/10 text-white overflow-hidden">

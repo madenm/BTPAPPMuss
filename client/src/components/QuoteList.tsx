@@ -30,7 +30,7 @@ import { QUOTE_STATUS_LABELS } from "@/lib/quoteConstants";
 import type { SupabaseQuote } from "@/lib/supabaseQuotes";
 import {
   FileText, Plus, Loader2, Download, Pencil, ExternalLink, Search,
-  MoreVertical, Copy, Building, Trash2, RefreshCw, Clock, Mail,
+  MoreVertical, Copy, Building, Trash2, RefreshCw, Clock, Mail, Receipt,
   ChevronLeft, ChevronRight,
 } from "lucide-react";
 
@@ -61,6 +61,7 @@ export interface QuoteListProps {
   onChangeStatus: (quoteId: string, status: QuoteStatus) => void;
   onGoToProjects: (chantierId: string) => void;
   onSendEmail: (quote: SupabaseQuote) => void;
+  onCreateInvoiceFromQuote?: (quote: SupabaseQuote) => void;
 }
 
 function getExpirationDate(quote: SupabaseQuote): Date {
@@ -106,6 +107,7 @@ export function QuoteList({
   onChangeStatus,
   onGoToProjects,
   onSendEmail,
+  onCreateInvoiceFromQuote,
 }: QuoteListProps) {
   const chantierMap = new Map(chantiers.map((c) => [c.id, c.nom]));
   const [deleteTarget, setDeleteTarget] = useState<SupabaseQuote | null>(null);
@@ -125,7 +127,7 @@ export function QuoteList({
     <>
       <header className="bg-black/20  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
-          <div className="min-w-0 w-full sm:flex-1 pl-20">
+          <div className="min-w-0 w-full sm:flex-1">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">Devis</h1>
             <p className="text-xs sm:text-sm text-white/70 sm:truncate">
               Liste de vos devis · Créer ou modifier un devis
@@ -145,8 +147,8 @@ export function QuoteList({
           </div>
         </div>
       </header>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 overflow-x-hidden">
-        <main className="space-y-6 py-4 sm:py-6">
+      <div className="w-full min-w-0 p-2 sm:p-4 pt-0">
+        <main className="space-y-6">
           <Card className="bg-white/80 dark:bg-gray-800/80  border border-gray-200/50 dark:border-gray-700/50 shadow-xl rounded-2xl">
             <CardHeader className="space-y-0">
               <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
@@ -308,6 +310,12 @@ export function QuoteList({
                                     <Mail className="h-3 w-3 mr-2" />
                                     <span className="text-xs">Envoyer</span>
                                   </DropdownMenuItem>
+                                  {(q.status === "signé" || q.status === "validé" || q.status === "accepté") && onCreateInvoiceFromQuote && (
+                                    <DropdownMenuItem onClick={() => onCreateInvoiceFromQuote(q)}>
+                                      <Receipt className="h-3 w-3 mr-2" />
+                                      <span className="text-xs">Créer la facture</span>
+                                    </DropdownMenuItem>
+                                  )}
                                   {q.chantier_id && (
                                     <DropdownMenuItem onClick={() => onGoToProjects(q.chantier_id!)}>
                                       <ExternalLink className="h-3 w-3 mr-2" />
@@ -350,8 +358,8 @@ export function QuoteList({
                   </div>
 
                   {/* Vue Desktop - Tableau */}
-                  <div className="hidden md:block rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <Table>
+                  <div className="hidden md:block rounded-xl border border-gray-200 dark:border-gray-700 overflow-x-auto">
+                    <Table className="min-w-[900px]">
                       <TableHeader>
                         <TableRow className="bg-gray-50 dark:bg-gray-900/50">
                           <TableHead className="rounded-tl-xl">N°</TableHead>
@@ -461,6 +469,12 @@ export function QuoteList({
                                       <Mail className="h-4 w-4 mr-2" />
                                       Envoyer par email
                                     </DropdownMenuItem>
+                                    {(q.status === "signé" || q.status === "validé" || q.status === "accepté") && onCreateInvoiceFromQuote && (
+                                      <DropdownMenuItem onClick={() => onCreateInvoiceFromQuote(q)}>
+                                        <Receipt className="h-4 w-4 mr-2" />
+                                        Créer la facture
+                                      </DropdownMenuItem>
+                                    )}
                                     {q.chantier_id && (
                                       <DropdownMenuItem onClick={() => onGoToProjects(q.chantier_id!)}>
                                         <ExternalLink className="h-4 w-4 mr-2" />

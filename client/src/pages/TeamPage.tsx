@@ -498,7 +498,7 @@ export default function TeamPage() {
         </div>
       </header>
 
-      <main className="flex-1 p-4 sm:p-6 space-y-6 overflow-x-hidden">
+      <main className="flex-1 p-2 sm:p-4 space-y-6 overflow-x-hidden">
         {/* Widget Stats */}
         <Card className="bg-white/5  border border-white/10 text-white">
           <CardHeader>
@@ -937,7 +937,7 @@ export default function TeamPage() {
                     <SelectTrigger className={inputStyles}>
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-black/30 border-white/10">
+                    <SelectContent className="bg-gray-900 border-white/10">
                       <SelectItem value="actif">Actif</SelectItem>
                       <SelectItem value="inactif">Inactif</SelectItem>
                     </SelectContent>

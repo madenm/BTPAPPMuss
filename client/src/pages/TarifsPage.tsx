@@ -247,7 +247,7 @@ function TariffFormModal({ open, onOpenChange, tariff, onSave, isSaving }: Tarif
               <SelectTrigger className="mt-1 bg-black/20 border-white/10 text-white">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-black/20  border-white/10">
+              <SelectContent className="bg-gray-900 border-white/10">
                 {CATEGORIES.map((c) => (
                   <SelectItem key={c} value={c} className="text-white">
                     {c}
@@ -262,7 +262,7 @@ function TariffFormModal({ open, onOpenChange, tariff, onSave, isSaving }: Tarif
               <SelectTrigger className="mt-1 bg-black/20 border-white/10 text-white">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-black/20  border-white/10">
+              <SelectContent className="bg-gray-900 border-white/10">
                 {UNITS.map((u) => (
                   <SelectItem key={u} value={u} className="text-white">
                     {u}
@@ -520,8 +520,8 @@ export default function TarifsPage() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 overflow-x-hidden">
-        <main className="space-y-6 py-4 sm:py-6">
+      <div className="w-full min-w-0 p-2 sm:p-4 pt-0 overflow-x-auto">
+        <main className="space-y-6">
           <div className="flex flex-wrap items-center gap-3">
             <Button
               size="sm"

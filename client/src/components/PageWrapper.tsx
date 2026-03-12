@@ -34,11 +34,8 @@ export function PageWrapper({ children }: PageWrapperProps) {
 
   return (
     <div className="min-h-screen relative overflow-hidden">
-      <div className="relative z-10">
-        {/* Sidebar - animated menu */}
-        <Sidebar />
-
-        {/* Main Content - animated */}
+      <div className="relative z-10 flex flex-col min-h-screen">
+        {/* Contenu principal - en premier dans le DOM pour être sous le menu */}
         <AnimatePresence mode="wait">
           <motion.div
             key={location}
@@ -46,13 +43,18 @@ export function PageWrapper({ children }: PageWrapperProps) {
             animate="animate"
             exit="exit"
             variants={contentVariants}
-            className="py-4 sm:py-6 lg:py-8 px-4 sm:px-[5.5rem] max-w-[100vw] overflow-x-hidden max-md:pb-[env(safe-area-inset-bottom)]"
+            className="py-4 sm:py-6 lg:py-8 px-20 max-w-[100vw] min-w-0 overflow-x-auto max-md:pb-[env(safe-area-inset-bottom)] relative z-0 flex-1 min-h-0"
           >
-            <div className="max-w-7xl mx-auto min-w-0 w-full">
+            <div className="w-full min-w-0 max-w-none">
               {children}
             </div>
           </motion.div>
         </AnimatePresence>
+
+        {/* Sidebar : couche en pointer-events-none ; le Sidebar réactive les clics uniquement sur le bouton et le menu ouvert */}
+        <div className="relative z-[100] pointer-events-none [&>*]:pointer-events-none">
+          <Sidebar />
+        </div>
       </div>
     </div>
   )

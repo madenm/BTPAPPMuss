@@ -246,6 +246,7 @@ const QUESTIONS_BY_TYPE: Record<string, QuestionnaireQuestion[]> = {
       { value: 'leger', label: 'Mobilier léger (déplaçable)' },
       { value: 'lourd', label: 'Mobilier lourd (à protéger sur place)' },
     ]},
+    { id: 'peinture_repartition', label: 'Répartition des surfaces (ex : 100 m² extérieur, 400 m² intérieur) ?', type: 'text' },
   ],
   maconnerie: [
     { id: 'maconnerie_nature', label: 'Nature des travaux ?', type: 'choice', required: true, options: [

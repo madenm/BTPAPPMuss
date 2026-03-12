@@ -655,6 +655,14 @@ export function CRMPipeline() {
 
   const handleRelance = async (prospect: Prospect) => {
     if (!userId) return
+    if (!prospect.email?.trim()) {
+      toast({
+        title: "Impossible d'envoyer la relance",
+        description: "Ce prospect n'a pas d'adresse email renseignée.",
+        variant: "destructive",
+      })
+      return
+    }
     setUpdatingStage(true)
     try {
       // Récupérer le message de relance personnalisé

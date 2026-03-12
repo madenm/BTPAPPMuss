@@ -73,32 +73,35 @@ export default function Sidebar() {
   const overlayVariants = {
     closed: { 
       opacity: 0,
+      pointerEvents: 'none' as const,
       transition: {
         duration: 0.3,
       },
     },
     open: { 
       opacity: 1,
+      pointerEvents: 'auto' as const,
       transition: {
         duration: 0.4,
       },
     },
   };
 
-
   return (
     <>
-      {/* Menu Button - Always visible, aligné avec le contenu sur mobile */}
-      <motion.button
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-6 left-6 z-50 p-3 rounded-xl transition-colors shadow-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 max-md:left-4 max-md:top-[max(1rem,env(safe-area-inset-top))] max-md:min-w-[44px] max-md:min-h-[44px] max-md:flex max-md:items-center max-md:justify-center max-md:[&_svg]:w-5 max-md:[&_svg]:h-5"
-      >
-        {isOpen ? <X size={24} /> : <Menu size={24} />}
-      </motion.button>
+      {/* Bouton menu : seul élément cliquable quand le menu est fermé (parent a pointer-events-none) */}
+      <div className="!pointer-events-auto fixed top-6 left-6 z-[100]">
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="p-3 rounded-xl transition-colors shadow-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 max-md:left-4 max-md:top-[max(1rem,env(safe-area-inset-top))] max-md:min-w-[44px] max-md:min-h-[44px] max-md:flex max-md:items-center max-md:justify-center max-md:[&_svg]:w-5 max-md:[&_svg]:h-5"
+          aria-label={isOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
+        >
+          {isOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+      </div>
 
-      {/* Overlay */}
+      {/* Overlay - cliquable uniquement quand ouvert (variants) */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -107,12 +110,12 @@ export default function Sidebar() {
             animate="open"
             exit="closed"
             onClick={() => setIsOpen(false)}
-            className="fixed inset-0 bg-black bg-opacity-50 z-30"
+            className="fixed inset-0 bg-black bg-opacity-50 z-40 !pointer-events-auto"
           />
         )}
       </AnimatePresence>
 
-      {/* Side Menu */}
+      {/* Menu latéral : cliquable quand ouvert */}
       <motion.nav
         variants={menuVariants}
         initial="closed"
@@ -122,7 +125,10 @@ export default function Sidebar() {
         dragElastic={0.2}
         onDragEnd={handleDragEnd}
         style={{ x: dragX }}
-        className="fixed top-0 left-0 h-full w-80 z-40 shadow-2xl bg-white dark:bg-gray-800 flex flex-col rounded-r-3xl"
+        className={cn(
+          "fixed top-0 left-0 h-full w-80 z-50 shadow-2xl bg-white dark:bg-gray-800 flex flex-col rounded-r-3xl",
+          isOpen ? '!pointer-events-auto' : 'pointer-events-none'
+        )}
       >
         {/* Drag Indicator */}
         <motion.div
