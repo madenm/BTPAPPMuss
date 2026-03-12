@@ -1266,7 +1266,6 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
     }
 
     const surface = chantierInfo?.surface != null ? String(chantierInfo.surface).trim() : "";
-    const metier = typeof chantierInfo?.metier === "string" ? chantierInfo.metier.trim() : "";
     const materiauxArr = Array.isArray(analysisResults.materiaux) ? analysisResults.materiaux : [];
     const materiauxSummary = materiauxArr
       .slice(0, 10)
