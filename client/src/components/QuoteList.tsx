@@ -30,7 +30,7 @@ import { QUOTE_STATUS_LABELS } from "@/lib/quoteConstants";
 import type { SupabaseQuote } from "@/lib/supabaseQuotes";
 import {
   FileText, Plus, Loader2, Download, Pencil, ExternalLink, Search,
-  MoreVertical, Copy, Building, Trash2, RefreshCw, Clock, Mail,
+  MoreVertical, Copy, Building, Trash2, RefreshCw, Clock, Mail, Receipt,
   ChevronLeft, ChevronRight,
 } from "lucide-react";
 
@@ -61,6 +61,7 @@ export interface QuoteListProps {
   onChangeStatus: (quoteId: string, status: QuoteStatus) => void;
   onGoToProjects: (chantierId: string) => void;
   onSendEmail: (quote: SupabaseQuote) => void;
+  onCreateInvoiceFromQuote?: (quote: SupabaseQuote) => void;
 }
 
 function getExpirationDate(quote: SupabaseQuote): Date {
@@ -106,6 +107,7 @@ export function QuoteList({
   onChangeStatus,
   onGoToProjects,
   onSendEmail,
+  onCreateInvoiceFromQuote,
 }: QuoteListProps) {
   const chantierMap = new Map(chantiers.map((c) => [c.id, c.nom]));
   const [deleteTarget, setDeleteTarget] = useState<SupabaseQuote | null>(null);
@@ -308,6 +310,12 @@ export function QuoteList({
                                     <Mail className="h-3 w-3 mr-2" />
                                     <span className="text-xs">Envoyer</span>
                                   </DropdownMenuItem>
+                                  {(q.status === "signé" || q.status === "validé" || q.status === "accepté") && onCreateInvoiceFromQuote && (
+                                    <DropdownMenuItem onClick={() => onCreateInvoiceFromQuote(q)}>
+                                      <Receipt className="h-3 w-3 mr-2" />
+                                      <span className="text-xs">Créer la facture</span>
+                                    </DropdownMenuItem>
+                                  )}
                                   {q.chantier_id && (
                                     <DropdownMenuItem onClick={() => onGoToProjects(q.chantier_id!)}>
                                       <ExternalLink className="h-3 w-3 mr-2" />
@@ -461,6 +469,12 @@ export function QuoteList({
                                       <Mail className="h-4 w-4 mr-2" />
                                       Envoyer par email
                                     </DropdownMenuItem>
+                                    {(q.status === "signé" || q.status === "validé" || q.status === "accepté") && onCreateInvoiceFromQuote && (
+                                      <DropdownMenuItem onClick={() => onCreateInvoiceFromQuote(q)}>
+                                        <Receipt className="h-4 w-4 mr-2" />
+                                        Créer la facture
+                                      </DropdownMenuItem>
+                                    )}
                                     {q.chantier_id && (
                                       <DropdownMenuItem onClick={() => onGoToProjects(q.chantier_id!)}>
                                         <ExternalLink className="h-4 w-4 mr-2" />

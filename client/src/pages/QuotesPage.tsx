@@ -34,6 +34,7 @@ import { downloadQuotePdf, fetchLogoDataUrl, getQuotePdfBase64, buildQuoteEmailH
 import { QuotePreview } from '@/components/QuotePreview';
 import { QuoteList } from '@/components/QuoteList';
 import { InvoiceDialog } from '@/components/InvoiceDialog';
+import { createInvoiceFromQuote } from '@/lib/supabaseInvoices';
 import { QuotesQuestionnaire } from '@/components/QuotesQuestionnaire';
 import { hasQuestionsForType } from '@/lib/estimationQuestionnaire';
 import { fetchTariffs, type UserTariff } from '@/lib/supabaseTariffs';
@@ -1560,6 +1561,22 @@ export default function QuotesPage() {
     setLocation(url);
   };
 
+  const handleCreateInvoiceFromQuote = async (quote: SupabaseQuote) => {
+    if (!user?.id) return;
+    try {
+      const invoice = await createInvoiceFromQuote(user.id, quote);
+      if (invoice) {
+        toast({ title: 'Facture créée', description: 'La facture a été créée. Vous pouvez la consulter dans la page Factures.' });
+        setLocation('/dashboard/invoices');
+      } else {
+        toast({ title: 'Facture existante', description: 'Une facture existe déjà pour ce devis.', variant: 'destructive' });
+      }
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Erreur', description: err instanceof Error ? err.message : 'Impossible de créer la facture.', variant: 'destructive' });
+    }
+  };
+
   return (
     <PageWrapper>
       {!showForm ? (
@@ -1586,6 +1603,7 @@ export default function QuotesPage() {
           onDeleteQuote={handleDeleteQuoteFromList}
           onChangeStatus={handleChangeStatusFromList}
           onGoToProjects={(chantierId) => setLocation(`/dashboard/projects/${chantierId}`)}
+          onCreateInvoiceFromQuote={handleCreateInvoiceFromQuote}
         />
       ) : (
         <>
