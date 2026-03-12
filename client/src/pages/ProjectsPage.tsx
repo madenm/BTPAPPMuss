@@ -235,6 +235,14 @@ export default function ProjectsPage() {
   const [quoteCounts, setQuoteCounts] = useState<Record<string, { total: number; pending: number; validated: number }>>({});
   const [invoiceCounts, setInvoiceCounts] = useState<Record<string, number>>({});
 
+  const [showNewClientForm, setShowNewClientForm] = useState(false);
+  const [newClientFormFor, setNewClientFormFor] = useState<'new' | 'edit' | null>(null);
+  const [newClientPrenom, setNewClientPrenom] = useState('');
+  const [newClientNom, setNewClientNom] = useState('');
+  const [newClientEmail, setNewClientEmail] = useState('');
+  const [newClientPhone, setNewClientPhone] = useState('');
+  const [creatingClient, setCreatingClient] = useState(false);
+
   // Debounce search 300ms
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
@@ -465,17 +473,52 @@ export default function ProjectsPage() {
     }
   };
 
-  const handleAddClient = async () => {
-    try {
-      const created = await addClient({
-        name: `Client ${clients.length + 1}`,
-        email: '',
-        phone: ''
+  const handleAddClient = (forDialog: 'new' | 'edit') => {
+    setNewClientFormFor(forDialog);
+    setShowNewClientForm(true);
+    setNewClientPrenom('');
+    setNewClientNom('');
+    setNewClientEmail('');
+    setNewClientPhone('');
+  };
+
+  const handleCreateNewClient = async () => {
+    const prenom = newClientPrenom.trim();
+    const nom = newClientNom.trim();
+    const email = newClientEmail.trim();
+    if (!prenom || !nom || !email) {
+      toast({
+        title: 'Champs requis',
+        description: 'Renseignez le prénom, le nom et l\'email du contact.',
+        variant: 'destructive',
       });
-      setNewChantier(prev => ({ ...prev, clientId: created.id }));
+      return;
+    }
+    setCreatingClient(true);
+    try {
+      const fullName = `${prenom} ${nom}`.trim();
+      const created = await addClient({
+        name: fullName,
+        email,
+        phone: newClientPhone.trim() || undefined,
+      });
+      if (newClientFormFor === 'new') {
+        setNewChantier((prev) => ({ ...prev, clientId: created.id }));
+      } else if (newClientFormFor === 'edit') {
+        setEditChantier((prev) => ({ ...prev, clientId: created.id, clientName: created.name }));
+      }
+      setShowNewClientForm(false);
+      setNewClientFormFor(null);
+      setNewClientPrenom('');
+      setNewClientNom('');
+      setNewClientEmail('');
+      setNewClientPhone('');
+      toast({ title: 'Contact créé', description: `${fullName} a été ajouté.` });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Erreur lors de l\'ajout du client';
-      toast({ title: 'Impossible d\'ajouter le client', description: msg, variant: 'destructive' });
+      const msg = err instanceof Error ? err.message : 'Erreur inconnue';
+      toast({ title: 'Impossible d\'ajouter le contact', description: msg, variant: 'destructive' });
+    } finally {
+      setCreatingClient(false);
     }
   };
 
@@ -833,12 +876,72 @@ export default function ProjectsPage() {
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={handleAddClient}
+                        onClick={() => handleAddClient('new')}
                         className="text-white border-white/20 hover:bg-white/10"
+                        title="Nouveau contact"
                       >
                         <Plus className="h-4 w-4" />
                       </Button>
                     </div>
+                    {showNewClientForm && newClientFormFor === 'new' && (
+                      <div className="mt-3 p-3 rounded-lg bg-black/30 border border-white/10 space-y-3">
+                        <p className="text-sm font-medium text-white">Nouveau contact — prénom, nom et email obligatoires</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-white/80 text-xs">Prénom *</Label>
+                            <Input
+                              value={newClientPrenom}
+                              onChange={(e) => setNewClientPrenom(e.target.value)}
+                              placeholder="Prénom"
+                              className="mt-1 bg-black/20 border-white/10 text-white placeholder:text-white/40"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-white/80 text-xs">Nom *</Label>
+                            <Input
+                              value={newClientNom}
+                              onChange={(e) => setNewClientNom(e.target.value)}
+                              placeholder="Nom"
+                              className="mt-1 bg-black/20 border-white/10 text-white placeholder:text-white/40"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-white/80 text-xs">Email *</Label>
+                          <Input
+                            type="email"
+                            value={newClientEmail}
+                            onChange={(e) => setNewClientEmail(e.target.value)}
+                            placeholder="email@exemple.fr"
+                            className="mt-1 bg-black/20 border-white/10 text-white placeholder:text-white/40"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-white/80 text-xs">Téléphone (optionnel)</Label>
+                          <Input
+                            type="tel"
+                            value={newClientPhone}
+                            onChange={(e) => setNewClientPhone(e.target.value)}
+                            placeholder="06..."
+                            className="mt-1 bg-black/20 border-white/10 text-white placeholder:text-white/40"
+                          />
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                          <Button type="button" variant="outline" size="sm" onClick={() => { setShowNewClientForm(false); setNewClientFormFor(null); }} className="text-white border-white/20 hover:bg-white/10">
+                            Annuler
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={handleCreateNewClient}
+                            disabled={!newClientPrenom.trim() || !newClientNom.trim() || !newClientEmail.trim() || creatingClient}
+                            className="bg-white/20 text-white border border-white/10 hover:bg-white/30 disabled:opacity-50"
+                          >
+                            {creatingClient ? 'Création...' : 'Créer le contact'}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -1214,12 +1317,72 @@ export default function ProjectsPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={handleAddClient}
+                  onClick={() => handleAddClient('edit')}
                   className="text-white border-white/20 hover:bg-white/10"
+                  title="Nouveau contact"
                 >
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
+              {showNewClientForm && newClientFormFor === 'edit' && (
+                <div className="mt-3 p-3 rounded-lg bg-black/30 border border-white/10 space-y-3">
+                  <p className="text-sm font-medium text-white">Nouveau contact — prénom, nom et email obligatoires</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-white/80 text-xs">Prénom *</Label>
+                      <Input
+                        value={newClientPrenom}
+                        onChange={(e) => setNewClientPrenom(e.target.value)}
+                        placeholder="Prénom"
+                        className="mt-1 bg-black/20 border-white/10 text-white placeholder:text-white/40"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-white/80 text-xs">Nom *</Label>
+                      <Input
+                        value={newClientNom}
+                        onChange={(e) => setNewClientNom(e.target.value)}
+                        placeholder="Nom"
+                        className="mt-1 bg-black/20 border-white/10 text-white placeholder:text-white/40"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-white/80 text-xs">Email *</Label>
+                    <Input
+                      type="email"
+                      value={newClientEmail}
+                      onChange={(e) => setNewClientEmail(e.target.value)}
+                      placeholder="email@exemple.fr"
+                      className="mt-1 bg-black/20 border-white/10 text-white placeholder:text-white/40"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-white/80 text-xs">Téléphone (optionnel)</Label>
+                    <Input
+                      type="tel"
+                      value={newClientPhone}
+                      onChange={(e) => setNewClientPhone(e.target.value)}
+                      placeholder="06..."
+                      className="mt-1 bg-black/20 border-white/10 text-white placeholder:text-white/40"
+                    />
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button type="button" variant="outline" size="sm" onClick={() => { setShowNewClientForm(false); setNewClientFormFor(null); }} className="text-white border-white/20 hover:bg-white/10">
+                      Annuler
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleCreateNewClient}
+                      disabled={!newClientPrenom.trim() || !newClientNom.trim() || !newClientEmail.trim() || creatingClient}
+                      className="bg-white/20 text-white border border-white/10 hover:bg-white/30 disabled:opacity-50"
+                    >
+                      {creatingClient ? 'Création...' : 'Créer le contact'}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">

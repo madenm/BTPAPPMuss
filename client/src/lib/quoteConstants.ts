@@ -36,6 +36,7 @@ export function inferUnitFromDescription(description: string): string {
   return m[1].trim();
 }
 
+/** Complète l'unité des lignes : conserve l'unité déjà renseignée, sinon la déduit de la description. */
 export function backfillUnitOnItems(items: QuoteItem[]): QuoteItem[] {
   return items.map((item) => {
     const unit = item.unit?.trim() || inferUnitFromDescription(item.description || "");

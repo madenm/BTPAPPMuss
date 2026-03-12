@@ -28,6 +28,8 @@ import { getCatalogForMetier, ARTIPRIX_CHAPTERS, type ArtiprixChapter } from '@/
 import { TYPE_CHANTIER_LABELS } from '@/lib/planningUtils';
 import { getQuestionsForType, hasQuestionsForType, validateAnswers } from '@/lib/estimationQuestionnaire';
 import { EstimationQuestionnaire } from '@/components/EstimationQuestionnaire';
+import { insertQuote, type QuoteItem } from '@/lib/supabaseQuotes';
+import { useToast } from '@/hooks/use-toast';
 
 interface UploadedImage {
   file: File;
@@ -52,6 +54,7 @@ interface EditableMaterial {
 const ESTIMATION_STORAGE_KEY = 'estimationForChantier';
 const ESTIMATION_DEVIS_KEY = 'estimationForDevis';
 const ESTIMATION_DEVIS_DIRECT_KEY = 'estimationForDevisDirect';
+const ESTIMATION_PAGE_STATE_KEY = 'estimationPageState';
 
 const DONUT_COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#06b6d4'];
 
@@ -143,6 +146,7 @@ export default function EstimationPage() {
   const { clients: existingClients } = useChantiers();
   const { profile, logoUrl, themeColor } = useUserSettings();
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -161,6 +165,7 @@ export default function EstimationPage() {
   const [analysisResults, setAnalysisResults] = useState<any>(null);
   const [isEstimating, setIsEstimating] = useState(false);
   const [estimateError, setEstimateError] = useState<string | null>(null);
+  const [isCreatingQuote, setIsCreatingQuote] = useState(false);
   const [photoAnalysis, setPhotoAnalysis] = useState<{
     descriptionZone: string;
     suggestions?: {
@@ -185,6 +190,62 @@ export default function EstimationPage() {
       fetchTariffs(user.id).then((t) => setUserTariffs(t)).catch(() => {});
     }
   }, [user?.id]);
+
+  // Restaurer l'estimation au retour (ex: bouton retour depuis la page devis)
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(ESTIMATION_PAGE_STATE_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw) as {
+        step?: number;
+        chantierInfo?: { surface?: string; materiaux?: string; localisation?: string; delai?: string; metier?: string };
+        analysisResults?: unknown;
+        questionnaireAnswers?: Record<string, string>;
+        photoAnalysis?: { descriptionZone?: string };
+        selectedClient?: { id?: string; name?: string; email?: string; phone?: string } | null;
+        editableMaterials?: EditableMaterial[];
+      };
+      if (!data?.analysisResults || data.step !== 3) return;
+      setStep(3);
+      if (data.chantierInfo) setChantierInfo((prev) => ({ ...prev, ...data.chantierInfo }));
+      setAnalysisResults(data.analysisResults);
+      if (data.questionnaireAnswers && typeof data.questionnaireAnswers === 'object') setQuestionnaireAnswers(data.questionnaireAnswers);
+      if (data.photoAnalysis && data.photoAnalysis.descriptionZone) setPhotoAnalysis((prev) => ({ ...(prev ?? {}), descriptionZone: data.photoAnalysis!.descriptionZone! }));
+      if (data.selectedClient) setSelectedClient(data.selectedClient);
+      if (Array.isArray(data.editableMaterials) && data.editableMaterials.length > 0) {
+        setEditableMaterials(data.editableMaterials);
+      } else {
+        const mats = (data.analysisResults as { materiaux?: { nom?: string; quantite?: string; prix?: number; prixUnitaire?: number }[] })?.materiaux ?? [];
+        setEditableMaterials(mats.map((m: { nom?: string; quantite?: string; prix?: number; prixUnitaire?: number }) => ({
+          nom: m.nom ?? '',
+          quantite: m.quantite ?? '1',
+          prix: m.prix ?? 0,
+          prixUnitaire: m.prixUnitaire,
+        })));
+      }
+    } catch {
+      // ignore invalid stored state
+    }
+  }, []);
+
+  // Sauvegarder l'état de l'estimation (étape 3) pour le restaurer au retour arrière
+  useEffect(() => {
+    if (!analysisResults || step !== 3) return;
+    try {
+      const payload = {
+        step: 3,
+        chantierInfo,
+        analysisResults,
+        questionnaireAnswers,
+        photoAnalysis: photoAnalysis?.descriptionZone ? { descriptionZone: photoAnalysis.descriptionZone } : undefined,
+        selectedClient: selectedClient ? { id: selectedClient.id, name: selectedClient.name, email: selectedClient.email, phone: selectedClient.phone } : null,
+        editableMaterials,
+      };
+      sessionStorage.setItem(ESTIMATION_PAGE_STATE_KEY, JSON.stringify(payload));
+    } catch {
+      // ignore quota / private mode
+    }
+  }, [analysisResults, step, chantierInfo, questionnaireAnswers, photoAnalysis?.descriptionZone, selectedClient, editableMaterials]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -287,6 +348,7 @@ export default function EstimationPage() {
     setEstimateError(null);
     setPhotoAnalysisError(null);
     setIsEstimating(true);
+    toast({ title: 'Estimation en cours', description: 'Cela peut prendre quelques instants…', duration: 4000 });
     try {
       let descriptionZoneForApi = photoAnalysis?.descriptionZone ?? undefined;
       if (images.length > 0 && !descriptionZoneForApi) {
@@ -357,26 +419,132 @@ export default function EstimationPage() {
     setLocation('/dashboard/projects?openDialog=true&fromEstimation=1');
   }, [analysisResults, selectedClient, chantierInfo.metier, photoAnalysis?.descriptionZone, questionnaireAnswers, setLocation]);
 
-  const handleCreateDevisFromEstimation = useCallback(() => {
-    if (!analysisResults) return;
-    const materials = editingMaterials ? editableMaterials : (analysisResults.materiaux ?? []);
-    const payload = {
-      clientName: selectedClient?.name ?? '',
-      clientEmail: selectedClient?.email ?? '',
-      clientPhone: selectedClient?.phone ?? '',
-      projectType: TYPE_CHANTIER_LABELS[chantierInfo.metier] ?? chantierInfo.metier,
-      projectDescription: `Estimation — ${chantierInfo.surface} m² — ${TYPE_CHANTIER_LABELS[chantierInfo.metier] ?? chantierInfo.metier}`,
-      items: materials.map((m: any) => ({
-        description: m.nom ?? 'Matériau',
-        quantity: parseFloat(m.quantite) || 1,
-        unitPrice: m.prixUnitaire ?? m.prix ?? 0,
-        unit: '',
-      })),
-      conditions: profile?.default_conditions ?? '',
-    };
-    try { sessionStorage.setItem(ESTIMATION_DEVIS_KEY, JSON.stringify(payload)); } catch {}
-    setLocation('/dashboard/quotes?new=1&fromEstimation=1');
-  }, [analysisResults, editableMaterials, editingMaterials, selectedClient, chantierInfo, profile, setLocation]);
+  const handleCreateDevisFromEstimation = useCallback(async () => {
+    if (!analysisResults || !user?.id) return;
+    const tvaRate = Math.max(0, Math.min(100, parseInt(String(profile?.default_tva_rate || '20'), 10) || 20));
+    const validityDays = Math.max(1, parseInt(String(profile?.default_validity_days || '30'), 10) || 30);
+
+    let quoteItems: QuoteItem[];
+
+    setIsCreatingQuote(true);
+    try {
+      const materialsToSend = editingMaterials ? editableMaterials : (analysisResults.materiaux ?? []);
+      const res = await fetch('/api/generate-quote-from-estimation', {
+        method: 'POST',
+        headers: getApiPostHeaders(session?.access_token),
+        body: JSON.stringify({
+          chantierInfo,
+          questionnaireAnswers,
+          analysisResults,
+          photoDescription: photoAnalysis?.descriptionZone ?? undefined,
+          tvaRate: tvaRate,
+          editableMaterials: materialsToSend.length > 0 ? materialsToSend.map((m) => ({ nom: m.nom, quantite: m.quantite, prix: m.prix, prixUnitaire: m.prixUnitaire, notes: m.notes })) : undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      let usedDetailedApi = false;
+      let usedFallbackToast = false;
+
+      if (res.ok && Array.isArray(data?.items) && data.items.length > 0) {
+        const baseId = `est-${Date.now()}`;
+        quoteItems = data.items.map((row: { description?: string; quantity?: number; unitPrice?: number; unit?: string }, index: number) => {
+          const desc = typeof row.description === 'string' ? row.description.trim() : '';
+          const qty = typeof row.quantity === 'number' && row.quantity >= 0 ? row.quantity : 0;
+          const price = typeof row.unitPrice === 'number' && row.unitPrice >= 0 ? row.unitPrice : 0;
+          const total = Math.round(qty * price * 100) / 100;
+          let unit = typeof row.unit === 'string' ? row.unit.trim() : '';
+          if (unit === 'forfait') unit = 'Forfait';
+          if (unit === 'm' || unit === 'ml') unit = 'm';
+          if (unit === 'm2') unit = 'm²';
+          return {
+            id: `${baseId}-${index}`,
+            description: desc,
+            quantity: qty,
+            unitPrice: price,
+            total,
+            unit: unit || undefined,
+          };
+        });
+        usedDetailedApi = true;
+      } else {
+        const materials = editingMaterials ? editableMaterials : (analysisResults.materiaux ?? []);
+        quoteItems = materials.map((m: any, index: number) => {
+          const qty = parseFloat(m.quantite) || 1;
+          const unitPrice = m.prixUnitaire ?? m.prix ?? 0;
+          const total = Math.round(qty * unitPrice * 100) / 100;
+          return {
+            id: `est-${index + 1}-${Date.now()}`,
+            description: m.nom ?? 'Matériau',
+            quantity: qty,
+            unitPrice,
+            total,
+            unit: '',
+          };
+        });
+        const estimationTotalTtc = Math.round(
+          Number((analysisResults as { couts?: { prixTTC?: number } })?.couts?.prixTTC) ?? Number(analysisResults.coutTotal) ?? 0
+        );
+        if (estimationTotalTtc > 0 && quoteItems.length > 0) {
+          const estimationTotalHt = Math.round((estimationTotalTtc / (1 + tvaRate / 100)) * 100) / 100;
+          const sumItems = quoteItems.reduce((s, it) => s + it.total, 0);
+          if (Math.abs(sumItems - estimationTotalHt) > 1) {
+            const factor = sumItems > 0 ? estimationTotalHt / sumItems : 1;
+            quoteItems = quoteItems.map((it, i) => {
+              const isLast = i === quoteItems.length - 1;
+              const newUnitPrice = isLast ? it.unitPrice : Math.round(it.unitPrice * factor * 100) / 100;
+              const newTotal = isLast ? it.total : Math.round(it.quantity * it.unitPrice * factor * 100) / 100;
+              return { ...it, unitPrice: newUnitPrice, total: newTotal };
+            });
+            const sumExceptLast = quoteItems.slice(0, -1).reduce((s, it) => s + it.total, 0);
+            const last = quoteItems[quoteItems.length - 1];
+            quoteItems[quoteItems.length - 1] = {
+              ...last,
+              total: Math.round((estimationTotalHt - sumExceptLast) * 100) / 100,
+              unitPrice: last.quantity > 0 ? Math.round((estimationTotalHt - sumExceptLast) / last.quantity * 100) / 100 : last.unitPrice,
+            };
+          }
+        }
+        if (res.status === 429 || res.status === 503) {
+          usedFallbackToast = true;
+        }
+      }
+
+      const total_ht = Math.round(quoteItems.reduce((s, it) => s + it.total, 0) * 100) / 100;
+      const total_ttc = Math.round(total_ht * (1 + tvaRate / 100) * 100) / 100;
+
+      const created = await insertQuote(user.id, {
+        client_name: selectedClient?.name ?? newClient.name ?? '',
+        client_email: selectedClient?.email ?? newClient.email ?? '',
+        client_phone: selectedClient?.phone ?? newClient.phone ?? '',
+        client_address: '',
+        project_type: TYPE_CHANTIER_LABELS[chantierInfo.metier] ?? chantierInfo.metier,
+        project_description: `Estimation — ${chantierInfo.surface} m² — ${TYPE_CHANTIER_LABELS[chantierInfo.metier] ?? chantierInfo.metier}`,
+        total_ht,
+        total_ttc,
+        validity_days: validityDays,
+        items: quoteItems,
+        status: 'brouillon',
+      });
+      if (usedDetailedApi) {
+        toast({ title: 'Devis créé', description: 'Le devis détaillé a été créé à partir de l\'estimation.' });
+      } else if (!usedFallbackToast) {
+        toast({ title: 'Devis créé', description: 'Le devis a été créé à partir de l\'estimation.' });
+      } else {
+        toast({ title: 'Devis créé', description: 'Devis basé sur les matériaux (génération détaillée indisponible).' });
+      }
+      setLocation(`/dashboard/quotes?quoteId=${created.id}`);
+    } catch (err) {
+      console.error(err);
+      toast({
+        title: 'Erreur',
+        description: err instanceof Error ? err.message : 'Impossible de créer le devis.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCreatingQuote(false);
+    }
+  }, [analysisResults, editableMaterials, editingMaterials, selectedClient, newClient, chantierInfo, profile, user?.id, session?.access_token, photoAnalysis?.descriptionZone, questionnaireAnswers, setLocation, toast]);
 
   const handleRetryEstimation = () => {
     setAnalysisResults(null);
@@ -395,6 +563,9 @@ export default function EstimationPage() {
     setQuestionnaireAnswers({});
     setEditableMaterials([]);
     setEditingMaterials(false);
+    try {
+      sessionStorage.removeItem(ESTIMATION_PAGE_STATE_KEY);
+    } catch {}
   };
 
   const filteredExistingClients = useMemo(() => {
@@ -778,8 +949,9 @@ export default function EstimationPage() {
 
               {/* Actions principales */}
               <div className="flex flex-wrap gap-2">
-                <Button onClick={handleCreateDevisFromEstimation} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                  <FileText className="h-4 w-4 mr-2" />Créer un devis
+                <Button onClick={handleCreateDevisFromEstimation} disabled={isCreatingQuote} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                  {isCreatingQuote ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
+                  {isCreatingQuote ? 'Création du devis...' : 'Créer un devis'}
                 </Button>
                 <Button variant="outline" onClick={handleCreateChantierFromEstimation} className="text-white border-white/20 hover:bg-white/10">
                   <Building className="h-4 w-4 mr-2" />Créer un projet
@@ -787,7 +959,7 @@ export default function EstimationPage() {
                 <Button variant="outline" onClick={handleRetryEstimation} className="text-white border-white/20 hover:bg-white/10">
                   <RefreshCw className="h-4 w-4 mr-2" />Refaire l&apos;estimation
                 </Button>
-                <Button variant="outline" onClick={handleFullReset} className="text-white/60 border-white/15 hover:bg-white/10">
+                <Button variant="outline" onClick={handleFullReset} className="text-white border-white/20 hover:bg-white/10">
                   Nouvelle estimation
                 </Button>
               </div>

@@ -138,6 +138,7 @@ export default function QuotesPage() {
   const defaultTva = profile?.default_tva_rate || '20';
   const defaultValidity = profile?.default_validity_days || '30';
   const defaultConditions = profile?.default_conditions || '';
+  const CONDITIONS_TEMPLATE_MAGASIN = 'Travaux réalisés en horaires compatibles avec l\'activité du lieu. Protection des marchandises et des accès à la charge du client. Délai d\'exécution et planning à convenir. Acompte à la commande, solde à réception des travaux. Garantie décennale incluse.';
   const [validityDays, setValidityDays] = useState(defaultValidity);
   const [tvaRate, setTvaRate] = useState(defaultTva);
   const [discountType, setDiscountType] = useState<'none' | 'percent' | 'fixed'>('none');
@@ -163,6 +164,9 @@ export default function QuotesPage() {
     itemIds?: string[];
   }>({});
   const [quoteLoadState, setQuoteLoadState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
+  const quoteIdFromUrl = searchParams.get('quoteId');
+  const openingQuoteByUrl = !!quoteIdFromUrl && (quoteLoadState === 'idle' || quoteLoadState === 'loading');
+  const effectiveStep = openingQuoteByUrl ? 3 : step;
   const [aiAvailable, setAiAvailable] = useState<boolean | null>(null);
   const clientCardRef = useRef<HTMLDivElement>(null);
   const itemsCardRef = useRef<HTMLDivElement>(null);
@@ -322,7 +326,10 @@ export default function QuotesPage() {
 
   useEffect(() => {
     if (!user?.id) return;
-    const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+    const queryPart = typeof window !== 'undefined' && window.location.search
+      ? window.location.search
+      : (location.includes('?') ? location.slice(location.indexOf('?')) : '');
+    const params = new URLSearchParams(queryPart);
     const quoteIdFromUrl = params.get('quoteId');
     const quoteId = quoteIdFromUrl || quoteIdToOpenFromList;
     if (!quoteId) {
@@ -332,6 +339,7 @@ export default function QuotesPage() {
     }
     if (lastAppliedQuoteIdRef.current === quoteId) return;
     setQuoteLoadState('loading');
+    setStep(3);
     fetchQuoteById(user.id, quoteId).then((quote) => {
       if (!quote) {
         setQuoteLoadState('error');
@@ -370,11 +378,24 @@ export default function QuotesPage() {
       }
       setEditingQuoteId(quoteId);
       setEditingQuoteStatus(quote.status);
+      const name = quote.client_name ?? '';
+      const emailFromQuote = quote.client_email ?? '';
+      const phoneFromQuote = quote.client_phone ?? '';
+      const addressFromQuote = quote.client_address ?? '';
+      let resolvedEmail = emailFromQuote;
+      let resolvedPhone = phoneFromQuote;
+      if (name.trim() && (!emailFromQuote.trim() || !phoneFromQuote.trim()) && clients.length > 0) {
+        const matches = clients.filter((c) => (c.name || '').trim().toLowerCase() === name.trim().toLowerCase());
+        if (matches.length === 1) {
+          if (!resolvedEmail.trim()) resolvedEmail = matches[0].email ?? '';
+          if (!resolvedPhone.trim()) resolvedPhone = matches[0].phone ?? '';
+        }
+      }
       setClientInfo({
-        name: quote.client_name ?? '',
-        email: quote.client_email ?? '',
-        phone: quote.client_phone ?? '',
-        address: quote.client_address ?? '',
+        name,
+        email: resolvedEmail,
+        phone: resolvedPhone,
+        address: addressFromQuote ?? '',
       });
       setProjectType(quote.project_type ?? '');
       setProjectDescription(quote.project_description ?? '');
@@ -385,8 +406,12 @@ export default function QuotesPage() {
       setSelectedClientId(chantier?.clientId ?? null);
       setStep(3);
       setQuoteLoadState('loaded');
+    }).catch(() => {
+      setQuoteLoadState('error');
+      lastAppliedQuoteIdRef.current = null;
+      toast({ title: 'Erreur', description: 'Impossible de charger le devis.', variant: 'destructive' });
     });
-  }, [user?.id, chantiers, toast, setLocation, location, searchString, quoteIdToOpenFromList]);
+  }, [user?.id, chantiers, clients, toast, setLocation, location, quoteIdToOpenFromList]);
 
   // Garder le chantier sélectionné cohérent avec le client : ne jamais afficher un chantier d'un autre client
   useEffect(() => {
@@ -404,6 +429,19 @@ export default function QuotesPage() {
       setProjectDescription('');
     }
   }, [selectedClientId, selectedChantierId, chantiers]);
+
+  // Quand la liste des clients arrive après le chargement du devis, compléter email/téléphone si le nom correspond
+  useEffect(() => {
+    if (!editingQuoteId || step !== 3 || !clientInfo.name?.trim() || clientInfo.email?.trim() || clients.length === 0) return;
+    const matches = clients.filter((c) => (c.name || '').trim().toLowerCase() === clientInfo.name.trim().toLowerCase());
+    if (matches.length !== 1) return;
+    const c = matches[0];
+    setClientInfo((prev) => ({
+      ...prev,
+      email: prev.email?.trim() ? prev.email : (c.email ?? ''),
+      phone: prev.phone?.trim() ? prev.phone : (c.phone ?? prev.phone ?? ''),
+    }));
+  }, [editingQuoteId, step, clientInfo.name, clientInfo.email, clientInfo.phone, clients]);
 
   useEffect(() => {
     if (step !== 3 || !user?.id) return;
@@ -964,15 +1002,10 @@ export default function QuotesPage() {
   // Fonction helper pour vérifier si le devis peut être sauvegardé
   const canSaveQuote = (): boolean => {
     if (!user?.id || step !== 3) return false;
-    
     const missingName = !clientInfo.name?.trim();
-    const missingEmail = !clientInfo.email?.trim();
-    
-    // Calculer les totaux pour vérifier si le devis est valide
     const currentSubtotal = items.reduce((sum, item) => sum + getItemTotal(item), 0);
     const missingItems = items.length === 0 || currentSubtotal === 0;
-    
-    return !missingName && !missingEmail && !missingItems;
+    return !missingName && !missingItems;
   };
 
   // Fonction de sauvegarde manuelle du devis
@@ -991,7 +1024,7 @@ export default function QuotesPage() {
     const currentSubtotalAfterDiscount = Math.max(0, currentSubtotal - currentDiscountAmt);
     const missingItems = items.length === 0 || currentSubtotal === 0;
     
-    if (missingName || missingEmail || missingItems) {
+    if (missingName || missingItems) {
       setHighlightMissing({
         clientName: missingName,
         clientEmail: missingEmail,
@@ -1141,11 +1174,11 @@ export default function QuotesPage() {
   const handleCreateChantierFromQuote = async () => {
     if (!user?.id || !editingQuoteId) return;
     const clientName = clientInfo.name?.trim();
-    const clientEmail = clientInfo.email?.trim();
-    if (!clientName || !clientEmail) {
+    const clientEmail = (clientInfo.email?.trim() ?? '');
+    if (!clientName) {
       toast({
         title: 'Client requis',
-        description: 'Renseignez le nom et l\'email du client avant de créer le projet.',
+        description: 'Renseignez au moins le nom du client avant de créer le projet.',
         variant: 'destructive',
       });
       return;
@@ -1160,7 +1193,9 @@ export default function QuotesPage() {
           clientId = c.id;
           resolvedClientName = c.name;
         } else {
-          const existing = clients.find((x) => (x.email ?? '').toLowerCase() === clientEmail.toLowerCase());
+          const existing = clientEmail
+            ? clients.find((x) => (x.email ?? '').toLowerCase() === clientEmail.toLowerCase())
+            : clients.find((x) => (x.name || '').trim().toLowerCase() === clientName.toLowerCase());
           if (existing) {
             clientId = existing.id;
             resolvedClientName = existing.name;
@@ -1171,7 +1206,9 @@ export default function QuotesPage() {
           }
         }
       } else {
-        const existing = clients.find((x) => (x.email ?? '').toLowerCase() === clientEmail.toLowerCase());
+        const existing = clientEmail
+          ? clients.find((x) => (x.email ?? '').toLowerCase() === clientEmail.toLowerCase())
+          : clients.find((x) => (x.name || '').trim().toLowerCase() === clientName.toLowerCase());
         if (existing) {
           clientId = existing.id;
           resolvedClientName = existing.name;
@@ -1247,7 +1284,7 @@ export default function QuotesPage() {
     const missingEmail = !clientInfo.email?.trim();
     const invalidItemIds = items.filter((i) => !i.description?.trim() || getItemTotal(i) === 0).map((i) => i.id);
     const missingItems = items.length === 0 || subtotal === 0;
-    if (missingName || missingEmail || missingItems) {
+    if (missingName || missingItems) {
       setHighlightMissing({
         clientName: missingName,
         clientEmail: missingEmail,
@@ -1559,7 +1596,7 @@ export default function QuotesPage() {
               {editingQuoteId ? `Devis ${getQuoteDisplayNumber(listQuotes, editingQuoteId) || ''}` : 'Nouveau Devis'}
             </h1>
             <p className="text-xs sm:text-sm text-white/70 sm:truncate">
-              Étape {step}/3 – {step === 1 ? 'Informations client' : step === 2 ? 'Détails du projet' : 'Détail du devis'}
+              Étape {effectiveStep}/3 – {effectiveStep === 1 ? 'Informations client' : effectiveStep === 2 ? 'Détails du projet' : 'Détail du devis'}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end w-full sm:w-auto">
@@ -1591,7 +1628,7 @@ export default function QuotesPage() {
               <Plus className="h-4 w-4 mr-2" />
               Nouveau devis
             </Button>
-            {step === 3 && (
+            {effectiveStep === 3 && (
               <>
                 <Button
                   variant="outline"
@@ -1840,14 +1877,14 @@ export default function QuotesPage() {
 
       <div className="w-full min-w-0 p-2 sm:p-4 pt-0">
         <main className="space-y-6">
-          {quoteLoadState === 'loading' ? (
+          {(quoteLoadState === 'loading' || (quoteIdFromUrl && quoteLoadState === 'idle')) ? (
             <div className="flex flex-col items-center justify-center py-24 text-white/80">
               <p className="text-lg font-medium">Chargement du devis...</p>
               <p className="text-sm text-white/60 mt-2">Préparation du formulaire</p>
             </div>
           ) : (
           <AnimatePresence mode="wait">
-            {step === 1 && (
+            {effectiveStep === 1 && (
               <motion.div
                 key="step1"
                 initial={{ opacity: 0, x: 20 }}
@@ -1954,7 +1991,7 @@ export default function QuotesPage() {
               </motion.div>
             )}
 
-            {step === 2 && (
+            {effectiveStep === 2 && (
               <motion.div
                 key="step2"
                 initial={{ opacity: 0, x: 20 }}
@@ -2178,7 +2215,7 @@ export default function QuotesPage() {
               </motion.div>
             )}
 
-            {step === 3 && (
+            {effectiveStep === 3 && (
               <motion.div
                 key="step3"
                 initial={{ opacity: 0, x: 20 }}
@@ -2670,7 +2707,29 @@ export default function QuotesPage() {
                           </div>
                         </div>
                         <div className="space-y-2">
-                          <Label className="text-gray-700 dark:text-gray-300">Conditions générales / Notes</Label>
+                          <div className="flex items-center justify-between gap-2">
+                            <Label className="text-gray-700 dark:text-gray-300">Conditions générales / Notes</Label>
+                            <Select
+                              value={
+                                generalConditions === defaultConditions ? 'default'
+                                  : generalConditions === CONDITIONS_TEMPLATE_MAGASIN ? 'magasin'
+                                  : 'custom'
+                              }
+                              onValueChange={(v) => {
+                                if (v === 'default') setGeneralConditions(defaultConditions);
+                                else if (v === 'magasin') setGeneralConditions(CONDITIONS_TEMPLATE_MAGASIN);
+                              }}
+                            >
+                              <SelectTrigger className="w-[200px] h-8 text-xs rounded-lg border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+                                <SelectValue placeholder="Modèle" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="custom">Personnalisé</SelectItem>
+                                <SelectItem value="default">Défaut (profil)</SelectItem>
+                                <SelectItem value="magasin">Magasin / local commercial</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
                           <Textarea
                             value={generalConditions}
                             onChange={(e) => setGeneralConditions(e.target.value)}
@@ -2743,7 +2802,7 @@ export default function QuotesPage() {
                         variant="outline"
                         size="sm"
                         onClick={handleCreateChantierFromQuote}
-                        disabled={isCreatingChantier || !clientInfo.name?.trim() || !clientInfo.email?.trim()}
+                        disabled={isCreatingChantier || !clientInfo.name?.trim()}
                         className="rounded-xl border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 shadow-sm dark:border-gray-600 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
                         type="button"
                       >
