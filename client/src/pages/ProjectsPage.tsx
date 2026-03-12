@@ -242,6 +242,7 @@ export default function ProjectsPage() {
   const [newClientEmail, setNewClientEmail] = useState('');
   const [newClientPhone, setNewClientPhone] = useState('');
   const [creatingClient, setCreatingClient] = useState(false);
+  const newClientFormRef = useRef<HTMLDivElement>(null);
 
   // Debounce search 300ms
   useEffect(() => {
@@ -480,6 +481,9 @@ export default function ProjectsPage() {
     setNewClientNom('');
     setNewClientEmail('');
     setNewClientPhone('');
+    requestAnimationFrame(() => {
+      newClientFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
   };
 
   const handleCreateNewClient = async () => {
@@ -826,6 +830,8 @@ export default function ProjectsPage() {
                 if (!open) {
                   setNewChantier({ nom: '', clientId: '', dateDebut: '', dateFin: '', duree: '', images: [], statut: 'planifié', notes: '', notesAvancement: '', typeChantier: '', montantDevis: undefined });
                   setNewChantierMemberIds([]);
+                  setShowNewClientForm(false);
+                  setNewClientFormFor(null);
                 }
                 setIsDialogOpen(open);
               }}
@@ -876,7 +882,11 @@ export default function ProjectsPage() {
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={() => handleAddClient('new')}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleAddClient('new');
+                        }}
                         className="text-white border-white/20 hover:bg-white/10"
                         title="Nouveau contact"
                       >
@@ -884,7 +894,7 @@ export default function ProjectsPage() {
                       </Button>
                     </div>
                     {showNewClientForm && newClientFormFor === 'new' && (
-                      <div className="mt-3 p-3 rounded-lg bg-black/30 border border-white/10 space-y-3">
+                      <div ref={newClientFormRef} className="mt-3 p-3 rounded-lg bg-black/30 border border-white/10 space-y-3">
                         <p className="text-sm font-medium text-white">Nouveau contact — prénom, nom et email obligatoires</p>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
@@ -1274,7 +1284,16 @@ export default function ProjectsPage() {
       )}
 
       {/* Dialog d'édition de chantier */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      <Dialog
+        open={isEditDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowNewClientForm(false);
+            setNewClientFormFor(null);
+          }
+          setIsEditDialogOpen(open);
+        }}
+      >
         <DialogContent className="bg-black/20  border border-white/10 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-white">Modifier le projet</DialogTitle>
@@ -1317,7 +1336,11 @@ export default function ProjectsPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => handleAddClient('edit')}
+                  onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleAddClient('edit');
+                }}
                   className="text-white border-white/20 hover:bg-white/10"
                   title="Nouveau contact"
                 >
@@ -1325,7 +1348,7 @@ export default function ProjectsPage() {
                 </Button>
               </div>
               {showNewClientForm && newClientFormFor === 'edit' && (
-                <div className="mt-3 p-3 rounded-lg bg-black/30 border border-white/10 space-y-3">
+                <div ref={newClientFormRef} className="mt-3 p-3 rounded-lg bg-black/30 border border-white/10 space-y-3">
                   <p className="text-sm font-medium text-white">Nouveau contact — prénom, nom et email obligatoires</p>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
