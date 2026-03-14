@@ -121,6 +121,7 @@ export default function TeamPage() {
   const [inviteLinkLoadingId, setInviteLinkLoadingId] = useState<string | null>(null);
   const [inviteModalMember, setInviteModalMember] = useState<TeamMember | null>(null);
   const [inviteHistory, setInviteHistory] = useState<TeamInvitation[]>([]);
+  const [isAddingMember, setIsAddingMember] = useState(false);
 
   useEffect(() => {
     loadMembers();
@@ -212,35 +213,40 @@ export default function TeamPage() {
       return;
     }
 
-    const memberData: Omit<TeamMember, 'id' | 'created_at' | 'updated_at' | 'user_id'> = {
-      name: newMember.name,
-      role: newMember.role,
-      email: newMember.email,
-      phone: newMember.phone || null,
-      status: 'actif',
-      login_code: newMember.login_code,
-    };
-    PERMISSION_LABELS.forEach(({ key }) => {
-      const v = newMember[key as keyof typeof newMember];
-      if (typeof v === 'boolean') (memberData as Record<string, boolean>)[key] = v;
-    });
+    setIsAddingMember(true);
+    try {
+      const memberData: Omit<TeamMember, 'id' | 'created_at' | 'updated_at' | 'user_id'> = {
+        name: newMember.name,
+        role: newMember.role,
+        email: newMember.email,
+        phone: newMember.phone || null,
+        status: 'actif',
+        login_code: newMember.login_code,
+      };
+      PERMISSION_LABELS.forEach(({ key }) => {
+        const v = newMember[key as keyof typeof newMember];
+        if (typeof v === 'boolean') (memberData as Record<string, boolean>)[key] = v;
+      });
 
-    const result = await createTeamMember(memberData);
-    if (result) {
-      const { inviteLink: link } = await createTeamInvitation(result.id, result.email);
-      if (link) {
-        setInviteLink(link);
-        setInviteModalMember(result);
-        setInviteHistory(await fetchTeamInvitationsByMember(result.id));
-        setShowInviteModal(true);
+      const result = await createTeamMember(memberData);
+      if (result) {
+        const { inviteLink: link } = await createTeamInvitation(result.id, result.email);
+        if (link) {
+          setInviteLink(link);
+          setInviteModalMember(result);
+          setInviteHistory(await fetchTeamInvitationsByMember(result.id));
+          setShowInviteModal(true);
+        }
+        await loadMembers();
+        setNewMember({ name: '', role: '', email: '', phone: '', login_code: '', ...emptyPermissions() });
+        setCustomPermissions(false);
+        setIsAddDialogOpen(false);
+        toast({ title: 'Membre ajouté', description: `${result.name} a été ajouté à l'équipe.` });
+      } else {
+        toast({ title: 'Erreur', description: 'Impossible d\'ajouter le membre.', variant: 'destructive' });
       }
-      await loadMembers();
-      setNewMember({ name: '', role: '', email: '', phone: '', login_code: '', ...emptyPermissions() });
-      setCustomPermissions(false);
-      setIsAddDialogOpen(false);
-      toast({ title: 'Membre ajouté' });
-    } else {
-      toast({ title: 'Erreur', description: 'Impossible d\'ajouter le membre.', variant: 'destructive' });
+    } finally {
+      setIsAddingMember(false);
     }
   };
 
@@ -360,7 +366,7 @@ export default function TeamPage() {
 
   const chantierById = (id: string) => chantiers.find((c) => c.id === id);
 
-  const modalStyles = 'bg-black/10  border border-white/10 text-white rounded-2xl max-h-[90vh] overflow-y-auto';
+  const modalStyles = 'bg-gray-900 border border-white/20 text-white rounded-2xl max-h-[90vh] overflow-y-auto shadow-xl backdrop-blur-sm';
   const inputStyles = 'bg-black/10 border-white/10 text-white';
 
   return (
@@ -372,7 +378,7 @@ export default function TeamPage() {
             <p className="text-xs sm:text-sm text-white/70 sm:truncate">Gérez les membres et leurs codes de connexion</p>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 w-full sm:w-auto">
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen} modal={false}>
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="bg-white/20  text-white border border-white/10 hover:bg-white/30 max-md:min-h-[44px]">
                   <Plus className="h-4 w-4 mr-2" />
@@ -489,7 +495,16 @@ export default function TeamPage() {
                   <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} className="text-white border-white/20">
                     Annuler
                   </Button>
-                  <Button onClick={handleAddMember}>Ajouter le Membre</Button>
+                  <Button onClick={handleAddMember} disabled={isAddingMember}>
+                    {isAddingMember ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Ajout en cours...
+                      </>
+                    ) : (
+                      'Ajouter le Membre'
+                    )}
+                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
