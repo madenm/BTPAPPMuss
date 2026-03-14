@@ -123,8 +123,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return { error: msg };
     }
     const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
-    if (!token) return { error: "Token manquant (Authorization: Bearer)." };
+    const fallbackToken = (req.headers["x-auth-token"] as string)?.trim();
+    let token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+    if (!token && fallbackToken) token = fallbackToken;
+    if (!token) return { error: "Token manquant (Authorization: Bearer ou X-Auth-Token)." };
     try {
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
       const { data: { user }, error } = await supabase.auth.getUser(token);

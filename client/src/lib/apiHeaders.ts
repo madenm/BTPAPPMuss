@@ -9,6 +9,7 @@ export function getApiPostHeaders(accessToken?: string | null): Record<string, s
   const token = accessToken?.trim();
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
+    headers["X-Auth-Token"] = token;
   }
   return headers;
 }
