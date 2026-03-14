@@ -107,27 +107,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "https://hvnjlxxcxfxvuwlmnwtw.supabase.co"
   ).replace(/\/$/, "");
   const supabaseServiceKey = (process.env.SUPABASE_SERVICE_KEY || "").trim();
+  const isFallbackUrl = !process.env.SUPABASE_URL && !process.env.VITE_SUPABASE_URL;
 
-  async function getSupabaseAndUser(req: Request): Promise<{ supabase: ReturnType<typeof createClient>; userId: string } | null> {
+  type AuthResult = { supabase: ReturnType<typeof createClient>; userId: string } | { error: string };
+
+  async function getSupabaseAndUserWithError(req: Request): Promise<AuthResult> {
+    if (isFallbackUrl) {
+      const msg = "SUPABASE_URL non définie. Définir SUPABASE_URL en Production dans Vercel.";
+      console.warn("[api]", msg);
+      return { error: msg };
+    }
     if (!supabaseServiceKey) {
-      console.warn("[api/ai-usage] SUPABASE_SERVICE_KEY est vide. Définissez-la dans Vercel (Settings → Environment Variables) avec la clé service_role du projet Supabase (Dashboard → Settings → API).");
-      return null;
+      const msg = "SUPABASE_SERVICE_KEY est vide. Définir en Production dans Vercel.";
+      console.warn("[api]", msg);
+      return { error: msg };
     }
     const authHeader = req.headers.authorization;
     const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
-    if (!token) return null;
+    if (!token) return { error: "Token manquant (Authorization: Bearer)." };
     try {
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
       const { data: { user }, error } = await supabase.auth.getUser(token);
       if (error) {
-        console.warn("[api/ai-usage] getUser failed:", error.message);
-        return null;
+        console.warn("[api] getUser failed:", error.message);
+        return { error: `Supabase: ${error.message}` };
       }
       if (user?.id) return { supabase, userId: user.id };
+      return { error: "Utilisateur non trouvé." };
     } catch (e) {
-      console.warn("[api/ai-usage] getSupabaseAndUser error:", e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn("[api] getSupabaseAndUser error:", msg);
+      return { error: msg };
     }
-    return null;
+  }
+
+  async function getSupabaseAndUser(req: Request): Promise<{ supabase: ReturnType<typeof createClient>; userId: string } | null> {
+    const result = await getSupabaseAndUserWithError(req);
+    return "error" in result ? null : result;
   }
 
   app.get("/api/ai-usage", async (req: Request, res: Response) => {
@@ -2526,12 +2542,20 @@ Règles :
     res.status(405).json({ message: "Use POST to send the invoice by email." });
   });
   app.post("/api/invoices/:id/send-email", async (req: Request, res: Response) => {
-    const auth = await getSupabaseAndUser(req);
-    if (!auth) {
-      res.status(401).json({ message: "Non autorisé." });
+    if (!supabaseServiceKey) {
+      res.status(503).json({ message: "Service temporairement indisponible. Configuration serveur manquante (SUPABASE_SERVICE_KEY)." });
       return;
     }
-    const userIdVal = auth.userId;
+    if (!process.env.SUPABASE_URL && !process.env.VITE_SUPABASE_URL) {
+      res.status(503).json({ message: "Config manquante: définir SUPABASE_URL pour l'environnement Production dans Vercel (Settings → Environment Variables)." });
+      return;
+    }
+    const authResult = await getSupabaseAndUserWithError(req);
+    if ("error" in authResult) {
+      res.status(401).json({ message: "Non autorisé.", detail: authResult.error });
+      return;
+    }
+    const userIdVal = authResult.userId;
     const { id } = req.params;
     const { to, subject, message, pdfBase64, replyTo } = req.body as {
       to?: string;
@@ -2614,12 +2638,16 @@ Règles :
 
   // GET /api/invoices/:id/pdf - Générer PDF (retourne base64)
   app.get("/api/invoices/:id/pdf", async (req: Request, res: Response) => {
-    const auth = await getSupabaseAndUser(req);
-    if (!auth) {
-      res.status(401).json({ message: "Non autorisé." });
+    if (!process.env.SUPABASE_URL && !process.env.VITE_SUPABASE_URL) {
+      res.status(503).json({ message: "Config manquante: définir SUPABASE_URL pour l'environnement Production dans Vercel (Settings → Environment Variables)." });
       return;
     }
-    const userId = auth.userId;
+    const authResult = await getSupabaseAndUserWithError(req);
+    if ("error" in authResult) {
+      res.status(401).json({ message: "Non autorisé.", detail: authResult.error });
+      return;
+    }
+    const userId = authResult.userId;
     const { id } = req.params;
 
     try {

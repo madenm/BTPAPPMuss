@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { getApiPostHeaders } from '@/lib/apiHeaders';
+import { supabase } from '@/lib/supabaseClient';
 import { useAuth } from '@/context/AuthContext';
 import { useTeamEffectiveUserId } from '@/context/TeamEffectiveUserIdContext';
 import { useChantiers } from '@/context/ChantiersContext';
@@ -139,6 +140,18 @@ export function InvoiceDetailDialog({
 
     setSendingEmail(true);
     try {
+      const { data: { session: freshSession } } = await supabase.auth.getSession();
+      const accessToken = freshSession?.access_token ?? session?.access_token;
+      if (!accessToken) {
+        toast({
+          title: 'Session expirée',
+          description: 'Reconnectez-vous pour envoyer la facture par email.',
+          variant: 'destructive',
+        });
+        setSendingEmail(false);
+        return;
+      }
+
       const emailHtml = buildInvoiceEmailHtml({
         clientName: invoice.client_name ?? '',
         clientEmail: invoice.client_email,
@@ -168,7 +181,7 @@ export function InvoiceDetailDialog({
       const replyTo = profile?.company_email || user?.email || null;
       const res = await fetch(`/api/invoices/${invoice.id}/send-email`, {
         method: 'POST',
-        headers: getApiPostHeaders(session?.access_token),
+        headers: getApiPostHeaders(accessToken),
         body: JSON.stringify({
           userId,
           to: invoice.client_email,
@@ -186,7 +199,11 @@ export function InvoiceDetailDialog({
         });
         onUpdated();
       } else {
-        throw new Error(data.message || 'Erreur envoi email');
+        const detail = data.detail ? ` (${data.detail})` : '';
+        const message = res.status === 401
+          ? `Session expirée ou non autorisée. Reconnectez-vous puis réessayez.${detail}`
+          : (data.message || 'Erreur envoi email') + detail;
+        throw new Error(message);
       }
     } catch (error) {
       console.error('Error sending email:', error);
