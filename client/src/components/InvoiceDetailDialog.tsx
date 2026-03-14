@@ -140,8 +140,12 @@ export function InvoiceDetailDialog({
 
     setSendingEmail(true);
     try {
-      const { data: { session: freshSession } } = await supabase.auth.getSession();
-      const accessToken = freshSession?.access_token ?? session?.access_token;
+      let freshSession = (await supabase.auth.getSession()).data.session;
+      if (!freshSession?.access_token?.trim()) {
+        const { data, error } = await supabase.auth.refreshSession();
+        if (!error && data.session?.access_token?.trim()) freshSession = data.session;
+      }
+      const accessToken = freshSession?.access_token?.trim() || session?.access_token?.trim() || null;
       if (!accessToken) {
         toast({
           title: 'Session expirée',

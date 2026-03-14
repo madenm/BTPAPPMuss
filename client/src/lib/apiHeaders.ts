@@ -6,8 +6,9 @@ export function getApiPostHeaders(accessToken?: string | null): Record<string, s
     "Content-Type": "application/json",
     "Accept": "application/json",
   };
-  if (accessToken && accessToken.trim()) {
-    headers["Authorization"] = `Bearer ${accessToken.trim()}`;
+  const token = accessToken?.trim();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
   }
   return headers;
 }
