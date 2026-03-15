@@ -602,6 +602,7 @@ export default function EstimationPage() {
       } else {
         toast({ title: 'Devis créé', description: 'Devis basé sur les matériaux (génération détaillée indisponible).' });
       }
+      refetchPlan();
       setLocation(`/dashboard/quotes?quoteId=${created.id}`);
     } catch (err) {
       console.error(err);

@@ -36,6 +36,7 @@ const CRMPipelinePage = lazy(() => import("@/pages/CRMPipelinePage"));
 const TeamPage = lazy(() => import("@/pages/TeamPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const CreateUserPage = lazy(() => import("@/pages/CreateUserPage"));
+const PricingPage = lazy(() => import("@/pages/PricingPage"));
 
 const PageFallback = () => (
   <div className="flex items-center justify-center min-h-[280px] text-gray-500 dark:text-gray-400">
@@ -138,13 +139,15 @@ function Router() {
         return <ProtectedRoute><Suspense fallback={<PageFallback />}><SettingsPage /></Suspense></ProtectedRoute>;
       case "/dashboard/create-user":
         return <ProtectedRoute><Suspense fallback={<PageFallback />}><CreateUserPage /></Suspense></ProtectedRoute>;
+      case "/pricing":
+        return <ProtectedRoute><Suspense fallback={<PageFallback />}><PricingPage /></Suspense></ProtectedRoute>;
       default:
         return <NotFound />;
     }
   };
 
   // Pages without sidebar (Home, Auth, Login, Loading, Invite, Client form) get full page animation
-  const isFullPage = location === "/" || location === "/auth" || location === "/login" || location === "/loading" || location.startsWith("/invite/") || location.startsWith("/client-form/") || location.startsWith("/sign-quote/");
+  const isFullPage = location === "/" || location === "/auth" || location === "/login" || location === "/loading" || location === "/pricing" || location.startsWith("/invite/") || location.startsWith("/client-form/") || location.startsWith("/sign-quote/");
 
   if (isFullPage) {
     return (
