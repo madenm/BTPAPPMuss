@@ -122,11 +122,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.warn("[api]", msg);
       return { error: msg };
     }
-    const authHeader = req.headers.authorization;
-    const fallbackToken = (req.headers["x-auth-token"] as string)?.trim();
+    const authHeader = (req.headers.authorization || req.headers["Authorization"]) as string | undefined;
+    const fallbackToken = (req.headers["x-auth-token"] || req.headers["X-Auth-Token"]) as string | undefined;
+    const fallbackTrim = (fallbackToken && typeof fallbackToken === "string") ? fallbackToken.trim() : "";
     let token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
-    if (!token && fallbackToken) token = fallbackToken;
-    if (!token) return { error: "Token manquant (Authorization: Bearer ou X-Auth-Token)." };
+    if (!token && fallbackTrim) token = fallbackTrim;
+    if (!token && req.body && typeof req.body === "object") {
+      const b = req.body as Record<string, unknown>;
+      const bodyToken = b.accessToken ?? b.token;
+      if (typeof bodyToken === "string" && bodyToken.trim()) token = bodyToken.trim();
+    }
+    if (!token) {
+      console.warn("[api] Auth headers: authorization=" + (authHeader ? "present" : "missing") + " x-auth-token=" + (fallbackTrim ? "present" : "missing"));
+      return { error: "Token manquant (Authorization, X-Auth-Token ou body.accessToken)." };
+    }
     try {
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
       const { data: { user }, error } = await supabase.auth.getUser(token);

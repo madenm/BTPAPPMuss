@@ -67,11 +67,22 @@ export default async function handler(req, res) {
     }
   }
 
+  const forwardedHeaders = { ...req.headers };
+  const tokenFromBody = parsedBody && typeof parsedBody.accessToken === "string" && parsedBody.accessToken.trim()
+    ? parsedBody.accessToken.trim()
+    : parsedBody && typeof parsedBody.token === "string" && parsedBody.token.trim()
+      ? parsedBody.token.trim()
+      : "";
+  if (tokenFromBody) {
+    forwardedHeaders.authorization = "Bearer " + tokenFromBody;
+    forwardedHeaders["x-auth-token"] = tokenFromBody;
+  }
   const descriptor = {
     url: { value: pathForExpress, writable: true },
     method: { value: method, writable: true },
     path: { value: pathnameOnly, writable: true },
     originalUrl: { value: pathForExpress, writable: true },
+    headers: { value: forwardedHeaders, writable: true },
   };
   if (parsedBody !== undefined) {
     descriptor.body = { value: parsedBody, writable: true };

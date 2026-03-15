@@ -183,7 +183,8 @@ export function InvoiceDetailDialog({
       });
 
       const replyTo = profile?.company_email || user?.email || null;
-      const res = await fetch(`/api/invoices/${invoice.id}/send-email`, {
+      const apiBase = typeof window !== 'undefined' ? window.location.origin : '';
+      const res = await fetch(`${apiBase}/api/invoices/${invoice.id}/send-email`, {
         method: 'POST',
         headers: getApiPostHeaders(accessToken),
         body: JSON.stringify({
@@ -192,6 +193,7 @@ export function InvoiceDetailDialog({
           subject: `Facture ${invoice.invoice_number}`,
           message: emailHtml,
           replyTo,
+          accessToken,
         }),
       });
 
@@ -203,6 +205,9 @@ export function InvoiceDetailDialog({
         });
         onUpdated();
       } else {
+        if (res.status === 401) {
+          console.warn('[send-email] 401 response:', JSON.stringify(data));
+        }
         const detail = data.detail ? ` (${data.detail})` : '';
         const message = res.status === 401
           ? `Session expirée ou non autorisée. Reconnectez-vous puis réessayez.${detail}`
