@@ -4,6 +4,7 @@ import { Link, useLocation } from 'wouter';
 import { Menu, X, ChevronLeft, Home, Calculator, Building, Calendar, Workflow, FileText, Users, User, Receipt, UserPlus, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
+import { usePlan } from '@/hooks/usePlan';
 
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -11,6 +12,7 @@ export default function Sidebar() {
   const dragX = useMotionValue(0);
   const dragOpacity = useTransform(dragX, [-200, 0], [0, 1]);
   const { user } = useAuth();
+  const { plan } = usePlan();
   const adminEmail = (import.meta.env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
   const isAdmin = !!adminEmail && user?.email?.toLowerCase() === adminEmail;
 
@@ -166,6 +168,9 @@ export default function Sidebar() {
             <p className="text-sm mb-2 text-gray-600 dark:text-gray-400">
               Construire pour durer
             </p>
+            {plan === 'solo' && (
+              <p className="text-xs text-gray-500 dark:text-gray-500 mb-2">Plan Solo</p>
+            )}
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: 80 }}

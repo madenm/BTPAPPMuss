@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '@/context/AuthContext';
+import { usePlan } from '@/hooks/usePlan';
 import { useLocation } from 'wouter';
 import { User, LogOut, ChevronDown, Settings } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -33,6 +34,7 @@ export function UserAccountButton({ variant = 'fixed' }: UserAccountButtonProps)
   const userName = user?.user_metadata?.full_name || userEmail.split('@')[0];
   const adminEmail = (import.meta.env.VITE_ADMIN_EMAIL || '').trim().toLowerCase();
   const isAdmin = !!adminEmail && user?.email?.toLowerCase() === adminEmail;
+  const { plan } = usePlan();
 
   const handleToggle = () => {
     if (isOpen) {
@@ -127,6 +129,9 @@ export function UserAccountButton({ variant = 'fixed' }: UserAccountButtonProps)
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white truncate">{userName}</p>
                   <p className="text-xs text-white/70 truncate">{userEmail}</p>
+                  {plan === 'solo' && (
+                    <p className="text-xs text-white/50 mt-1">Plan Solo</p>
+                  )}
                 </div>
               </div>
             </div>
