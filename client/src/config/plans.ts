@@ -10,7 +10,7 @@ export interface PlanLimits {
   maxChantiers: number;
   /** Devis créés par mois maximum */
   maxQuotesPerMonth: number;
-  /** Nombre max de membres d'équipe (Solo: 4, Pro: illimité; 0 = désactivé) */
+  /** Nombre max de membres d'équipe (0 = gestion équipe désactivée) */
   maxTeamMembers: number;
   /** Utilisations IA par jour */
   maxAiPerDay: number;
@@ -22,14 +22,14 @@ export const PLAN_LIMITS: Record<PlanId, PlanLimits> = {
   solo: {
     maxChantiers: 5,
     maxQuotesPerMonth: 15,
-    maxTeamMembers: 4,
+    maxTeamMembers: 0,
     maxAiPerDay: 5,
     supportLabel: 'Support standard',
   },
   pro: {
     maxChantiers: Infinity,
     maxQuotesPerMonth: Infinity,
-    maxTeamMembers: Infinity,
+    maxTeamMembers: 4,
     maxAiPerDay: Infinity,
     supportLabel: 'Support prioritaire',
   },

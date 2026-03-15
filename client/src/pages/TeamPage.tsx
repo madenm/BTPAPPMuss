@@ -94,9 +94,11 @@ const emptyPermissions = () => ({
 export default function TeamPage() {
   const { chantiers } = useChantiers();
   const { toast } = useToast();
-  const { canDo, plan, getRemainingQuota, refetch } = usePlan();
-  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const { canDo, plan, getRemainingQuota } = usePlan({ teamMembersCount: members.length });
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [upgradeModalTitle, setUpgradeModalTitle] = useState('Limite de votre plan atteinte');
+  const [upgradeModalMessage, setUpgradeModalMessage] = useState('');
   const [assignmentsMap, setAssignmentsMap] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -211,9 +213,20 @@ export default function TeamPage() {
     }
   };
 
+  const openTeamUpgradeModal = () => {
+    if (plan === 'solo') {
+      setUpgradeModalTitle("Gestion d'équipe réservée au plan Pro");
+      setUpgradeModalMessage("Le plan Solo ne permet pas d'ajouter de membres d'équipe ni d'envoyer des invitations. Passez en Pro pour gérer votre équipe.");
+    } else {
+      setUpgradeModalTitle('Limite de 4 membres atteinte');
+      setUpgradeModalMessage("Le plan Pro permet jusqu'à 4 membres dans votre équipe. Supprimez un membre pour en ajouter un autre.");
+    }
+    setUpgradeModalOpen(true);
+  };
+
   const handleAddMember = async () => {
     if (!canDo('team')) {
-      setUpgradeModalOpen(true);
+      openTeamUpgradeModal();
       return;
     }
     if (!newMember.name || !newMember.role || !newMember.email || !newMember.login_code) {
@@ -246,7 +259,6 @@ export default function TeamPage() {
           setShowInviteModal(true);
         }
         await loadMembers();
-        await refetch();
         setNewMember({ name: '', role: '', email: '', phone: '', login_code: '', ...emptyPermissions() });
         setCustomPermissions(false);
         setIsAddDialogOpen(false);
@@ -333,7 +345,6 @@ export default function TeamPage() {
     const success = await deleteTeamMember(id);
     if (success) {
       await loadMembers();
-      await refetch();
       toast({ title: 'Membre supprimé' });
     } else {
       toast({ title: 'Erreur', description: 'Impossible de supprimer.', variant: 'destructive' });
@@ -342,7 +353,7 @@ export default function TeamPage() {
 
   const handleGetInviteLink = async (member: TeamMember) => {
     if (!canDo('team')) {
-      setUpgradeModalOpen(true);
+      openTeamUpgradeModal();
       return;
     }
     setInviteLinkLoadingId(member.id);
@@ -392,6 +403,11 @@ export default function TeamPage() {
               <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">Gestion de l&apos;Équipe</h1>
               {plan === 'solo' && (
                 <Badge variant="secondary" className="text-xs font-normal text-white/80 bg-white/10 border-white/20">
+                  Plan Pro requis
+                </Badge>
+              )}
+              {plan === 'pro' && (
+                <Badge variant="secondary" className="text-xs font-normal text-white/80 bg-white/10 border-white/20">
                   {getRemainingQuota('team').label}
                 </Badge>
               )}
@@ -406,7 +422,7 @@ export default function TeamPage() {
                   if (canDo('team')) {
                     setIsAddDialogOpen(true);
                   } else {
-                    setUpgradeModalOpen(true);
+                    openTeamUpgradeModal();
                   }
                 }}
               >
@@ -1156,8 +1172,8 @@ export default function TeamPage() {
       <UpgradeModal
         open={upgradeModalOpen}
         onOpenChange={setUpgradeModalOpen}
-        title="Limite de 4 membres atteinte"
-        message="Vous avez atteint la limite de 4 membres de votre plan Solo. Passez en Pro pour une équipe illimitée."
+        title={upgradeModalTitle}
+        message={upgradeModalMessage}
       />
     </PageWrapper>
   );

@@ -1,7 +1,15 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { PageWrapper } from '@/components/PageWrapper';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import {
   Dialog,
   DialogContent,
@@ -388,56 +396,64 @@ export default function ClientsPage() {
             </Button>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredClients.map((client) => (
-              <Card
-                key={client.id}
-                className="bg-black/20  border border-white/10 text-white rounded-lg p-4 transition-all duration-200 hover:shadow-lg hover:scale-[1.01]"
-              >
-                <CardContent className="p-0">
-                  <p className="font-semibold text-base text-white truncate">{client.name}</p>
-                  <div className="mt-2 space-y-1">
-                    <div className="flex items-center gap-2 text-sm text-white/70">
-                      <Mail className="h-4 w-4 shrink-0 text-white/50" />
-                      <span className="truncate">{client.email}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-white/70">
-                      <Phone className="h-4 w-4 shrink-0 text-white/50" />
-                      <span>{client.phone}</span>
-                    </div>
-                  </div>
-                  <p className="mt-2 text-xs text-white/50">Créé : {formatCreatedAt(client.created_at)}</p>
-                  <div className="mt-4 flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingClient(client);
-                        setIsModalOpen(true);
-                      }}
-                      className="h-8 max-md:min-h-[44px] text-white border-white/20 hover:bg-white/10"
-                    >
-                      <Pencil className="h-3.5 w-3.5 mr-1" />
-                      Modifier
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteTarget(client);
-                      }}
-                      className="h-8 max-md:min-h-[44px] text-red-300 border-red-500/50 hover:bg-red-500/20"
-                    >
-                      <Trash2 className="h-3.5 w-3.5 mr-1" />
-                      Supprimer
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <Card className="bg-black/20 border border-white/10 text-white overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-white/10 hover:bg-transparent">
+                  <TableHead className="text-white/80 font-medium">Nom</TableHead>
+                  <TableHead className="text-white/80 font-medium">Email</TableHead>
+                  <TableHead className="text-white/80 font-medium">Téléphone</TableHead>
+                  <TableHead className="text-white/80 font-medium">Créé</TableHead>
+                  <TableHead className="text-white/80 font-medium text-right w-[180px]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredClients.map((client) => (
+                  <TableRow key={client.id} className="border-white/10 hover:bg-white/5">
+                    <TableCell className="font-medium text-white">{client.name}</TableCell>
+                    <TableCell className="text-white/80">
+                      <span className="flex items-center gap-2">
+                        <Mail className="h-4 w-4 shrink-0 text-white/50" />
+                        {client.email}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-white/80">
+                      <span className="flex items-center gap-2">
+                        <Phone className="h-4 w-4 shrink-0 text-white/50" />
+                        {client.phone}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-white/60 text-sm">{formatCreatedAt(client.created_at)}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setEditingClient(client);
+                            setIsModalOpen(true);
+                          }}
+                          className="h-8 text-white border-white/20 hover:bg-white/10"
+                        >
+                          <Pencil className="h-3.5 w-3.5 mr-1" />
+                          Modifier
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setDeleteTarget(client)}
+                          className="h-8 text-red-300 border-red-500/50 hover:bg-red-500/20"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-1" />
+                          Supprimer
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
         )}
       </main>
 

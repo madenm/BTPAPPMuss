@@ -4,7 +4,6 @@ import { useUserSettings } from '@/context/UserSettingsContext';
 import { useChantiers } from '@/context/ChantiersContext';
 import { useAiUsage } from '@/hooks/useAiUsage';
 import { countQuotesCreatedThisMonth } from '@/lib/supabaseQuotes';
-import { fetchAllTeamMembers } from '@/lib/supabase';
 import {
   getPlanLimits,
   type PlanId,
@@ -47,19 +46,23 @@ function getQuotaLabel(action: PlanAction, current: number, limit: number): stri
   }
 }
 
-export function usePlan(): UsePlanReturn {
+export interface UsePlanOptions {
+  /** Nombre actuel de membres d'équipe (pour appliquer la limite Pro à 4) */
+  teamMembersCount?: number;
+}
+
+export function usePlan(options?: UsePlanOptions): UsePlanReturn {
   const { user, session, loading: authLoading } = useAuth();
   const { profile } = useUserSettings();
   const { chantiers } = useChantiers();
   const aiUsage = useAiUsage(session?.access_token ?? null, !authLoading);
+  const teamMembersCount = options?.teamMembersCount ?? 0;
 
   const plan: PlanId = (profile?.plan === 'pro' ? 'pro' : 'solo') as PlanId;
   const limits = getPlanLimits(plan);
 
   const [quotesThisMonth, setQuotesThisMonth] = useState<number>(0);
   const [quotesLoading, setQuotesLoading] = useState(false);
-  const [teamMembersCount, setTeamMembersCount] = useState<number>(0);
-  const [teamLoading, setTeamLoading] = useState(false);
 
   const fetchQuotesCount = useCallback(async () => {
     if (!user?.id) {
@@ -77,44 +80,23 @@ export function usePlan(): UsePlanReturn {
     }
   }, [user?.id]);
 
-  const fetchTeamCount = useCallback(async () => {
-    if (!user?.id) {
-      setTeamMembersCount(0);
-      return;
-    }
-    setTeamLoading(true);
-    try {
-      const list = await fetchAllTeamMembers();
-      setTeamMembersCount(list.length);
-    } catch {
-      setTeamMembersCount(0);
-    } finally {
-      setTeamLoading(false);
-    }
-  }, [user?.id]);
-
   useEffect(() => {
     fetchQuotesCount();
   }, [fetchQuotesCount]);
-
-  useEffect(() => {
-    fetchTeamCount();
-  }, [fetchTeamCount]);
 
   const activeChantiersCount = chantiers.filter((c) => c.statut !== 'terminé').length;
 
   const canDo = useCallback(
     (action: PlanAction): boolean => {
-      if (plan === 'pro') return true;
       switch (action) {
         case 'chantiers':
-          return activeChantiersCount < limits.maxChantiers;
+          return plan === 'pro' || activeChantiersCount < limits.maxChantiers;
         case 'quotes':
-          return quotesThisMonth < limits.maxQuotesPerMonth;
+          return plan === 'pro' || quotesThisMonth < limits.maxQuotesPerMonth;
         case 'team':
           return limits.maxTeamMembers > 0 && teamMembersCount < limits.maxTeamMembers;
         case 'ai':
-          return aiUsage.used < limits.maxAiPerDay;
+          return plan === 'pro' || aiUsage.used < limits.maxAiPerDay;
         default:
           return true;
       }
@@ -127,8 +109,8 @@ export function usePlan(): UsePlanReturn {
       limits.maxAiPerDay,
       activeChantiersCount,
       quotesThisMonth,
-      teamMembersCount,
       aiUsage.used,
+      teamMembersCount,
     ]
   );
 
@@ -175,16 +157,16 @@ export function usePlan(): UsePlanReturn {
       limits,
       activeChantiersCount,
       quotesThisMonth,
-      teamMembersCount,
       aiUsage.used,
+      teamMembersCount,
     ]
   );
 
-  const loading = authLoading || quotesLoading || teamLoading;
+  const loading = authLoading || quotesLoading;
 
   const refetch = useCallback(async () => {
-    await Promise.all([fetchQuotesCount(), fetchTeamCount(), aiUsage.refetch()]);
-  }, [fetchQuotesCount, fetchTeamCount, aiUsage.refetch]);
+    await Promise.all([fetchQuotesCount(), aiUsage.refetch()]);
+  }, [fetchQuotesCount, aiUsage.refetch]);
 
   return {
     plan,
