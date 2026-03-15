@@ -171,6 +171,9 @@ export default function Sidebar() {
             {plan === 'solo' && (
               <p className="text-xs text-gray-500 dark:text-gray-500 mb-2">Plan Solo</p>
             )}
+            {plan === 'pro' && (
+              <p className="text-xs text-gray-500 dark:text-gray-500 mb-2">Plan Pro</p>
+            )}
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: 80 }}

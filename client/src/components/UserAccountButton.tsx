@@ -132,6 +132,9 @@ export function UserAccountButton({ variant = 'fixed' }: UserAccountButtonProps)
                   {plan === 'solo' && (
                     <p className="text-xs text-white/50 mt-1">Plan Solo</p>
                   )}
+                  {plan === 'pro' && (
+                    <p className="text-xs text-white/50 mt-1">Plan Pro</p>
+                  )}
                 </div>
               </div>
             </div>
