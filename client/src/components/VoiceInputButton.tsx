@@ -274,12 +274,12 @@ export function VoiceInputButton({ onTranscript, onInterimTranscript, disabled, 
         )}
       </Button>
       {error && (
-        <div className="absolute top-full left-0 mt-1 px-2 py-1 bg-red-500/90 text-white text-xs rounded whitespace-nowrap z-50">
+        <div className="absolute top-full right-0 mt-1 px-2 py-1 bg-red-500/90 text-white text-xs rounded whitespace-nowrap z-50 text-right">
           {error}
         </div>
       )}
       {isListening && (
-        <div className="absolute top-full left-0 mt-1 px-2 py-1.5 bg-emerald-600/95 text-white text-xs rounded shadow-lg z-50 whitespace-nowrap">
+        <div className="absolute top-full right-0 mt-1 px-2 py-1.5 bg-emerald-600/95 text-white text-xs rounded shadow-lg z-50 whitespace-nowrap text-right">
           🎤 Écoute en cours… Parlez maintenant.
         </div>
       )}
