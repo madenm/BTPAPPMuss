@@ -50,7 +50,7 @@ import {
   type NewUserTariffPayload,
   type TariffCategory,
 } from "@/lib/supabaseTariffs";
-import { Plus, Pencil, Trash2, Upload, Download, Loader2, Search, MoreVertical, Copy, Tag } from "lucide-react";
+import { Plus, Pencil, Trash2, Upload, Download, Loader2, Search, MoreVertical, Copy, Tag, FileText, FileSpreadsheet, ChevronDown } from "lucide-react";
 import * as XLSX from "xlsx";
 
 const CATEGORIES: TariffCategory[] = ["matériau", "service", "main-d'œuvre", "location", "sous-traitance", "transport", "équipement", "fourniture", "autre"];
@@ -164,6 +164,19 @@ function getTemplateCsvBlob(): Blob {
   const header = "label;category;unit;price_ht\n";
   const sample = "Peinture murale;matériau;m²;25.50\nMain d'œuvre jour;service;jour;350\n";
   return new Blob(["\uFEFF" + header + sample], { type: "text/csv;charset=utf-8" });
+}
+
+function getTemplateExcelBlob(): Blob {
+  const rows = [
+    ["label", "category", "unit", "price_ht"],
+    ["Peinture murale", "matériau", "m²", "25.50"],
+    ["Main d'œuvre jour", "service", "jour", "350"],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Tarifs");
+  const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  return new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
 }
 
 interface TariffFormModalProps {
@@ -416,16 +429,27 @@ export default function TarifsPage() {
     }
   }, [deleteTarget, user?.id, loadTariffs, toast]);
 
-  const handleDownloadTemplate = useCallback(() => {
-    const blob = getTemplateCsvBlob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "tarifs_template.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-    toast({ title: "Modèle téléchargé (tarifs_template.csv)" });
-  }, [toast]);
+  const downloadBlob = useCallback(
+    (blob: Blob, filename: string) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+    []
+  );
+
+  const handleDownloadTemplateCsv = useCallback(() => {
+    downloadBlob(getTemplateCsvBlob(), "tarifs_template.csv");
+    toast({ title: "Modèle CSV téléchargé (tarifs_template.csv)" });
+  }, [downloadBlob, toast]);
+
+  const handleDownloadTemplateExcel = useCallback(() => {
+    downloadBlob(getTemplateExcelBlob(), "tarifs_template.xlsx");
+    toast({ title: "Modèle Excel téléchargé (tarifs_template.xlsx)" });
+  }, [downloadBlob, toast]);
 
   const handleDuplicate = useCallback(
     async (tariff: UserTariff) => {
@@ -543,15 +567,29 @@ export default function TarifsPage() {
               <Upload className="h-4 w-4 mr-2" />
               Importer
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDownloadTemplate}
-              className="rounded-xl bg-white/10  text-white border border-white/20 hover:bg-white/20"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Modèle CSV
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-xl bg-white/10  text-white border border-white/20 hover:bg-white/20"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Télécharger un modèle
+                  <ChevronDown className="h-4 w-4 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="bg-gray-900 border-white/10">
+                <DropdownMenuItem onClick={handleDownloadTemplateCsv} className="text-white focus:bg-white/10 focus:text-white cursor-pointer">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Modèle CSV (.csv)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDownloadTemplateExcel} className="text-white focus:bg-white/10 focus:text-white cursor-pointer">
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Modèle Excel (.xlsx)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           <Card className="bg-white/80 dark:bg-gray-800/80  border border-gray-200/50 dark:border-gray-700/50 shadow-xl rounded-2xl">
