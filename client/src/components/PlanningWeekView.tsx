@@ -133,7 +133,7 @@ export function PlanningWeekView({
               const hiddenCount = dayChantiers.length - MAX_VISIBLE_CARDS;
 
               return (
-                <div key={dateKey} className={`flex flex-col min-h-[180px] ${isToday ? 'bg-violet-500/5' : ''}`}>
+                <div key={dateKey} className={`flex flex-col min-h-[400px] ${isToday ? 'bg-violet-500/5' : ''}`}>
                   {/* Day header — clean */}
                   <div className={`px-3 py-2 border-b border-white/10 flex items-center justify-between ${isToday ? 'bg-violet-500/10' : 'bg-white/5'}`}>
                     <div className="flex items-center gap-2">

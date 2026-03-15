@@ -28,7 +28,6 @@ import {
   Loader2,
   Trophy,
   XCircle,
-  ExternalLink,
 } from "lucide-react"
 import type { Prospect, ProspectStage } from "@/lib/supabaseClients"
 import { STAGE_LABELS } from "@/lib/supabaseClients"
@@ -232,9 +231,6 @@ export function ProspectDetailPanel({
                         </p>
                       </div>
                     </div>
-                    <a href="/devis" className="text-blue-300 hover:text-blue-200">
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
                   </div>
                 )}
               </div>
@@ -277,24 +273,18 @@ export function ProspectDetailPanel({
           )}
         </div>
 
-        {/* Actions */}
-        <div className="flex justify-end gap-2 pt-3 border-t border-white/10 flex-shrink-0">
-          {editing ? (
-            <>
-              <Button variant="outline" className="text-white border-white/20 hover:bg-white/10" onClick={() => setEditing(false)} disabled={saving}>
-                Annuler
-              </Button>
-              <Button onClick={handleSave} disabled={saving} className="bg-white/20 text-white border border-white/10 hover:bg-white/30">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                Enregistrer
-              </Button>
-            </>
-          ) : (
-            <Button onClick={() => setEditing(true)} className="bg-white/20 text-white border border-white/10 hover:bg-white/30">
-              Modifier
+        {/* Actions (only when editing) */}
+        {editing && (
+          <div className="flex justify-end gap-2 pt-3 border-t border-white/10 flex-shrink-0">
+            <Button variant="outline" className="text-white border-white/20 hover:bg-white/10" onClick={() => setEditing(false)} disabled={saving}>
+              Annuler
             </Button>
-          )}
-        </div>
+            <Button onClick={handleSave} disabled={saving} className="bg-white/20 text-white border border-white/10 hover:bg-white/30">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+              Enregistrer
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )

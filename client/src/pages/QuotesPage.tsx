@@ -137,7 +137,7 @@ export default function QuotesPage() {
   const [projectType, setProjectType] = useState('');
   const [projectDescription, setProjectDescription] = useState('');
   const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<string, string>>({});
-  const [useAiForPrefill, setUseAiForPrefill] = useState(true);
+  const [useAiForPrefill, setUseAiForPrefill] = useState(false);
   const defaultTva = profile?.default_tva_rate || '20';
   const defaultValidity = profile?.default_validity_days || '30';
   const defaultConditions = profile?.default_conditions || '';

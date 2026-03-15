@@ -179,6 +179,16 @@ export function CRMPipeline() {
       if (map[stage]) map[stage].push(p)
       else map["quote"]?.push(p)
     }
+    // Terminé : afficher seulement les 5 les plus récents (par dernière action, sinon date de création)
+    if (map["terminal"]?.length) {
+      const terminal = map["terminal"]
+      const byDate = (a: Prospect, b: Prospect) => {
+        const dateA = a.lastActionAt || a.createdAt || ""
+        const dateB = b.lastActionAt || b.createdAt || ""
+        return new Date(dateB).getTime() - new Date(dateA).getTime()
+      }
+      map["terminal"] = [...terminal].sort(byDate).slice(0, 5)
+    }
     return map
   }, [prospects])
 
