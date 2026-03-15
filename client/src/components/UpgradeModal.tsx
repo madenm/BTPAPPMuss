@@ -7,7 +7,6 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Link } from 'wouter';
 import { Zap, Check } from 'lucide-react';
 
 export interface UpgradeModalProps {
@@ -54,14 +53,9 @@ export function UpgradeModal({
             ))}
           </ul>
         </div>
-        <DialogFooter className="flex-col gap-2 sm:flex-row">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Plus tard
-          </Button>
-          <Button asChild>
-            <Link href="/pricing" onClick={() => onOpenChange(false)}>
-              Passer en Pro
-            </Link>
+        <DialogFooter>
+          <Button onClick={() => onOpenChange(false)}>
+            Fermer
           </Button>
         </DialogFooter>
       </DialogContent>

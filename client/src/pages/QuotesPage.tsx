@@ -839,6 +839,7 @@ export default function QuotesPage() {
       
       setListQuotes((prev) => [duplicated, ...prev]);
       toast({ title: 'Devis dupliqué', description: 'Le devis a été dupliqué en brouillon.' });
+      refetchPlan();
     } catch (e) {
       console.error(e);
       toast({ title: 'Erreur', description: 'Impossible de dupliquer le devis.', variant: 'destructive' });
@@ -1155,6 +1156,7 @@ export default function QuotesPage() {
           title: 'Devis sauvegardé',
           description: 'Le devis a été enregistré avec succès.',
         });
+        refetchPlan();
       } else {
         // Mettre à jour le devis existant - ne pas modifier le statut lors de la sauvegarde
         const payload = {
@@ -1469,6 +1471,7 @@ export default function QuotesPage() {
         quoteIdToUse = newQuote.id;
         setEditingQuoteId(newQuote.id);
         setEditingQuoteStatus(newQuote.status);
+        refetchPlan();
         if (selectedChantierId) {
           try {
             await updateChantier(selectedChantierId, { montantDevis: total });
