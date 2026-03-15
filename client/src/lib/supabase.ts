@@ -328,6 +328,9 @@ function generateInvitationToken(): string {
   return crypto.randomUUID() + '-' + Date.now().toString(36);
 }
 
+// Lien d'invitation sans expiration : date très lointaine (colonne NOT NULL en BDD)
+const INVITATION_NO_EXPIRY = '2099-12-31T23:59:59.000Z';
+
 /** Récupère la dernière invitation pour un membre (pour réutiliser le même lien). */
 async function getLatestInvitationByTeamMember(teamMemberId: string): Promise<TeamInvitation | null> {
   const list = await fetchTeamInvitationsByMember(teamMemberId);
@@ -335,6 +338,7 @@ async function getLatestInvitationByTeamMember(teamMemberId: string): Promise<Te
 }
 
 // Créer une invitation pour un membre d'équipe (réutilise le même lien si une invitation existe déjà)
+// Les liens n'expirent pas : l'utilisateur peut revenir et se connecter avec son code à tout moment.
 export async function createTeamInvitation(
   teamMemberId: string,
   email: string
@@ -344,15 +348,13 @@ export async function createTeamInvitation(
     if (!userId) throw new Error('User not authenticated');
 
     const existing = await getLatestInvitationByTeamMember(teamMemberId);
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7); // Expire dans 7 jours
 
     if (existing) {
-      // Réutiliser le même lien : mettre à jour expiration et remettre used=false pour que le lien reste valide à chaque connexion
+      // Réutiliser le même lien : pas d'expiration, remettre used=false pour que le lien reste valide
       const { error } = await supabase
         .from('team_invitations')
         .update({
-          expires_at: expiresAt.toISOString(),
+          expires_at: INVITATION_NO_EXPIRY,
           updated_at: new Date().toISOString(),
           used: false,
         })
@@ -361,7 +363,7 @@ export async function createTeamInvitation(
       if (error) throw error;
 
       const inviteLink = `${window.location.origin}/invite/${existing.token}`;
-      return { invitation: { ...existing, expires_at: expiresAt.toISOString(), used: false }, inviteLink };
+      return { invitation: { ...existing, expires_at: INVITATION_NO_EXPIRY, used: false }, inviteLink };
     }
 
     const token = generateInvitationToken();
@@ -372,7 +374,7 @@ export async function createTeamInvitation(
         team_member_id: teamMemberId,
         email: email,
         token: token,
-        expires_at: expiresAt.toISOString(),
+        expires_at: INVITATION_NO_EXPIRY,
       })
       .select()
       .single();
@@ -410,6 +412,7 @@ export async function fetchTeamInvitationsByMember(teamMemberId: string): Promis
 }
 
 // Vérifier et récupérer une invitation par token
+// Les liens n'expirent pas : on ne vérifie plus la date, l'utilisateur peut se connecter tant qu'il a son code.
 export async function getInvitationByToken(
   token: string
 ): Promise<TeamInvitation | null> {
@@ -422,12 +425,6 @@ export async function getInvitationByToken(
       .single();
 
     if (error || !data) return null;
-
-    // Vérifier si l'invitation a expiré
-    const expiresAt = new Date(data.expires_at);
-    if (expiresAt < new Date()) {
-      return null;
-    }
 
     return data;
   } catch (error) {

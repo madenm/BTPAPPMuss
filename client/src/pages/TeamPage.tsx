@@ -352,10 +352,7 @@ export default function TeamPage() {
   };
 
   const handleGetInviteLink = async (member: TeamMember) => {
-    if (!canDo('team')) {
-      openTeamUpgradeModal();
-      return;
-    }
+    // Partager le lien ne crée pas de nouveau membre, on autorise même à la limite de 4
     setInviteLinkLoadingId(member.id);
     try {
       const { inviteLink: link } = await createTeamInvitation(member.id, member.email);
