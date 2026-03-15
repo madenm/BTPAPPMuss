@@ -317,6 +317,29 @@ export async function countQuotesByStatus(
   return count ?? 0;
 }
 
+/** Nombre de devis créés par l'utilisateur sur le mois en cours (Europe/Paris). Utilisé pour les limites du plan Solo. */
+export async function countQuotesCreatedThisMonth(userId: string): Promise<number> {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  const startIso = start.toISOString();
+  const endIso = end.toISOString();
+
+  const { count, error } = await supabase
+    .from("quotes")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .gte("created_at", startIso)
+    .lte("created_at", endIso);
+
+  if (error) {
+    if (isSupabaseTableMissing(error)) return 0;
+    console.error("Error counting quotes this month:", error);
+    return 0;
+  }
+  return count ?? 0;
+}
+
 export async function deleteQuote(
   userId: string,
   quoteId: string,

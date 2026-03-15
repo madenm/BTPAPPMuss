@@ -59,6 +59,8 @@ import {
   getInitials,
   formatChantierDateRange,
 } from '@/lib/teamUtils';
+import { usePlan } from '@/hooks/usePlan';
+import { UpgradeModal } from '@/components/UpgradeModal';
 
 const ROLES = ['Chef de projet', 'Ouvrier', 'Commercial', 'Assistant', 'Autre'];
 
@@ -92,6 +94,8 @@ const emptyPermissions = () => ({
 export default function TeamPage() {
   const { chantiers } = useChantiers();
   const { toast } = useToast();
+  const { canDo, plan } = usePlan();
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [assignmentsMap, setAssignmentsMap] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
@@ -208,6 +212,10 @@ export default function TeamPage() {
   };
 
   const handleAddMember = async () => {
+    if (!canDo('team')) {
+      setUpgradeModalOpen(true);
+      return;
+    }
     if (!newMember.name || !newMember.role || !newMember.email || !newMember.login_code) {
       toast({ title: 'Champs requis', description: 'Nom, rôle, email et code sont obligatoires.', variant: 'destructive' });
       return;
@@ -331,6 +339,10 @@ export default function TeamPage() {
   };
 
   const handleGetInviteLink = async (member: TeamMember) => {
+    if (!canDo('team')) {
+      setUpgradeModalOpen(true);
+      return;
+    }
     setInviteLinkLoadingId(member.id);
     try {
       const { inviteLink: link } = await createTeamInvitation(member.id, member.email);
@@ -374,17 +386,31 @@ export default function TeamPage() {
       <header className="bg-black/10  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
           <div className="min-w-0 w-full sm:flex-1 pl-20">
-            <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">Gestion de l&apos;Équipe</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">Gestion de l&apos;Équipe</h1>
+              {plan === 'solo' && (
+                <Badge variant="secondary" className="text-xs font-normal text-white/80 bg-white/10 border-white/20">
+                  Plan Pro requis
+                </Badge>
+              )}
+            </div>
             <p className="text-xs sm:text-sm text-white/70 sm:truncate">Gérez les membres et leurs codes de connexion</p>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 w-full sm:w-auto">
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-white/20  text-white border border-white/10 hover:bg-white/30 max-md:min-h-[44px]">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Ajouter un Membre
-                </Button>
-              </DialogTrigger>
+              <Button
+                className="bg-white/20  text-white border border-white/10 hover:bg-white/30 max-md:min-h-[44px]"
+                onClick={() => {
+                  if (canDo('team')) {
+                    setIsAddDialogOpen(true);
+                  } else {
+                    setUpgradeModalOpen(true);
+                  }
+                }}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Ajouter un Membre
+              </Button>
               <DialogContent className={modalStyles + ' flex flex-col'}>
                 <DialogHeader>
                   <DialogTitle>Ajouter un Nouveau Membre</DialogTitle>
@@ -1125,6 +1151,12 @@ export default function TeamPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <UpgradeModal
+        open={upgradeModalOpen}
+        onOpenChange={setUpgradeModalOpen}
+        title="Gestion d'équipe réservée au plan Pro"
+        message="Le plan Solo ne permet pas d'ajouter de membres d'équipe ni d'envoyer des invitations. Passez en Pro pour gérer votre équipe sans limite."
+      />
     </PageWrapper>
   );
 }

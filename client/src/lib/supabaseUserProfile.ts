@@ -25,6 +25,8 @@ export interface UserProfile {
   invoice_mentions?: string | null;
   quote_prefix?: string | null;
   invoice_prefix?: string | null;
+  /** Plan utilisateur : 'solo' (défaut) ou 'pro' */
+  plan?: 'solo' | 'pro' | null;
   created_at: string;
   updated_at: string;
 }
@@ -73,6 +75,7 @@ export async function updateUserProfile(
     'insurance_name', 'insurance_policy', 'qualifications',
     'default_tva_rate', 'default_validity_days', 'default_conditions',
     'invoice_mentions', 'quote_prefix', 'invoice_prefix',
+    'plan',
   ];
   for (const k of keys) {
     if (payload[k] !== undefined) updatePayload[k] = payload[k];
