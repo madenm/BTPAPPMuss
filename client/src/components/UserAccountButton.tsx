@@ -108,7 +108,7 @@ export function UserAccountButton({ variant = 'fixed' }: UserAccountButtonProps)
             initial={{ opacity: 0, y: -10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            className="fixed w-64 bg-black/20  border border-white/10 rounded-xl shadow-xl overflow-hidden z-50"
+            className="fixed w-64 bg-gray-900 border border-white/10 rounded-xl shadow-xl overflow-hidden z-50"
             style={isInline ? {
               top: `${dropdownPosition.top}px`,
               right: `${dropdownPosition.right}px`,
