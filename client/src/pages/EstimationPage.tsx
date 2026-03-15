@@ -18,6 +18,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { getApiPostHeaders } from '@/lib/apiHeaders';
 import { useAiUsage } from '@/hooks/useAiUsage';
+import { usePlan } from '@/hooks/usePlan';
+import { UpgradeModal } from '@/components/UpgradeModal';
 import { useAuth } from '@/context/AuthContext';
 import { useChantiers } from '@/context/ChantiersContext';
 import { useUserSettings } from '@/context/UserSettingsContext';
@@ -30,6 +32,7 @@ import { getQuestionsForType, hasQuestionsForType, validateAnswers } from '@/lib
 import { EstimationQuestionnaire } from '@/components/EstimationQuestionnaire';
 import { insertQuote, type QuoteItem } from '@/lib/supabaseQuotes';
 import { useToast } from '@/hooks/use-toast';
+import { Badge } from '@/components/ui/badge';
 
 interface UploadedImage {
   file: File;
@@ -149,10 +152,14 @@ function CollapsibleSection({
 export default function EstimationPage() {
   const { user, session, loading: authLoading } = useAuth();
   const aiUsage = useAiUsage(session?.access_token, !authLoading);
+  const { canDo, getRemainingQuota, plan, refetch: refetchPlan } = usePlan();
   const { clients: existingClients, addClient, refreshClients } = useChantiers();
   const { profile, logoUrl, themeColor } = useUserSettings();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [upgradeModalTitle, setUpgradeModalTitle] = useState('Limite de votre plan atteinte');
+  const [upgradeModalMessage, setUpgradeModalMessage] = useState('');
   const [step, setStep] = useState(1);
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -335,7 +342,13 @@ export default function EstimationPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        if (res.status === 429) aiUsage.refetch();
+        if (res.status === 429) {
+          aiUsage.refetch();
+          refetchPlan();
+          setUpgradeModalTitle('Quota IA atteint');
+          setUpgradeModalMessage('Vous avez atteint la limite de 5 utilisations IA par jour pour le plan Solo. Passez en Pro pour l\'IA illimitée.');
+          setUpgradeModalOpen(true);
+        }
         setPhotoAnalysisError(typeof data?.message === 'string' ? data.message : 'L\'analyse de la photo a échoué.');
         return null;
       }
@@ -387,7 +400,13 @@ export default function EstimationPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        if (res.status === 429) aiUsage.refetch();
+        if (res.status === 429) {
+          aiUsage.refetch();
+          refetchPlan();
+          setUpgradeModalTitle('Quota IA atteint');
+          setUpgradeModalMessage('Vous avez atteint la limite de 5 utilisations IA par jour pour le plan Solo. Passez en Pro pour l\'IA illimitée.');
+          setUpgradeModalOpen(true);
+        }
         setEstimateError(typeof data?.message === 'string' ? data.message : 'L\'estimation IA est indisponible.');
         return;
       }
@@ -555,6 +574,14 @@ export default function EstimationPage() {
       const total_ht = Math.round(quoteItems.reduce((s, it) => s + it.total, 0) * 100) / 100;
       const total_ttc = Math.round(total_ht * (1 + tvaRate / 100) * 100) / 100;
 
+      if (!canDo('quotes')) {
+        setUpgradeModalTitle('Limite devis atteinte');
+        setUpgradeModalMessage('Vous avez atteint la limite de 15 devis créés ce mois pour le plan Solo. Passez en Pro pour des devis illimités.');
+        setUpgradeModalOpen(true);
+        setIsCreatingQuote(false);
+        return;
+      }
+
       const created = await insertQuote(user.id, {
         client_name: selectedClient?.name ?? newClient.name ?? '',
         client_email: selectedClient?.email ?? newClient.email ?? '',
@@ -693,9 +720,16 @@ export default function EstimationPage() {
       <header className="bg-black/20  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
           <div className="min-w-0 w-full sm:flex-1 pl-20">
-            <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
-              Estimation Automatique
-            </h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
+                Estimation Automatique
+              </h1>
+              {plan === 'solo' && (
+                <Badge variant="secondary" className="text-xs font-normal text-white/80 bg-white/10 border-white/20">
+                  {getRemainingQuota('ai').label}
+                </Badge>
+              )}
+            </div>
             <p className="text-xs sm:text-sm text-white/70 sm:truncate">
               {step === 1 ? 'Ajoutez des photos (optionnel)' : step === 2 ? 'Décrivez votre projet' : 'Résultats de l\'estimation'}
             </p>
@@ -1240,6 +1274,12 @@ export default function EstimationPage() {
           )}
         </AnimatePresence>
       </main>
+      <UpgradeModal
+        open={upgradeModalOpen}
+        onOpenChange={setUpgradeModalOpen}
+        title={upgradeModalTitle}
+        message={upgradeModalMessage}
+      />
     </PageWrapper>
   );
 }

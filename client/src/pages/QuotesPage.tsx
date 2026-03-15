@@ -26,6 +26,8 @@ import { useChantiers } from '@/context/ChantiersContext';
 import { useUserSettings } from '@/context/UserSettingsContext';
 import { useToast } from '@/hooks/use-toast';
 import { useAiUsage } from '@/hooks/useAiUsage';
+import { usePlan } from '@/hooks/usePlan';
+import { UpgradeModal } from '@/components/UpgradeModal';
 import { UserAccountButton } from '@/components/UserAccountButton';
 import { VoiceInputButton } from '@/components/VoiceInputButton';
 import { supabase } from '@/lib/supabaseClient';
@@ -82,12 +84,16 @@ interface ClientInfo {
 export default function QuotesPage() {
   const { user, session, loading: authLoading } = useAuth();
   const aiUsage = useAiUsage(session?.access_token, !authLoading);
+  const { canDo, getRemainingQuota, plan, refetch: refetchPlan } = usePlan();
   const { clients, chantiers, addChantier, addClient, updateChantier, refreshChantiers } = useChantiers();
   const { logoUrl, themeColor, profile } = useUserSettings();
   const accentColor = themeColor || DEFAULT_THEME_COLOR;
   const [location, setLocation] = useLocation();
   const pathname = location.includes('?') ? location.slice(0, location.indexOf('?')) : location;
   const [showNewFormFromClick, setShowNewFormFromClick] = useState(false);
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [upgradeModalMessage, setUpgradeModalMessage] = useState('');
+  const [upgradeModalTitle, setUpgradeModalTitle] = useState('Limite de votre plan atteinte');
   const keepFormVisibleRef = useRef(false);
   const searchString = typeof window !== 'undefined' ? window.location.search : '';
   const searchParams = new URLSearchParams(searchString || (location.includes('?') ? location.slice(location.indexOf('?')) : ''));
@@ -704,6 +710,10 @@ export default function QuotesPage() {
           const msg = (data?.message && typeof data.message === 'string') ? data.message : 'L\'analyse IA est indisponible.';
           if (res.status === 429) {
             aiUsage.refetch();
+            refetchPlan();
+            setUpgradeModalTitle('Quota IA atteint');
+            setUpgradeModalMessage('Vous avez atteint la limite de 5 utilisations IA par jour pour le plan Solo. Passez en Pro pour l\'IA illimitée.');
+            setUpgradeModalOpen(true);
             toast({
               title: 'Quota IA atteint',
               description: msg,
@@ -768,6 +778,12 @@ export default function QuotesPage() {
 
   const handleDuplicateQuote = async (quote: SupabaseQuote) => {
     if (!user) return;
+    if (!canDo('quotes')) {
+      setUpgradeModalTitle('Limite devis atteinte');
+      setUpgradeModalMessage('Vous avez atteint la limite de 15 devis créés ce mois pour le plan Solo. Passez en Pro pour des devis illimités.');
+      setUpgradeModalOpen(true);
+      return;
+    }
     try {
       const duplicated = await insertQuote(user.id, {
         chantier_id: quote.chantier_id ?? undefined,
@@ -1063,6 +1079,13 @@ export default function QuotesPage() {
         description: 'Ce devis a été validé et ne peut plus être modifié.',
         variant: 'destructive',
       });
+      return;
+    }
+
+    if (!editingQuoteId && !canDo('quotes')) {
+      setUpgradeModalTitle('Limite devis atteinte');
+      setUpgradeModalMessage('Vous avez atteint la limite de 15 devis créés ce mois pour le plan Solo. Passez en Pro pour des devis illimités.');
+      setUpgradeModalOpen(true);
       return;
     }
 
@@ -1387,6 +1410,13 @@ export default function QuotesPage() {
     let quoteIdToUse = editingQuoteId;
     try {
       if (!editingQuoteId) {
+        if (!canDo('quotes')) {
+          setUpgradeModalTitle('Limite devis atteinte');
+          setUpgradeModalMessage('Vous avez atteint la limite de 15 devis créés ce mois pour le plan Solo. Passez en Pro pour des devis illimités.');
+          setUpgradeModalOpen(true);
+          setIsGenerating(false);
+          return;
+        }
         // Créer le devis s'il n'existe pas encore - ne pas définir de statut
         const payload = {
           chantier_id: selectedChantierId ?? null,
@@ -1621,9 +1651,16 @@ export default function QuotesPage() {
       <header className="bg-black/20  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
           <div className="min-w-0 w-full sm:flex-1 pl-20">
-            <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
-              {editingQuoteId ? `Devis ${getQuoteDisplayNumber(listQuotes, editingQuoteId) || ''}` : 'Nouveau Devis'}
-            </h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
+                {editingQuoteId ? `Devis ${getQuoteDisplayNumber(listQuotes, editingQuoteId) || ''}` : 'Nouveau Devis'}
+              </h1>
+              {plan === 'solo' && (
+                <Badge variant="secondary" className="text-xs font-normal text-white/80 bg-white/10 border-white/20">
+                  {getRemainingQuota('quotes').label}
+                </Badge>
+              )}
+            </div>
             <p className="text-xs sm:text-sm text-white/70 sm:truncate">
               Étape {effectiveStep}/3 – {effectiveStep === 1 ? 'Informations client' : effectiveStep === 2 ? 'Détails du projet' : 'Détail du devis'}
             </p>
@@ -2924,6 +2961,12 @@ export default function QuotesPage() {
       </div>
         </>
       )}
+      <UpgradeModal
+        open={upgradeModalOpen}
+        onOpenChange={setUpgradeModalOpen}
+        title={upgradeModalTitle}
+        message={upgradeModalMessage}
+      />
     </PageWrapper>
   );
 }

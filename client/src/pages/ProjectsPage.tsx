@@ -32,6 +32,8 @@ import { useToast } from '@/hooks/use-toast';
 import { DeleteChantierConfirmDialog } from '@/components/DeleteChantierConfirmDialog';
 import { ProjectKpiBar } from '@/components/ProjectKpiBar';
 import { ProjectCard, type QuoteCountInfo } from '@/components/ProjectCard';
+import { usePlan } from '@/hooks/usePlan';
+import { UpgradeModal } from '@/components/UpgradeModal';
 
 // Format montant en euros (FR)
 function formatMontantEuro(value?: number | null): string {
@@ -165,6 +167,10 @@ export default function ProjectsPage() {
   const { chantiers, clients, addChantier, addClient, updateChantier, deleteChantier, loading } = useChantiers();
   const { logoUrl, themeColor, profile } = useUserSettings();
   const { toast } = useToast();
+  const { canDo, getRemainingQuota, plan } = usePlan();
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [upgradeModalMessage, setUpgradeModalMessage] = useState('');
+  const [upgradeModalTitle, setUpgradeModalTitle] = useState('Limite de votre plan atteinte');
   const [location, setLocation] = useLocation();
   const [quoteValidatingLoading, setQuoteValidatingLoading] = useState(false);
   const [quoteDeletingId, setQuoteDeletingId] = useState<string | null>(null);
@@ -384,6 +390,12 @@ export default function ProjectsPage() {
   };
 
   const handleAddChantier = async () => {
+    if (!canDo('chantiers')) {
+      setUpgradeModalTitle('Limite chantiers atteinte');
+      setUpgradeModalMessage('Vous avez atteint la limite de 5 chantiers actifs pour le plan Solo. Passez en Pro pour créer des chantiers sans limite.');
+      setUpgradeModalOpen(true);
+      return;
+    }
     // Vérifier chaque champ individuellement et collecter les champs manquants
     const missingFields: string[] = [];
     
@@ -528,6 +540,12 @@ export default function ProjectsPage() {
 
   const handleDuplicateChantier = async (chantier: Chantier) => {
     if (!user?.id) return;
+    if (!canDo('chantiers')) {
+      setUpgradeModalTitle('Limite chantiers atteinte');
+      setUpgradeModalMessage('Vous avez atteint la limite de 5 chantiers actifs pour le plan Solo. Passez en Pro pour créer des chantiers sans limite.');
+      setUpgradeModalOpen(true);
+      return;
+    }
     try {
       const client = clients.find((c) => c.id === chantier.clientId);
       await addChantier({
@@ -721,10 +739,16 @@ export default function ProjectsPage() {
           // ignore
         }
       }
-      setIsDialogOpen(true);
+      if (canDo('chantiers')) {
+        setIsDialogOpen(true);
+      } else {
+        setUpgradeModalTitle('Limite chantiers atteinte');
+        setUpgradeModalMessage('Vous avez atteint la limite de 5 chantiers actifs pour le plan Solo. Passez en Pro pour créer des chantiers sans limite.');
+        setUpgradeModalOpen(true);
+      }
       window.history.replaceState({}, '', '/dashboard/projects');
     }
-  }, [location, clients]);
+  }, [location, clients, canDo]);
 
   // Pré-remplir le client dans le formulaire "Nouveau chantier" quand le dialog s'ouvre avec clientId (depuis ClientsPage)
   useEffect(() => {
@@ -812,9 +836,16 @@ export default function ProjectsPage() {
       <header className="bg-black/20  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
           <div className="min-w-0 w-full sm:flex-1 pl-20">
-            <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
-              Mes Projets
-            </h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
+                Mes Projets
+              </h1>
+              {plan === 'solo' && (
+                <Badge variant="secondary" className="text-xs font-normal text-white/80 bg-white/10 border-white/20">
+                  {getRemainingQuota('chantiers').label}
+                </Badge>
+              )}
+            </div>
             <p className="text-xs sm:text-sm text-white/70 sm:truncate">Gérez tous vos projets en cours et terminés</p>
           </div>
           <div className="flex flex-shrink-0 items-center gap-1.5 sm:gap-2 w-full sm:w-auto flex-wrap">
@@ -836,13 +867,23 @@ export default function ProjectsPage() {
                 setIsDialogOpen(open);
               }}
             >
-              <DialogTrigger asChild>
-                <Button size="sm" className="bg-white/20  text-white border border-white/10 hover:bg-white/30 h-9 px-2 sm:px-3 text-sm">
-                  <Plus className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Ajouter un Projet</span>
-                  <span className="sm:hidden">Ajouter</span>
-                </Button>
-              </DialogTrigger>
+              <Button
+                size="sm"
+                className="bg-white/20  text-white border border-white/10 hover:bg-white/30 h-9 px-2 sm:px-3 text-sm"
+                onClick={() => {
+                  if (canDo('chantiers')) {
+                    setIsDialogOpen(true);
+                  } else {
+                    setUpgradeModalTitle('Limite chantiers atteinte');
+                    setUpgradeModalMessage('Vous avez atteint la limite de 5 chantiers actifs pour le plan Solo. Passez en Pro pour créer des chantiers sans limite.');
+                    setUpgradeModalOpen(true);
+                  }
+                }}
+              >
+                <Plus className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Ajouter un Projet</span>
+                <span className="sm:hidden">Ajouter</span>
+              </Button>
               <DialogContent className="bg-black/20  border border-white/10 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
 <DialogTitle className="text-white">Nouveau Projet</DialogTitle>
@@ -2024,7 +2065,15 @@ export default function ProjectsPage() {
                   Commencez par ajouter votre premier projet
                 </p>
                 <Button
-                  onClick={() => setIsDialogOpen(true)}
+                  onClick={() => {
+                    if (canDo('chantiers')) {
+                      setIsDialogOpen(true);
+                    } else {
+                      setUpgradeModalTitle('Limite chantiers atteinte');
+                      setUpgradeModalMessage('Vous avez atteint la limite de 5 chantiers actifs pour le plan Solo. Passez en Pro pour créer des chantiers sans limite.');
+                      setUpgradeModalOpen(true);
+                    }
+                  }}
                   className="bg-white/20  text-white border border-white/10 hover:bg-white/30"
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -2122,6 +2171,12 @@ export default function ProjectsPage() {
               .catch(() => setChantierInvoices([]));
           }
         }}
+      />
+      <UpgradeModal
+        open={upgradeModalOpen}
+        onOpenChange={setUpgradeModalOpen}
+        title={upgradeModalTitle}
+        message={upgradeModalMessage}
       />
     </PageWrapper>
   );

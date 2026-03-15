@@ -418,3 +418,9 @@ create policy "Users can update own files" on storage.objects for update to auth
   using (bucket_id = 'uploads' and (storage.foldername(name))[1] = auth.uid()::text);
 create policy "Users can delete own files" on storage.objects for delete to authenticated
   using (bucket_id = 'uploads' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- [19] add_plan_to_user_profiles (plans Solo / Pro)
+ALTER TABLE public.user_profiles
+  ADD COLUMN IF NOT EXISTS plan text NOT NULL DEFAULT 'solo'
+  CHECK (plan IN ('solo', 'pro'));
+COMMENT ON COLUMN public.user_profiles.plan IS 'Plan utilisateur : solo (limité) ou pro (illimité).';
