@@ -1,11 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Mic, MicOff } from 'lucide-react';
+import { Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface VoiceInputButtonProps {
   onTranscript: (text: string) => void;
+  /** Texte reconnu en direct (non final) pour affichage en temps réel */
+  onInterimTranscript?: (text: string) => void;
   disabled?: boolean;
   className?: string;
+  /** Afficher un libellé à côté du micro */
+  showLabel?: boolean;
 }
 
 interface SpeechRecognition extends EventTarget {
@@ -59,12 +63,14 @@ declare global {
   }
 }
 
-export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInputButtonProps) {
+export function VoiceInputButton({ onTranscript, onInterimTranscript, disabled, className, showLabel = false }: VoiceInputButtonProps) {
   const [isListening, setIsListening] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const interimTranscriptRef = useRef('');
+  const onInterimTranscriptRef = useRef(onInterimTranscript);
+  onInterimTranscriptRef.current = onInterimTranscript;
 
   const createRecognition = useCallback(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -96,6 +102,7 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
           onTranscript(finalTranscript.trim());
         } else if (interimTranscript) {
           interimTranscriptRef.current = interimTranscript;
+          onInterimTranscriptRef.current?.(interimTranscript);
         }
       };
 
@@ -127,6 +134,7 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
 
       recognition.onend = () => {
         setIsListening(false);
+        onInterimTranscriptRef.current?.('');
         if (interimTranscriptRef.current) {
           onTranscript(interimTranscriptRef.current);
           interimTranscriptRef.current = '';
@@ -138,7 +146,7 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
       console.error('Failed to create speech recognition:', err);
       return null;
     }
-  }, [onTranscript, isListening]);
+  }, [onTranscript]);
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -236,32 +244,33 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
         size="sm"
         onClick={toggleListening}
         disabled={disabled || !isSupported}
-        className={`${
+        className={`gap-2 ${
           isListening
-            ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/50'
+            ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/50 animate-pulse'
             : isSupported
             ? 'hover:bg-white/10 text-white'
             : 'opacity-50 cursor-not-allowed text-white/50'
         } transition-colors`}
         title={
           !isSupported
-            ? 'Reconnaissance vocale non supportée par votre navigateur (Chrome, Edge ou Safari requis)'
+            ? 'Reconnaissance vocale non supportée (Chrome, Edge ou Safari)'
             : isListening
-            ? 'Arrêter la dictée vocale'
-            : 'Démarrer la dictée vocale'
+            ? 'Cliquer pour arrêter la dictée'
+            : 'Cliquer pour dicter la description du projet'
         }
         aria-label={
           !isSupported
             ? 'Reconnaissance vocale non supportée'
             : isListening
-            ? 'Arrêter la dictée vocale'
+            ? 'Arrêter la dictée'
             : 'Démarrer la dictée vocale'
         }
       >
-        {isListening ? (
-          <MicOff className="h-4 w-4" />
-        ) : (
-          <Mic className="h-4 w-4" />
+        <Mic className={`h-4 w-4 ${isListening ? 'text-emerald-400' : ''}`} />
+        {showLabel && (
+          <span className="text-xs font-medium">
+            {isListening ? 'Arrêter' : 'Parler'}
+          </span>
         )}
       </Button>
       {error && (
@@ -270,8 +279,8 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
         </div>
       )}
       {isListening && (
-        <div className="absolute top-full left-0 mt-1 px-2 py-1 bg-blue-500/90 text-white text-xs rounded whitespace-nowrap z-50">
-          En écoute...
+        <div className="absolute top-full left-0 mt-1 px-2 py-1.5 bg-emerald-600/95 text-white text-xs rounded shadow-lg z-50 whitespace-nowrap">
+          🎤 Écoute en cours… Parlez maintenant.
         </div>
       )}
     </div>

@@ -136,6 +136,7 @@ export default function QuotesPage() {
 
   const [projectType, setProjectType] = useState('');
   const [projectDescription, setProjectDescription] = useState('');
+  const [interimVoiceTranscript, setInterimVoiceTranscript] = useState('');
   const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<string, string>>({});
   const [useAiForPrefill, setUseAiForPrefill] = useState(false);
   const defaultTva = profile?.default_tva_rate || '20';
@@ -2153,25 +2154,41 @@ export default function QuotesPage() {
                           </Tooltip>
                         </TooltipProvider>
                       </div>
-                      <div className="flex gap-2">
-                        <Textarea
-                          id="project-description"
-                          data-testid="textarea-project-description"
-                          value={projectDescription}
-                          onChange={(e) => setProjectDescription(e.target.value)}
-                          placeholder="Décrivez en détail le projet à réaliser..."
-                          rows={3}
-                          className="flex-1 cursor-text rounded-xl border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
-                        />
-                        <VoiceInputButton
-                          onTranscript={(text) => {
-                            setProjectDescription((prev) => {
-                              const trimmed = prev.trim();
-                              return trimmed ? `${trimmed} ${text}` : text;
-                            });
-                          }}
-                          className="self-start mt-1"
-                        />
+                      <div className="space-y-1.5">
+                        <div className="flex gap-2">
+                          <Textarea
+                            id="project-description"
+                            data-testid="textarea-project-description"
+                            value={projectDescription}
+                            onChange={(e) => setProjectDescription(e.target.value)}
+                            placeholder="Décrivez en détail le projet à réaliser, ou utilisez le micro pour dicter."
+                            rows={4}
+                            className="flex-1 cursor-text rounded-xl border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
+                          />
+                          <div className="flex flex-col items-center gap-1">
+                            <VoiceInputButton
+                              onTranscript={(text) => {
+                                setInterimVoiceTranscript('');
+                                setProjectDescription((prev) => {
+                                  const trimmed = prev.trim();
+                                  return trimmed ? `${trimmed} ${text}` : text;
+                                });
+                                if (aiUsage.remaining > 0) setUseAiForPrefill(true);
+                              }}
+                              onInterimTranscript={setInterimVoiceTranscript}
+                              showLabel
+                              className="self-start mt-1"
+                            />
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400 text-center max-w-[100px]">
+                              Dictez, puis Suivant pour que l&apos;IA génère les lignes.
+                            </p>
+                          </div>
+                        </div>
+                        {interimVoiceTranscript && (
+                          <p className="text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 rounded-lg px-2 py-1.5 border border-emerald-400/20">
+                            <span className="font-medium">En direct :</span> {interimVoiceTranscript}
+                          </p>
+                        )}
                       </div>
 
                       {projectType && hasQuestionsForType(projectType) && (
