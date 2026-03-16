@@ -14,7 +14,9 @@ export default function PortfolioPage() {
             </h1>
             <p className="text-sm text-white/70">Showcasez vos réalisations avec style</p>
           </div>
-          <UserAccountButton variant="inline" />
+          <div className="max-md:hidden">
+            <UserAccountButton variant="inline" />
+          </div>
         </div>
       </header>
 

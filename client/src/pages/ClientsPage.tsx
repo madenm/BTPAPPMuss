@@ -37,12 +37,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { UserAccountButton } from '@/components/UserAccountButton';
 import { useAuth } from '@/context/AuthContext';
 import { useChantiers, type Client } from '@/context/ChantiersContext';
 import { useToast } from '@/hooks/use-toast';
 import { createClientFormLink } from '@/lib/supabaseClients';
-import { Search, Plus, Pencil, Trash2, Mail, Phone, Link2 } from 'lucide-react';
+import { Search, Plus, Pencil, Trash2, Mail, Phone, Link2, Filter, ChevronRight, MoreVertical } from 'lucide-react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 
 function useDebouncedValue<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -232,6 +239,7 @@ export default function ClientsPage() {
   const [shareLinkOpen, setShareLinkOpen] = useState(false);
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [shareLinkLoading, setShareLinkLoading] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const { user } = useAuth();
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
@@ -331,32 +339,80 @@ export default function ClientsPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-black/20  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
+      <header className="bg-black/20  border-b border-white/10 px-3 py-3 sm:px-6 sm:py-4 max-md:rounded-none md:rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
-          <div className="min-w-0 w-full sm:flex-1 pl-20">
+          <div className="min-w-0 w-full sm:flex-1 pl-4 md:pl-20">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">Gestion des contacts</h1>
             <p className="text-xs sm:text-sm text-white/70 sm:truncate">Recherchez, éditez et gérez vos contacts</p>
           </div>
-          <div className="flex-shrink-0 w-full sm:w-auto">
+          <div className="flex-shrink-0 w-full sm:w-auto max-md:hidden">
             <UserAccountButton variant="inline" />
           </div>
         </div>
       </header>
 
       <main className="flex-1 p-2 sm:p-4 min-w-0 overflow-x-auto">
-        <div className="space-y-4 mb-6 flex flex-wrap items-center gap-3">
+        {/* Barre mobile: recherche + Filtres (Sheet) + actions */}
+        <div className="md:hidden flex flex-wrap items-center gap-2 mb-4">
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
+            <Input
+              placeholder="Rechercher..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 h-11 bg-black/20 border-white/10 text-white placeholder:text-white/50"
+            />
+          </div>
+          <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="icon" className="h-11 w-11 shrink-0 bg-black/20 border-white/10 text-white hover:bg-white/10">
+                <Filter className="h-4 w-4" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="bottom" className="bg-gray-900 border-white/10 text-white max-h-[85vh] rounded-t-2xl">
+              <SheetHeader>
+                <SheetTitle className="text-white">Filtres</SheetTitle>
+              </SheetHeader>
+              <div className="grid gap-4 py-4">
+                <div>
+                  <label className="text-xs text-white/60 mb-1.5 block">Statut</label>
+                  <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as FilterStatus)}>
+                    <SelectTrigger className="bg-black/20 border-white/10 text-white">
+                      <SelectValue placeholder="Filtre" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all" className="text-white">Tous</SelectItem>
+                      <SelectItem value="actifs" className="text-white">Actifs</SelectItem>
+                      <SelectItem value="terminés" className="text-white">Terminés</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button onClick={() => setMobileFiltersOpen(false)} className="w-full bg-white/20 text-white hover:bg-white/30">Appliquer</Button>
+              </div>
+            </SheetContent>
+          </Sheet>
+          <Button size="icon" className="h-11 w-11 shrink-0 bg-white/20 text-white border border-white/10 hover:bg-white/30" onClick={() => { setEditingClient(null); setIsModalOpen(true); }}>
+            <Plus className="h-4 w-4" />
+          </Button>
+          <Button size="icon" variant="outline" className="h-11 w-11 shrink-0 bg-black/20 border-white/10 text-white hover:bg-white/10" onClick={handleCreateShareLink} disabled={shareLinkLoading}>
+            <Link2 className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Barre desktop */}
+        <div className="hidden md:flex flex-wrap items-center gap-3 mb-6">
           <div className="relative flex-1 min-w-0 w-full sm:min-w-[200px] sm:max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50 pointer-events-none" />
             <Input
               placeholder="Rechercher par nom ou email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 bg-black/20 border-white/10 text-white placeholder:text-white/50 h-9 w-full max-md:min-h-[44px] max-md:h-[44px]"
+              className="pl-9 bg-black/20 border-white/10 text-white placeholder:text-white/50 h-9 w-full"
             />
           </div>
           <div className="flex flex-wrap items-center gap-3 min-w-0">
             <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as FilterStatus)}>
-              <SelectTrigger className="w-full sm:w-[160px] h-9 max-md:h-[44px] bg-black/20 border-white/10 text-white min-w-0">
+              <SelectTrigger className="w-full sm:w-[160px] h-9 bg-black/20 border-white/10 text-white min-w-0">
                 <SelectValue placeholder="Filtre" />
               </SelectTrigger>
               <SelectContent className="bg-gray-900 border-white/10">
@@ -365,38 +421,65 @@ export default function ClientsPage() {
                 <SelectItem value="terminés" className="text-white">Terminés</SelectItem>
               </SelectContent>
             </Select>
-            <Button
-              onClick={() => {
-                setEditingClient(null);
-                setIsModalOpen(true);
-              }}
-              className="h-9 max-md:h-[44px] bg-white/20  text-white border border-white/10 hover:bg-white/30"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Ajouter contact
+            <Button onClick={() => { setEditingClient(null); setIsModalOpen(true); }} className="h-9 bg-white/20 text-white border border-white/10 hover:bg-white/30">
+              <Plus className="h-4 w-4 mr-2" /> Ajouter contact
             </Button>
-            <Button
-              onClick={handleCreateShareLink}
-              disabled={shareLinkLoading}
-              variant="outline"
-              className="h-9 max-md:h-[44px] bg-white/10  text-white border border-white/20 hover:bg-white/20"
-            >
-              <Link2 className="h-4 w-4 mr-2" />
-              {shareLinkLoading ? 'Création...' : 'Partager un lien'}
+            <Button onClick={handleCreateShareLink} disabled={shareLinkLoading} variant="outline" className="h-9 bg-white/10 text-white border border-white/20 hover:bg-white/20">
+              <Link2 className="h-4 w-4 mr-2" /> {shareLinkLoading ? 'Création...' : 'Partager un lien'}
             </Button>
           </div>
         </div>
 
         {filteredClients.length === 0 ? (
-          <Card className="bg-black/20  border border-white/10 text-white p-12 text-center">
+          <Card className="bg-black/20 border border-white/10 text-white p-12 text-center">
             <p className="text-white/70">Aucun contact trouvé.</p>
-            <Button className="mt-4 min-h-[44px] max-md:min-h-[44px] bg-white/20  text-white border border-white/10 hover:bg-white/30" onClick={() => setIsModalOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Ajouter un contact
+            <Button className="mt-4 min-h-[44px] bg-white/20 text-white border border-white/10 hover:bg-white/30" onClick={() => setIsModalOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" /> Ajouter un contact
             </Button>
           </Card>
         ) : (
-          <Card className="bg-black/20 border border-white/10 text-white overflow-hidden">
+          <>
+            {/* Liste mobile */}
+            <div className="md:hidden divide-y divide-white/10 rounded-xl border border-white/10 bg-black/20 overflow-hidden">
+              {filteredClients.map((client) => (
+                <div key={client.id} className="flex items-center gap-2 py-3 px-3 hover:bg-white/5 active:bg-white/10">
+                  <button
+                    type="button"
+                    onClick={() => { setEditingClient(client); setIsModalOpen(true); }}
+                    className="flex-1 flex items-center gap-3 min-w-0 text-left"
+                  >
+                    <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center shrink-0 text-sm font-medium text-white">
+                      {client.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium text-white truncate">{client.name}</div>
+                      <div className="text-sm text-white/60 truncate flex items-center gap-1">
+                        <Mail className="h-3 w-3 shrink-0" />{client.email}
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-white/40 shrink-0" />
+                  </button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-white/70 hover:text-white" onClick={(e) => e.stopPropagation()}>
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="bg-gray-900 border-white/10">
+                      <DropdownMenuItem className="text-white" onClick={() => { setEditingClient(client); setIsModalOpen(true); }}>
+                        <Pencil className="h-3.5 w-3.5 mr-2" /> Modifier
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="text-red-400" onClick={() => setDeleteTarget(client)}>
+                        <Trash2 className="h-3.5 w-3.5 mr-2" /> Supprimer
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              ))}
+            </div>
+
+            {/* Tableau desktop */}
+            <Card className="hidden md:block bg-black/20 border border-white/10 text-white overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow className="border-white/10 hover:bg-transparent">
@@ -453,7 +536,8 @@ export default function ClientsPage() {
                 ))}
               </TableBody>
             </Table>
-          </Card>
+            </Card>
+          </>
         )}
       </main>
 

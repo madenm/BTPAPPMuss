@@ -230,7 +230,7 @@ export default function TeamDashboard() {
               transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
               className="flex-1 flex flex-col relative z-10 ml-0 md:ml-64 rounded-l-3xl overflow-hidden"
             >
-              <header className="bg-black/10  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
+              <header className="bg-black/10  border-b border-white/10 px-3 py-3 sm:px-6 sm:py-4 max-md:rounded-none md:rounded-tl-3xl">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
                   <div className="flex items-center gap-2 min-w-0 w-full sm:flex-1">
                     <SheetTrigger asChild>
@@ -256,14 +256,14 @@ export default function TeamDashboard() {
                     </p>
                   </div>
                 </div>
-                <div className="flex-shrink-0 w-full sm:w-auto">
+                <div className="flex-shrink-0 w-full sm:w-auto max-md:hidden">
                   <UserAccountButton variant="inline" />
                 </div>
               </div>
             </header>
 
             {/* Tabs Navigation */}
-            <div className="bg-black/10  border-b border-white/10 px-4 sm:px-6 rounded-tl-3xl">
+            <div className="bg-black/10  border-b border-white/10 px-3 sm:px-6 max-md:rounded-none md:rounded-tl-3xl">
               <div className="flex gap-2 overflow-x-auto min-w-0">
                 {/* Vue d'ensemble - toujours accessible */}
                 <Button

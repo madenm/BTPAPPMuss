@@ -922,8 +922,8 @@ export function CRMPipeline() {
   return (
     <div className="space-y-6">
 
-      {/* Pipeline columns */}
-      <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory">
+      {/* Pipeline columns: empilées sur mobile, scroll horizontal sur desktop */}
+      <div className="flex flex-col md:flex-row gap-4 overflow-x-auto pb-4 md:snap-x md:snap-mandatory">
         {renderColumnGroup("📬 Devis", QUOTE_COLUMNS, "sm:grid-cols-1 lg:grid-cols-2")}
         {renderColumnGroup("✅ Résultat", TERMINAL_COLUMNS, "sm:grid-cols-1 lg:grid-cols-1")}
       </div>

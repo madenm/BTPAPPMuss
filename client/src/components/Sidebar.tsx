@@ -5,6 +5,7 @@ import { Menu, X, ChevronLeft, Home, Calculator, Building, Calendar, Workflow, F
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { usePlan } from '@/hooks/usePlan';
+import { UserAccountButton } from '@/components/UserAccountButton';
 
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -91,12 +92,26 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Bouton menu : seul élément cliquable quand le menu est fermé (parent a pointer-events-none) */}
-      <div className="!pointer-events-auto fixed top-6 left-6 z-[100]">
+      {/* Sur mobile : barre fixe en haut pour réserver l’espace et éviter la superposition avec le titre */}
+      <div className="!pointer-events-auto fixed top-0 left-0 right-0 z-[100] md:hidden h-14 flex items-center justify-between pl-3 pr-3 bg-transparent" style={{ paddingTop: 'max(0px, env(safe-area-inset-top))' }}>
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="p-3 rounded-xl transition-colors shadow-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 max-md:left-4 max-md:top-[max(1rem,env(safe-area-inset-top))] max-md:min-w-[44px] max-md:min-h-[44px] max-md:flex max-md:items-center max-md:justify-center max-md:[&_svg]:w-5 max-md:[&_svg]:h-5"
+          className="p-2.5 rounded-xl transition-colors shadow-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 min-w-[44px] min-h-[44px] flex items-center justify-center [&_svg]:w-5 [&_svg]:h-5"
+          aria-label={isOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
+        >
+          {isOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+        <div className="flex items-center shrink-0">
+          <UserAccountButton variant="inline" />
+        </div>
+      </div>
+      {/* Desktop : bouton en coin comme avant */}
+      <div className="!pointer-events-auto fixed top-6 left-6 z-[100] hidden md:block">
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="p-3 rounded-xl transition-colors shadow-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95"
           aria-label={isOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
         >
           {isOpen ? <X size={24} /> : <Menu size={24} />}

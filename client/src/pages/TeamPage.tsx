@@ -19,6 +19,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -34,7 +35,10 @@ import {
   ChevronDown,
   Edit2,
   RefreshCw,
+  Filter,
+  ChevronRight,
 } from 'lucide-react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useState, useEffect, useMemo } from 'react';
 import {
   fetchAllTeamMembers,
@@ -121,6 +125,7 @@ export default function TeamPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterRoles, setFilterRoles] = useState<string[]>([]);
   const [filterStatus, setFilterStatus] = useState<'all' | 'actif' | 'inactif'>('all');
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -393,28 +398,28 @@ export default function TeamPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-black/10  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
-          <div className="min-w-0 w-full sm:flex-1 pl-20">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">Gestion de l&apos;Équipe</h1>
+      <header className="bg-black/10 border-b border-white/10 px-3 py-3 sm:px-6 sm:py-4 max-md:py-2 max-md:px-2 max-md:rounded-none md:rounded-tl-3xl">
+        <div className="flex flex-col gap-2 sm:gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
+          <div className="min-w-0 w-full sm:flex-1 pl-4 md:pl-20 max-md:pl-2">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <h1 className="text-base sm:text-2xl font-bold text-white sm:truncate max-md:truncate">Gestion de l&apos;Équipe</h1>
               {plan === 'solo' && (
-                <Badge variant="secondary" className="text-xs font-normal text-white/80 bg-white/10 border-white/20">
+                <Badge variant="secondary" className="text-xs font-normal text-white/80 bg-white/10 border-white/20 max-md:text-[10px] max-md:px-1.5 max-md:py-0">
                   Plan Pro requis
                 </Badge>
               )}
               {plan === 'pro' && (
-                <Badge variant="secondary" className="text-xs font-normal text-white/80 bg-white/10 border-white/20">
+                <Badge variant="secondary" className="text-xs font-normal text-white/80 bg-white/10 border-white/20 max-md:text-[10px] max-md:px-1.5 max-md:py-0">
                   {getRemainingQuota('team').label}
                 </Badge>
               )}
             </div>
-            <p className="text-xs sm:text-sm text-white/70 sm:truncate">Gérez les membres et leurs codes de connexion</p>
+            <p className="text-[11px] sm:text-sm text-white/70 sm:truncate max-md:line-clamp-1">Gérez les membres et leurs codes de connexion</p>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 w-full sm:w-auto">
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 w-full sm:w-auto max-md:min-w-0 max-md:flex-wrap">
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
               <Button
-                className="bg-white/20  text-white border border-white/10 hover:bg-white/30 max-md:min-h-[44px]"
+                className="bg-white/20 text-white border border-white/10 hover:bg-white/30 max-md:min-h-0 max-md:h-9 max-md:py-2 max-md:px-3 max-md:text-sm"
                 onClick={() => {
                   if (canDo('team')) {
                     setIsAddDialogOpen(true);
@@ -423,8 +428,8 @@ export default function TeamPage() {
                   }
                 }}
               >
-                <Plus className="h-4 w-4 mr-2" />
-                Ajouter un Membre
+                <Plus className="h-4 w-4 mr-2 max-md:h-3.5 max-md:w-3.5 max-md:mr-1.5" />
+                <span className="max-md:truncate">Ajouter un Membre</span>
               </Button>
               <DialogContent className={modalStyles + ' flex flex-col'}>
                 <DialogHeader>
@@ -549,13 +554,16 @@ export default function TeamPage() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-            <UserAccountButton variant="inline" />
+            <div className="max-md:hidden md:min-w-0 md:flex-shrink md:overflow-hidden">
+              <UserAccountButton variant="inline" />
+            </div>
           </div>
         </div>
       </header>
 
       <main className="flex-1 p-2 sm:p-4 space-y-6 overflow-x-hidden">
-        {/* Widget Stats */}
+        {/* Widget Stats — desktop only */}
+        <div className="hidden md:block">
         <Card className="bg-white/5  border border-white/10 text-white">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -585,11 +593,55 @@ export default function TeamPage() {
             </div>
           </CardContent>
         </Card>
+        </div>
 
         {/* Tableau */}
-        <Card className="bg-black/10  border border-white/10 text-white">
+        <Card className="bg-black/10 border border-white/10 text-white">
           <CardHeader>
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+            {/* Mobile: recherche + Filtres (Sheet) */}
+            <div className="md:hidden flex gap-1.5 mb-2">
+              <div className="relative flex-1 min-w-0">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/50" />
+                <Input placeholder="Rechercher..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className={inputStyles + ' pl-8 h-9 text-sm'} />
+              </div>
+              <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-9 w-9 shrink-0 bg-black/20 border-white/10 text-white hover:bg-white/10">
+                    <Filter className="h-3.5 w-3.5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="bottom" className="bg-gray-900 border-white/10 text-white max-h-[85vh] rounded-t-2xl">
+                  <SheetHeader><SheetTitle className="text-white">Filtres</SheetTitle></SheetHeader>
+                  <div className="grid gap-4 py-4">
+                    <div>
+                      <label className="text-xs text-white/60 mb-1.5 block">Rôle</label>
+                      <div className="space-y-2">
+                        {ROLES.map((r) => (
+                          <label key={r} className="flex items-center gap-2 cursor-pointer text-sm text-white">
+                            <Checkbox checked={filterRoles.includes(r)} onCheckedChange={(c) => toggleFilterRole(r, !!c)} className="border-white/30 data-[state=checked]:bg-violet-500" />
+                            {ROLE_ICONS[r] || ''} {r}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs text-white/60 mb-1.5 block">Statut</label>
+                      <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as 'all' | 'actif' | 'inactif')}>
+                        <SelectTrigger className="bg-black/20 border-white/10 text-white"><SelectValue /></SelectTrigger>
+                        <SelectContent className="bg-gray-900 border-white/10">
+                          <SelectItem value="all" className="text-white">Tous</SelectItem>
+                          <SelectItem value="actif" className="text-white">Actifs</SelectItem>
+                          <SelectItem value="inactif" className="text-white">Inactifs</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button onClick={() => setMobileFiltersOpen(false)} className="w-full bg-white/20 text-white hover:bg-white/30">Appliquer</Button>
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </div>
+            <p className="md:hidden text-xs text-white/60 mb-1.5">{filteredMembers.length} membre{filteredMembers.length !== 1 ? 's' : ''}</p>
+            <div className="hidden md:flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5 text-white/70" />
                 Membres de l&apos;Équipe
@@ -667,83 +719,47 @@ export default function TeamPage() {
               </div>
             ) : (
               <>
-                {/* Vue cartes - mobile uniquement */}
-                <div className="max-md:block md:hidden space-y-3">
+                {/* Liste mobile compacte */}
+                <div className="max-md:block md:hidden divide-y divide-white/10">
                   {filteredMembers.map((member) => {
                     const assignedIds = assignmentsMap[member.id] ?? [];
-                    const assignedChantiers = assignedIds.map((id) => chantierById(id)).filter(Boolean);
                     return (
-                      <div
-                        key={member.id}
-                        className="p-4 rounded-xl bg-white/5 border border-white/10 text-white"
-                      >
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-sm font-medium shrink-0">
-                              {getInitials(member.name)}
-                            </div>
-                            <span className="font-medium truncate">{member.name}</span>
+                      <div key={member.id} className="flex items-center gap-2 py-2.5 px-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleEditMember(member)}
+                          className="flex-1 flex items-center gap-2 min-w-0 text-left hover:bg-white/5 rounded-lg -mx-1 px-1.5 py-1.5"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-xs font-medium text-white shrink-0">
+                            {getInitials(member.name)}
                           </div>
-                          <Badge
-                            className={
-                              member.status === 'actif'
-                                ? 'bg-green-500/20 text-green-300 border-0 shrink-0'
-                                : 'bg-gray-500/20 text-gray-400 border-0 shrink-0'
-                            }
-                          >
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium text-white truncate text-sm">{member.name}</div>
+                            <div className="text-[11px] text-white/60 truncate">{ROLE_ICONS[member.role] || ''} {member.role} · {assignedIds.length} chantier{assignedIds.length !== 1 ? 's' : ''}</div>
+                          </div>
+                          <Badge className={member.status === 'actif' ? 'bg-green-500/20 text-green-300 border-0 shrink-0 text-[10px] px-1.5 py-0' : 'bg-gray-500/20 text-gray-400 border-0 shrink-0 text-[10px] px-1.5 py-0'}>
                             {member.status === 'actif' ? 'Actif' : 'Inactif'}
                           </Badge>
-                        </div>
-                        <Badge variant="secondary" className="mb-2 bg-white/10 text-white border-0">
-                          {ROLE_ICONS[member.role] || ''} {member.role}
-                        </Badge>
-                        <div className="text-sm text-white/90 truncate mb-1">{member.email}</div>
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="font-mono text-sm font-semibold">{member.login_code}</span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 min-w-[44px] text-white/70 hover:text-white"
-                            onClick={() => copyToClipboard(member.login_code, 'Code')}
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <div className="text-sm text-white/70 mb-3">
-                          Chantiers : {assignedIds.length > 0 ? assignedIds.length : '—'}
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="flex-1 min-h-[44px] text-white border-white/20 hover:bg-white/10"
-                            onClick={() => handleEditMember(member)}
-                          >
-                            <Edit2 className="h-4 w-4 mr-2" />
-                            Modifier
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="min-h-[44px] min-w-[44px] p-0 text-white border-white/20 hover:bg-white/10"
-                            onClick={() => handleGetInviteLink(member)}
-                            disabled={!!inviteLinkLoadingId}
-                          >
-                            {inviteLinkLoadingId === member.id ? (
-                              <span className="text-xs">...</span>
-                            ) : (
-                              <Share2 className="h-4 w-4" />
-                            )}
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="min-h-[44px] min-w-[44px] p-0 text-red-300 border-red-500/50 hover:bg-red-500/20"
-                            onClick={() => handleDeleteMember(member.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+                          <ChevronRight className="h-3.5 w-3.5 text-white/40 shrink-0" />
+                        </button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-white/70 hover:text-white" onClick={(e) => e.stopPropagation()}>
+                              <Share2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="bg-gray-900 border-white/10">
+                            <DropdownMenuItem className="text-white" onClick={() => handleGetInviteLink(member)} disabled={!!inviteLinkLoadingId}>
+                              Lien d&apos;invitation
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-white" onClick={() => copyToClipboard(member.login_code, 'Code')}>
+                              <Copy className="h-3.5 w-3.5 mr-2" /> Copier code
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-400" onClick={() => handleDeleteMember(member.id)}>
+                              <Trash2 className="h-3.5 w-3.5 mr-2" /> Supprimer
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     );
                   })}

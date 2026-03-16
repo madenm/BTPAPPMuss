@@ -203,9 +203,9 @@ export default function AIVisualizationPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-black/20  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4">
+      <header className="bg-black/20  border-b border-white/10 px-3 py-3 sm:px-6 sm:py-4 max-md:rounded-none">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0 sm:flex-nowrap">
-          <div className="min-w-0 w-full sm:flex-1 pl-20">
+          <div className="min-w-0 w-full sm:flex-1 pl-4 md:pl-20">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
               Visualisation
             </h1>
@@ -219,7 +219,9 @@ export default function AIVisualizationPage() {
             <Badge variant={step === 'generating' ? 'default' : 'secondary'}>3. Génér.</Badge>
             <Badge variant={step === 'result' ? 'default' : 'secondary'}>4. Résultat</Badge>
             </div>
-            <UserAccountButton variant="inline" />
+            <div className="max-md:hidden">
+              <UserAccountButton variant="inline" />
+            </div>
           </div>
         </div>
       </header>

@@ -50,7 +50,8 @@ import {
   type NewUserTariffPayload,
   type TariffCategory,
 } from "@/lib/supabaseTariffs";
-import { Plus, Pencil, Trash2, Upload, Download, Loader2, Search, MoreVertical, Copy, Tag, FileText, FileSpreadsheet, ChevronDown } from "lucide-react";
+import { Plus, Pencil, Trash2, Upload, Download, Loader2, Search, MoreVertical, Copy, Tag, FileText, FileSpreadsheet, ChevronDown, Filter, ChevronRight } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import * as XLSX from "xlsx";
 
 const CATEGORIES: TariffCategory[] = ["matériau", "service", "main-d'œuvre", "location", "sous-traitance", "transport", "équipement", "fourniture", "autre"];
@@ -348,6 +349,7 @@ export default function TarifsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const filteredTariffs = useMemo(() => {
     let result = tariffs;
@@ -530,15 +532,15 @@ export default function TarifsPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-black/20  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
+      <header className="bg-black/20  border-b border-white/10 px-3 py-3 sm:px-6 sm:py-4 max-md:rounded-none md:rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
-          <div className="min-w-0 w-full sm:flex-1 pl-20">
+          <div className="min-w-0 w-full sm:flex-1 pl-4 md:pl-20">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">Tarifs</h1>
             <p className="text-xs sm:text-sm text-white/70 sm:truncate">
               Gérez vos prix (matériaux, services) pour les devis et l'analyse IA
             </p>
           </div>
-          <div className="flex-shrink-0 w-full sm:w-auto">
+          <div className="flex-shrink-0 w-full sm:w-auto max-md:hidden">
             <UserAccountButton variant="inline" />
           </div>
         </div>
@@ -546,55 +548,72 @@ export default function TarifsPage() {
 
       <div className="w-full min-w-0 p-2 sm:p-4 pt-0 overflow-x-auto">
         <main className="space-y-6">
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              size="sm"
-              onClick={() => {
-                setEditingTariff(null);
-                setModalOpen(true);
-              }}
-              className="rounded-xl bg-violet-500 hover:bg-violet-600 text-white"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Ajouter un tarif
+          {/* Mobile: barre recherche + Filtres + actions */}
+          <div className="md:hidden flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input placeholder="Rechercher..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 h-11 rounded-xl border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800" />
+            </div>
+            <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="icon" className="h-11 w-11 shrink-0 rounded-xl bg-white/10 dark:bg-gray-800 border-white/20 text-white hover:bg-white/20">
+                  <Filter className="h-4 w-4" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="bottom" className="bg-gray-900 border-white/10 text-white max-h-[85vh] rounded-t-2xl">
+                <SheetHeader><SheetTitle className="text-white">Filtres</SheetTitle></SheetHeader>
+                <div className="grid gap-4 py-4">
+                  <div>
+                    <label className="text-xs text-white/60 mb-1.5 block">Catégorie</label>
+                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                      <SelectTrigger className="bg-black/20 border-white/10 text-white"><SelectValue placeholder="Catégorie" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all" className="text-white">Toutes</SelectItem>
+                        {CATEGORIES.map((c) => (
+                          <SelectItem key={c} value={c} className="text-white">{CATEGORY_BADGE[c].label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button onClick={() => setMobileFiltersOpen(false)} className="w-full bg-white/20 text-white hover:bg-white/30">Appliquer</Button>
+                </div>
+              </SheetContent>
+            </Sheet>
+            <Button size="icon" className="h-11 w-11 shrink-0 rounded-xl bg-violet-500 hover:bg-violet-600 text-white" onClick={() => { setEditingTariff(null); setModalOpen(true); }}>
+              <Plus className="h-4 w-4" />
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setImportOpen(true)}
-              className="rounded-xl bg-white/10  text-white border border-white/20 hover:bg-white/20"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              Importer
+            <Button variant="outline" size="icon" className="h-11 w-11 shrink-0 rounded-xl bg-white/10 border-white/20 text-white hover:bg-white/20" onClick={() => setImportOpen(true)}>
+              <Upload className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <div className="hidden md:flex flex-wrap items-center gap-3">
+            <Button size="sm" onClick={() => { setEditingTariff(null); setModalOpen(true); }} className="rounded-xl bg-violet-500 hover:bg-violet-600 text-white">
+              <Plus className="h-4 w-4 mr-2" /> Ajouter un tarif
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="rounded-xl bg-white/10 text-white border border-white/20 hover:bg-white/20">
+              <Upload className="h-4 w-4 mr-2" /> Importer
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="rounded-xl bg-white/10  text-white border border-white/20 hover:bg-white/20"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Télécharger un modèle
-                  <ChevronDown className="h-4 w-4 ml-1" />
+                <Button variant="outline" size="sm" className="rounded-xl bg-white/10 text-white border border-white/20 hover:bg-white/20">
+                  <Download className="h-4 w-4 mr-2" /> Télécharger un modèle <ChevronDown className="h-4 w-4 ml-1" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="bg-gray-900 border-white/10">
                 <DropdownMenuItem onClick={handleDownloadTemplateCsv} className="text-white focus:bg-white/10 focus:text-white cursor-pointer">
-                  <FileText className="h-4 w-4 mr-2" />
-                  Modèle CSV (.csv)
+                  <FileText className="h-4 w-4 mr-2" /> Modèle CSV (.csv)
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleDownloadTemplateExcel} className="text-white focus:bg-white/10 focus:text-white cursor-pointer">
-                  <FileSpreadsheet className="h-4 w-4 mr-2" />
-                  Modèle Excel (.xlsx)
+                  <FileSpreadsheet className="h-4 w-4 mr-2" /> Modèle Excel (.xlsx)
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
 
-          <Card className="bg-white/80 dark:bg-gray-800/80  border border-gray-200/50 dark:border-gray-700/50 shadow-xl rounded-2xl">
+          <Card className="bg-white/80 dark:bg-gray-800/80 border border-gray-200/50 dark:border-gray-700/50 shadow-xl rounded-2xl">
             <CardHeader className="space-y-0">
-              <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+              <div className="hidden md:flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                 <CardTitle className="text-gray-900 dark:text-white font-light flex items-center gap-2">
                   <Tag className="h-5 w-5 text-violet-500" />
                   Tous les tarifs
@@ -607,12 +626,7 @@ export default function TarifsPage() {
                 <div className="flex flex-wrap gap-2">
                   <div className="relative flex-1 sm:flex-initial min-w-[180px]">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
-                      placeholder="Rechercher un tarif..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-9 rounded-xl border-gray-200 dark:border-gray-700"
-                    />
+                    <Input placeholder="Rechercher un tarif..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 rounded-xl border-gray-200 dark:border-gray-700" />
                   </div>
                   <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                     <SelectTrigger className="w-[160px] rounded-xl border-gray-200 dark:border-gray-700">
@@ -621,9 +635,7 @@ export default function TarifsPage() {
                     <SelectContent>
                       <SelectItem value="all">Toutes</SelectItem>
                       {CATEGORIES.map((c) => (
-                        <SelectItem key={c} value={c}>
-                          {CATEGORY_BADGE[c].label}
-                        </SelectItem>
+                        <SelectItem key={c} value={c}>{CATEGORY_BADGE[c].label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -666,60 +678,104 @@ export default function TarifsPage() {
                   <p className="text-sm mt-1">Essayez un autre terme de recherche ou changez le filtre.</p>
                 </div>
               ) : (
-                <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-gray-50 dark:bg-gray-900/50">
-                        <TableHead className="rounded-tl-xl">Libellé</TableHead>
-                        <TableHead>Catégorie</TableHead>
-                        <TableHead>Unité</TableHead>
-                        <TableHead className="text-right">Prix HT (€)</TableHead>
-                        <TableHead className="text-right rounded-tr-xl w-[60px]">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredTariffs.map((t) => (
-                        <TableRow key={t.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                          <TableCell className="font-medium text-gray-900 dark:text-white">
-                            {t.label}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary" className={CATEGORY_BADGE[t.category]?.className ?? CATEGORY_BADGE.autre.className}>
-                              {CATEGORY_BADGE[t.category]?.label ?? t.category}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-gray-600 dark:text-gray-400">{t.unit}</TableCell>
-                          <TableCell className="text-right font-medium">
-                            {new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(t.price_ht))}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-44">
-                                <DropdownMenuItem onClick={() => { setEditingTariff(t); setModalOpen(true); }}>
-                                  <Pencil className="h-4 w-4 mr-2" />
-                                  Modifier
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleDuplicate(t)}>
-                                  <Copy className="h-4 w-4 mr-2" />
-                                  Dupliquer
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => setDeleteTarget(t)}>
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Supprimer
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
+                <>
+                  {/* Liste mobile */}
+                  <div className="md:hidden divide-y divide-gray-200 dark:divide-gray-700">
+                    {filteredTariffs.map((t) => (
+                      <div key={t.id} className="flex items-center gap-3 py-3 px-2">
+                        <button
+                          type="button"
+                          onClick={() => { setEditingTariff(t); setModalOpen(true); }}
+                          className="flex-1 flex items-center gap-3 min-w-0 text-left rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 -mx-2 px-2 py-2"
+                        >
+                          <div className="w-9 h-9 rounded-full bg-violet-500/20 flex items-center justify-center shrink-0">
+                            <Tag className="h-4 w-4 text-violet-500" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium text-gray-900 dark:text-white truncate">{t.label}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+                              <Badge variant="secondary" className={`${CATEGORY_BADGE[t.category]?.className ?? CATEGORY_BADGE.autre.className} text-[10px] px-1.5 py-0`}>
+                                {CATEGORY_BADGE[t.category]?.label ?? t.category}
+                              </Badge>
+                              <span>{t.unit}</span>
+                            </div>
+                          </div>
+                          <span className="font-semibold text-gray-900 dark:text-white shrink-0">
+                            {new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(t.price_ht))} €
+                          </span>
+                          <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
+                        </button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={(e) => e.stopPropagation()}>
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem onClick={() => { setEditingTariff(t); setModalOpen(true); }}>
+                              <Pencil className="h-4 w-4 mr-2" /> Modifier
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDuplicate(t)}>
+                              <Copy className="h-4 w-4 mr-2" /> Dupliquer
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => setDeleteTarget(t)}>
+                              <Trash2 className="h-4 w-4 mr-2" /> Supprimer
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Tableau desktop */}
+                  <div className="hidden md:block rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50 dark:bg-gray-900/50">
+                          <TableHead className="rounded-tl-xl">Libellé</TableHead>
+                          <TableHead>Catégorie</TableHead>
+                          <TableHead>Unité</TableHead>
+                          <TableHead className="text-right">Prix HT (€)</TableHead>
+                          <TableHead className="text-right rounded-tr-xl w-[60px]">Actions</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredTariffs.map((t) => (
+                          <TableRow key={t.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                            <TableCell className="font-medium text-gray-900 dark:text-white">{t.label}</TableCell>
+                            <TableCell>
+                              <Badge variant="secondary" className={CATEGORY_BADGE[t.category]?.className ?? CATEGORY_BADGE.autre.className}>
+                                {CATEGORY_BADGE[t.category]?.label ?? t.category}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-gray-600 dark:text-gray-400">{t.unit}</TableCell>
+                            <TableCell className="text-right font-medium">
+                              {new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(t.price_ht))}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0"><MoreVertical className="h-4 w-4" /></Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-44">
+                                  <DropdownMenuItem onClick={() => { setEditingTariff(t); setModalOpen(true); }}>
+                                    <Pencil className="h-4 w-4 mr-2" /> Modifier
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleDuplicate(t)}>
+                                    <Copy className="h-4 w-4 mr-2" /> Dupliquer
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => setDeleteTarget(t)}>
+                                    <Trash2 className="h-4 w-4 mr-2" /> Supprimer
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>

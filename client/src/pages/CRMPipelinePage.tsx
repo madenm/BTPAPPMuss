@@ -5,21 +5,21 @@ import { CRMPipeline } from '@/components/CRMPipeline';
 export default function CRMPipelinePage() {
   return (
     <PageWrapper>
-      <header className="bg-black/10  border-b border-white/5 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
+      <header className="bg-black/10  border-b border-white/5 px-3 py-3 sm:px-6 sm:py-4 max-md:rounded-none md:rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
-          <div className="min-w-0 w-full sm:flex-1 pl-20">
+          <div className="min-w-0 w-full sm:flex-1 pl-4 md:pl-20">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
               CRM Pipeline
             </h1>
             <p className="text-xs sm:text-sm text-white/70 sm:truncate">Gérez vos prospects et automatisez vos workflows</p>
           </div>
-          <div className="flex-shrink-0 w-full sm:w-auto">
+          <div className="flex-shrink-0 w-full sm:w-auto max-md:hidden">
             <UserAccountButton variant="inline" />
           </div>
         </div>
       </header>
 
-      <main className="flex-1 p-2 sm:p-4 space-y-6 overflow-x-hidden">
+      <main className="flex-1 p-3 sm:p-4 space-y-6 overflow-x-hidden">
         <CRMPipeline />
       </main>
     </PageWrapper>

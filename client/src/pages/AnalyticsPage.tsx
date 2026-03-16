@@ -14,7 +14,9 @@ export default function AnalyticsPage() {
             </h1>
             <p className="text-sm text-white/70">Analysez vos performances et optimisez votre activité</p>
           </div>
-          <UserAccountButton variant="inline" />
+          <div className="max-md:hidden">
+            <UserAccountButton variant="inline" />
+          </div>
         </div>
       </header>
 

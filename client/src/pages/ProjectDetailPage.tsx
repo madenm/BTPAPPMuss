@@ -485,7 +485,9 @@ export default function ProjectDetailPage() {
               >
                 Enregistrer
               </Button>
-              <UserAccountButton variant="inline" />
+              <div className="max-md:hidden">
+                <UserAccountButton variant="inline" />
+              </div>
             </div>
           </div>
 

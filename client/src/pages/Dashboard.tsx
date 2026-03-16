@@ -258,11 +258,11 @@ function OverviewTab() {
     <div className="space-y-6">
       {/* Welcome Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between min-w-0">
-        <div className="min-w-0 w-full sm:flex-1 pl-20">
-          <h1 className="text-2xl sm:text-4xl font-light tracking-tight text-white mb-1 drop-shadow-lg sm:truncate">
+        <div className="min-w-0 w-full sm:flex-1 pl-4 md:pl-20 max-md:pl-14 max-md:pr-24">
+          <h1 className="text-2xl sm:text-4xl font-light tracking-tight text-white mb-1 drop-shadow-lg sm:truncate max-md:break-words">
             {getGreeting()}{userName ? `, ${userName}` : ""}
           </h1>
-          <p className="text-white/70 drop-shadow-md text-sm sm:text-base flex items-center gap-2">
+          <p className="text-white/70 drop-shadow-md text-sm sm:text-base flex items-center gap-2 max-md:break-words">
             {new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
             {loading && (
               <span className="inline-flex items-center gap-1.5 text-white/50 text-xs">
@@ -272,11 +272,13 @@ function OverviewTab() {
             )}
           </p>
         </div>
-        <div className="flex-shrink-0 w-full sm:w-auto">
+        <div className="flex-shrink-0 w-full sm:w-auto max-md:hidden">
           <UserAccountButton variant="inline" />
         </div>
       </div>
 
+      {/* Desktop: cartes, graphiques, listes */}
+      <div className="hidden md:block space-y-6">
       {/* Alerts Section */}
       {loading ? (
         <Card className="bg-black/20  border border-white/10 shadow-xl rounded-2xl overflow-hidden">
@@ -701,6 +703,161 @@ function OverviewTab() {
             )}
           </CardContent>
         </Card>
+      </div>
+      </div>
+
+      {/* Vue mobile: listes et KPIs compacts */}
+      <div className="md:hidden space-y-4">
+        {loading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-20 w-full rounded-xl bg-white/10" />
+            <Skeleton className="h-24 w-full rounded-xl bg-white/10" />
+            <Skeleton className="h-32 w-full rounded-xl bg-white/10" />
+          </div>
+        ) : (
+          <>
+            {allAlerts.length > 0 && (
+              <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
+                <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10">
+                  <Bell className="h-4 w-4 text-amber-400" />
+                  <span className="text-sm font-medium text-white">Alertes</span>
+                  <Badge className="bg-amber-500/20 text-amber-300 border-0 text-xs">{allAlerts.length}</Badge>
+                </div>
+                <div className="divide-y divide-white/10">
+                  {allAlerts.slice(0, 5).map((alert) => (
+                    <button
+                      key={alert.id}
+                      type="button"
+                      onClick={() => alert.link && setLocation(alert.link)}
+                      className={`w-full flex items-center gap-3 py-2.5 px-3 text-left ${
+                        alert.type === "danger" ? "bg-red-500/5" : alert.type === "warning" ? "bg-amber-500/5" : "bg-blue-500/5"
+                      }`}
+                    >
+                      {alert.icon === "quote" && <FileText className="h-4 w-4 text-violet-400 shrink-0" />}
+                      {alert.icon === "invoice" && <Receipt className="h-4 w-4 text-emerald-400 shrink-0" />}
+                      {alert.icon === "project" && <Building className="h-4 w-4 text-blue-400 shrink-0" />}
+                      {alert.icon === "note" && <StickyNote className="h-4 w-4 text-amber-400 shrink-0" />}
+                      <span className="text-sm text-white truncate flex-1">{alert.title}</span>
+                      <ChevronRight className="h-4 w-4 text-white/40 shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setLocation("/dashboard/invoices")} className="flex items-center gap-2 p-3 rounded-xl bg-black/20 border border-white/10 text-white text-left">
+                <Euro className="h-5 w-5 text-violet-400 shrink-0" />
+                <div className="min-w-0">
+                  <div className="text-xs text-white/60">CA mois</div>
+                  <div className="text-sm font-semibold truncate">{formatCurrency(totalRevenue)}</div>
+                </div>
+              </button>
+              <button type="button" onClick={() => setLocation("/dashboard/projects")} className="flex items-center gap-2 p-3 rounded-xl bg-black/20 border border-white/10 text-white text-left">
+                <Building className="h-5 w-5 text-violet-400 shrink-0" />
+                <div className="min-w-0">
+                  <div className="text-xs text-white/60">Chantiers</div>
+                  <div className="text-sm font-semibold">{activeChantiers}{lateProjectsCount > 0 ? ` · ${lateProjectsCount} retard` : ""}</div>
+                </div>
+              </button>
+              <button type="button" onClick={() => setLocation("/dashboard/quotes")} className="flex items-center gap-2 p-3 rounded-xl bg-black/20 border border-white/10 text-white text-left">
+                <FileText className="h-5 w-5 text-violet-400 shrink-0" />
+                <div className="min-w-0">
+                  <div className="text-xs text-white/60">Devis attente</div>
+                  <div className="text-sm font-semibold">{pendingQuotes}</div>
+                </div>
+              </button>
+              <button type="button" onClick={() => setLocation("/dashboard/invoices")} className="flex items-center gap-2 p-3 rounded-xl bg-black/20 border border-white/10 text-white text-left">
+                <Wallet className="h-5 w-5 text-violet-400 shrink-0" />
+                <div className="min-w-0">
+                  <div className="text-xs text-white/60">À encaisser</div>
+                  <div className="text-sm font-semibold truncate">{formatCurrency(remainingToCollect)}</div>
+                </div>
+              </button>
+            </div>
+
+            {visiblePendingInvoices.length > 0 && (
+              <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
+                  <span className="text-sm font-medium text-white flex items-center gap-2">
+                    <CreditCard className="h-4 w-4 text-emerald-400" />
+                    Factures à encaisser
+                  </span>
+                  <Badge className="bg-emerald-500/20 text-emerald-300 border-0 text-xs">{visiblePendingInvoices.length}</Badge>
+                </div>
+                <div className="divide-y divide-white/10">
+                  {visiblePendingInvoices.slice(0, 5).map((inv) => {
+                    const remaining = Math.max(0, (inv.total_ttc ?? 0) - (inv.paidAmount ?? 0));
+                    const isOverdue = new Date(inv.due_date) < new Date();
+                    return (
+                      <button key={inv.id} type="button" onClick={() => setLocation("/dashboard/invoices")} className="w-full flex items-center gap-3 py-2.5 px-3 text-left hover:bg-white/5">
+                        <Receipt className={`h-4 w-4 shrink-0 ${isOverdue ? "text-red-400" : "text-emerald-400"}`} />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium text-white truncate">{inv.invoice_number}</div>
+                          <div className="text-xs text-white/60 truncate">{inv.client_name} · {new Date(inv.due_date).toLocaleDateString("fr-FR")}</div>
+                        </div>
+                        <span className="text-sm font-medium text-white shrink-0">{formatCurrency(remaining)}</span>
+                        <ChevronRight className="h-4 w-4 text-white/40 shrink-0" />
+                      </button>
+                    );
+                  })}
+                </div>
+                {visiblePendingInvoices.length > 5 && (
+                  <button type="button" onClick={() => setLocation("/dashboard/invoices")} className="w-full py-2 text-center text-xs text-white/50 hover:text-white/70">
+                    Voir tout →
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
+              <div className="px-3 py-2 border-b border-white/10 flex items-center gap-2">
+                <Activity className="h-4 w-4 text-violet-400" />
+                <span className="text-sm font-medium text-white">Activité récente</span>
+              </div>
+              {recentActivity.length === 0 ? (
+                <div className="py-6 text-center text-white/50 text-sm">Aucune activité</div>
+              ) : (
+                <div className="divide-y divide-white/10">
+                  {recentActivity.slice(0, 5).map((item) => (
+                    <div key={item.id} className="flex items-center gap-3 py-2.5 px-3">
+                      {item.type === "quote" && <FileText className="h-4 w-4 text-violet-400 shrink-0" />}
+                      {item.type === "invoice" && <Receipt className="h-4 w-4 text-emerald-400 shrink-0" />}
+                      {item.type === "project" && <Building className="h-4 w-4 text-blue-400 shrink-0" />}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-white truncate">{item.action} — {item.label}</p>
+                      </div>
+                      {item.amount != null && <span className="text-xs text-white/70 shrink-0">{new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 0 }).format(item.amount)}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
+              <div className="px-3 py-2 border-b border-white/10">
+                <span className="text-sm font-medium text-white">Raccourcis</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1 p-2">
+                <button type="button" onClick={() => setLocation("/dashboard/projects?openDialog=true")} className="flex items-center gap-2 py-2.5 px-3 rounded-lg text-white/80 hover:bg-white/5 text-left">
+                  <Plus className="h-4 w-4 shrink-0" /><span className="text-sm">Nouveau projet</span>
+                </button>
+                <button type="button" onClick={() => setLocation("/dashboard/quotes")} className="flex items-center gap-2 py-2.5 px-3 rounded-lg text-white/80 hover:bg-white/5 text-left">
+                  <FileText className="h-4 w-4 shrink-0" /><span className="text-sm">Devis</span>
+                </button>
+                <button type="button" onClick={() => setLocation("/dashboard/invoices")} className="flex items-center gap-2 py-2.5 px-3 rounded-lg text-white/80 hover:bg-white/5 text-left">
+                  <Receipt className="h-4 w-4 shrink-0" /><span className="text-sm">Facture</span>
+                </button>
+                <button type="button" onClick={() => setLocation("/dashboard/planning")} className="flex items-center gap-2 py-2.5 px-3 rounded-lg text-white/80 hover:bg-white/5 text-left">
+                  <Calendar className="h-4 w-4 shrink-0" /><span className="text-sm">Planning</span>
+                </button>
+                <button type="button" onClick={() => setLocation("/dashboard/team")} className="flex items-center gap-2 py-2.5 px-3 rounded-lg text-white/80 hover:bg-white/5 text-left col-span-2">
+                  <Users className="h-4 w-4 shrink-0" /><span className="text-sm">Équipe</span>
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

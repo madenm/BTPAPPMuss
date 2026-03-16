@@ -121,7 +121,8 @@ export function PlanningWeekView({
     <TooltipProvider delayDuration={300}>
       <Card className="bg-black/20  border border-white/10 text-white shadow-none min-w-0 overflow-hidden">
         <CardContent className="p-0">
-          <div className="grid grid-cols-1 lg:grid-cols-7 divide-y lg:divide-y-0 lg:divide-x divide-white/10">
+          {/* Mobile: scroll horizontal avec snap (un jour à la fois). Desktop: grille 7 colonnes */}
+          <div className="flex lg:grid lg:grid-cols-7 overflow-x-auto snap-x snap-mandatory lg:overflow-visible lg:snap-align-none divide-y lg:divide-y-0 lg:divide-x divide-white/10">
             {weekDays.map((day) => {
               const dateKey = toNoteDateKey(day);
               const isToday = day.toDateString() === todayStr;
@@ -133,7 +134,7 @@ export function PlanningWeekView({
               const hiddenCount = dayChantiers.length - MAX_VISIBLE_CARDS;
 
               return (
-                <div key={dateKey} className={`flex flex-col min-h-[400px] ${isToday ? 'bg-violet-500/5' : ''}`}>
+                <div key={dateKey} className={`flex flex-col min-h-[320px] lg:min-h-[400px] w-[85vw] min-w-[280px] max-w-[400px] lg:w-auto lg:min-w-0 lg:max-w-none shrink-0 snap-start lg:snap-align-none ${isToday ? 'bg-violet-500/5' : ''}`}>
                   {/* Day header — clean */}
                   <div className={`px-3 py-2 border-b border-white/10 flex items-center justify-between ${isToday ? 'bg-violet-500/10' : 'bg-white/5'}`}>
                     <div className="flex items-center gap-2">

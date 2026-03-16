@@ -43,7 +43,7 @@ export function PageWrapper({ children }: PageWrapperProps) {
             animate="animate"
             exit="exit"
             variants={contentVariants}
-            className="py-4 sm:py-6 lg:py-8 px-20 max-w-[100vw] min-w-0 overflow-x-auto max-md:pb-[env(safe-area-inset-bottom)] relative z-0 flex-1 min-h-0"
+            className="max-md:pb-2 sm:py-6 lg:py-8 px-3 sm:px-6 md:px-20 max-w-[100vw] min-w-0 overflow-x-auto max-md:pb-[env(safe-area-inset-bottom)] relative z-0 flex-1 min-h-0 max-md:pt-[calc(3.5rem+env(safe-area-inset-top,0px)+0.75rem)]"
           >
             <div className="w-full min-w-0 max-w-none">
               {children}

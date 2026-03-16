@@ -14,7 +14,9 @@ export default function ProspectsPage() {
             </h1>
             <p className="text-sm text-white/70">CRM intégré pour suivre vos leads</p>
           </div>
-          <UserAccountButton variant="inline" />
+          <div className="max-md:hidden">
+            <UserAccountButton variant="inline" />
+          </div>
         </div>
       </header>
 

@@ -1,4 +1,5 @@
 import { useMemo } from "react"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -31,6 +32,7 @@ import {
   XCircle,
   Eye,
   ArrowRight,
+  ChevronRight,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import type { Prospect, ProspectStage } from "@/lib/supabaseClients"
@@ -85,6 +87,7 @@ export function ProspectCard({
   quoteNumber,
   quoteAmount,
 }: ProspectCardProps) {
+  const isMobile = useIsMobile()
   const daysInStage = useMemo(() => getDaysInStage(prospect), [prospect])
   const stagnation = getStagnationLevel(daysInStage)
 
@@ -97,11 +100,81 @@ export function ProspectCard({
 
   const availableStages = STAGE_ORDER.filter((s) => s !== columnId)
 
+  if (isMobile) {
+    return (
+      <motion.div
+        layout
+        onClick={onOpenDetail}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => e.key === 'Enter' && onOpenDetail()}
+        className={`flex items-center gap-3 py-2.5 px-3 bg-black/30 border border-white/10 border-l-2 ${stagnationBorder} rounded-lg hover:bg-white/10 transition-colors text-white min-w-0 cursor-pointer`}
+      >
+        <div className="shrink-0 w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+          <FileText className="h-4 w-4 text-violet-400" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-medium text-sm text-white truncate">{prospect.name}</p>
+          <p className="text-xs text-white/60 truncate">{prospect.email}</p>
+        </div>
+        {quoteAmount !== undefined && (
+          <span className="text-sm font-semibold text-emerald-400 shrink-0">
+            {quoteAmount.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })}
+          </span>
+        )}
+        <ChevronRight className="h-4 w-4 text-white/40 shrink-0" />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0 rounded hover:bg-white/10 text-white/70 hover:text-white"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MoreVertical className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onClick={onOpenDetail}>
+              <Eye className="h-4 w-4 mr-2" />
+              Voir la fiche
+            </DropdownMenuItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <ArrowRight className="h-4 w-4 mr-2" />
+                Déplacer vers
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                {availableStages.map((stage) => (
+                  <DropdownMenuItem key={stage} onClick={() => onMoveToStage(stage)}>
+                    {stage === 'won' && <Trophy className="h-4 w-4 mr-2 text-green-400" />}
+                    {stage === 'lost' && <XCircle className="h-4 w-4 mr-2 text-red-400" />}
+                    {STAGE_LABELS[stage]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-red-400 focus:text-red-400"
+              onClick={(e) => { e.stopPropagation(); onRemove(e as unknown as React.MouseEvent); }}
+              disabled={removing}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Supprimer
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </motion.div>
+    )
+  }
+
   return (
     <motion.div
-      draggable
-      onDragStart={onDragStart}
-      className={`group relative shrink-0 p-3 pr-9 bg-black/30 border border-white/10 border-l-2 ${stagnationBorder} rounded-xl cursor-move hover:bg-white/10 transition-colors text-white overflow-hidden min-w-0`}
+      draggable={!isMobile}
+      onDragStart={isMobile ? undefined : onDragStart}
+      className={`group relative shrink-0 p-3 pr-9 bg-black/30 border border-white/10 border-l-2 ${stagnationBorder} rounded-xl ${isMobile ? "cursor-default" : "cursor-move"} hover:bg-white/10 transition-colors text-white overflow-hidden min-w-0`}
       layout
     >
       <DropdownMenu>
@@ -110,7 +183,7 @@ export function ProspectCard({
             type="button"
             variant="ghost"
             size="icon"
-            className="absolute right-1 top-1 h-6 w-6 rounded opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-white/10 text-white/70 hover:text-white transition-opacity"
+            className="absolute right-1 top-1 h-6 w-6 rounded opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 hover:bg-white/10 text-white/70 hover:text-white transition-opacity"
           >
             <MoreVertical className="h-3.5 w-3.5" />
           </Button>

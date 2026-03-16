@@ -718,9 +718,9 @@ export default function EstimationPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-black/20  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
+      <header className="bg-black/20  border-b border-white/10 px-3 py-3 sm:px-6 sm:py-4 max-md:rounded-none md:rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
-          <div className="min-w-0 w-full sm:flex-1 pl-20">
+          <div className="min-w-0 w-full sm:flex-1 pl-4 md:pl-20">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
                 Estimation Automatique
@@ -735,7 +735,7 @@ export default function EstimationPage() {
               {step === 1 ? 'Ajoutez des photos (optionnel)' : step === 2 ? 'Décrivez votre projet' : 'Résultats de l\'estimation'}
             </p>
           </div>
-          <div className="flex-shrink-0 w-full sm:w-auto">
+          <div className="flex-shrink-0 w-full sm:w-auto max-md:hidden">
             <UserAccountButton variant="inline" />
           </div>
         </div>
@@ -759,11 +759,30 @@ export default function EstimationPage() {
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-4 px-4 sm:px-6">
+                  {/* Mobile : zone compacte — bouton principal sans grande zone drag */}
+                  <div className="md:hidden space-y-3">
+                    <input id="photo-upload-mobile" type="file" accept="image/*" multiple onChange={handleFileInput} className="hidden" />
+                    <Button
+                      variant="outline"
+                      className="w-full min-h-[48px] text-white border-white/20 hover:bg-white/10 border-2 border-dashed rounded-xl"
+                      onClick={() => document.getElementById('photo-upload-mobile')?.click()}
+                      disabled={uploadingImages}
+                    >
+                      {uploadingImages ? (
+                        <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Envoi en cours...</>
+                      ) : (
+                        <><Upload className="h-5 w-5 mr-2" /> Sélectionner des photos</>
+                      )}
+                    </Button>
+                    <p className="text-xs text-white/50 text-center">Optionnel — vous pouvez passer à l’étape suivante</p>
+                  </div>
+
+                  {/* Desktop : zone glisser-déposer */}
                   <div
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
-                    className={`border-2 border-dashed rounded-xl p-6 sm:p-10 text-center transition-colors ${
+                    className={`hidden md:block border-2 border-dashed rounded-xl p-6 sm:p-10 text-center transition-colors ${
                       isDragging ? 'border-white/40 bg-white/10' : 'border-white/20 hover:border-white/30'
                     }`}
                   >
@@ -781,20 +800,20 @@ export default function EstimationPage() {
                       {images.map((image, index) => (
                         <div key={index} className="relative group">
                           <img src={image.preview} alt={`Photo ${index + 1}`} className="w-full h-28 object-cover rounded-lg border border-white/20" />
-                          <button onClick={() => { setPhotoAnalysis(null); removeImage(index); }} className="absolute top-1.5 right-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+                          <button onClick={() => { setPhotoAnalysis(null); removeImage(index); }} className="absolute top-1.5 right-1.5 bg-red-500/80 hover:bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity md:opacity-100 md:group-hover:opacity-100">×</button>
                         </div>
                       ))}
                     </div>
                   )}
 
-                  <div className="flex justify-between mt-4 gap-2">
-                    <Button variant="outline" onClick={() => setStep(2)} className="text-white/70 border-white/20 hover:bg-white/10">
-                      <SkipForward className="h-4 w-4 mr-2" />
-                      Passer cette étape
-                    </Button>
-                    <Button onClick={() => setStep(2)} className="bg-white/20 text-white border border-white/10 hover:bg-white/30">
+                  <div className="flex flex-col-reverse sm:flex-row justify-between mt-4 gap-2 sm:gap-2">
+                    <Button onClick={() => setStep(2)} className="min-h-[44px] bg-white/20 text-white border border-white/10 hover:bg-white/30 w-full sm:w-auto sm:order-2">
                       {images.length > 0 ? `Continuer avec ${images.length} photo${images.length > 1 ? 's' : ''}` : 'Continuer sans photo'}
                       <ArrowRight className="h-4 w-4 ml-2" />
+                    </Button>
+                    <Button variant="outline" onClick={() => setStep(2)} className="min-h-[44px] text-white/70 border-white/20 hover:bg-white/10 w-full sm:w-auto sm:order-1">
+                      <SkipForward className="h-4 w-4 mr-2" />
+                      Passer cette étape
                     </Button>
                   </div>
                 </CardContent>

@@ -14,7 +14,9 @@ export default function PaymentsPage() {
             </h1>
             <p className="text-sm text-white/70">Facturation et gestion de trésorerie</p>
           </div>
-          <UserAccountButton variant="inline" />
+          <div className="max-md:hidden">
+            <UserAccountButton variant="inline" />
+          </div>
         </div>
       </header>
 

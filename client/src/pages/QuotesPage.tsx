@@ -1651,9 +1651,9 @@ export default function QuotesPage() {
         />
       ) : (
         <>
-      <header className="bg-black/20  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
+      <header className="bg-black/20  border-b border-white/10 px-3 py-3 sm:px-6 sm:py-4 max-md:rounded-none md:rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
-          <div className="min-w-0 w-full sm:flex-1 pl-20">
+          <div className="min-w-0 w-full sm:flex-1 pl-4 md:pl-20">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
                 {editingQuoteId ? `Devis ${getQuoteDisplayNumber(listQuotes, editingQuoteId) || ''}` : 'Nouveau Devis'}
@@ -1672,7 +1672,7 @@ export default function QuotesPage() {
             <Button
               variant="outline"
               size="sm"
-              className="rounded-xl bg-white/20 text-white border-white/40 hover:bg-white/30 hover:border-white/50 max-md:min-h-[44px]"
+              className="rounded-xl bg-white/20 text-white border-white/40 hover:bg-white/30 hover:border-white/50 max-md:min-h-[44px] max-md:px-3 max-md:shrink-0"
               onClick={() => {
                 setForceListView(true);
                 keepFormVisibleRef.current = false;
@@ -1685,52 +1685,59 @@ export default function QuotesPage() {
               }}
               title="Voir tous les devis"
             >
-              <List className="h-4 w-4 mr-2" />
-              Voir tous les devis
+              <List className="h-4 w-4 md:mr-2 shrink-0" />
+              <span className="md:hidden">Liste</span>
+              <span className="hidden md:inline">Voir tous les devis</span>
             </Button>
             <Button
               size="sm"
-              className="rounded-xl bg-violet-500 hover:bg-violet-600 text-white max-md:min-h-[44px]"
+              className="rounded-xl bg-violet-500 hover:bg-violet-600 text-white max-md:min-h-[44px] max-md:px-3 max-md:shrink-0"
               onClick={handleNewQuote}
               data-testid="button-new-quote-form"
             >
-              <Plus className="h-4 w-4 mr-2" />
-              Nouveau devis
+              <Plus className="h-4 w-4 md:mr-2 shrink-0" />
+              <span className="md:hidden">Nouveau</span>
+              <span className="hidden md:inline">Nouveau devis</span>
             </Button>
             {effectiveStep === 3 && (
               <>
                 <Button
                   variant="outline"
                   size="sm"
-                  className={`rounded-xl border-white/40 hover:bg-white/30 hover:border-white/50 ${splitPreview ? 'bg-white/40 text-white' : 'bg-white/20 text-white'}`}
+                  className={`rounded-xl border-white/40 hover:bg-white/30 hover:border-white/50 max-md:min-h-[44px] max-md:px-3 ${splitPreview ? 'bg-white/40 text-white' : 'bg-white/20 text-white'}`}
                   onClick={() => setSplitPreview((p) => !p)}
+                  title="Split"
                 >
-                  <Columns2 className="h-4 w-4 mr-2" />
-                  Split
+                  <Columns2 className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Split</span>
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="rounded-xl bg-white/20 text-white border-white/40 hover:bg-white/30 hover:border-white/50"
+                  className="rounded-xl bg-white/20 text-white border-white/40 hover:bg-white/30 hover:border-white/50 max-md:min-h-[44px] max-md:px-3"
                   data-testid="button-preview"
                   onClick={() => setPreviewOpen(true)}
+                  title="Aperçu"
                 >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Aperçu
+                  <FileText className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Aperçu</span>
                 </Button>
-                <Button 
-                  size="sm" 
-                  onClick={handleDownloadPdf} 
+                <Button
+                  size="sm"
+                  onClick={handleDownloadPdf}
                   disabled={isGenerating || !user}
-                  className="bg-violet-500 hover:bg-violet-600 text-white rounded-xl disabled:opacity-50" 
+                  className="bg-violet-500 hover:bg-violet-600 text-white rounded-xl disabled:opacity-50 max-md:min-h-[44px] max-md:px-3 max-md:shrink-0"
                   data-testid="button-generate"
+                  title={isGenerating ? 'Téléchargement...' : 'Télécharger PDF'}
                 >
-                  <Download className="h-4 w-4 mr-2" />
-                  {isGenerating ? 'Téléchargement...' : 'Télécharger le devis en PDF'}
+                  <Download className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">{isGenerating ? 'Téléchargement...' : 'Télécharger le devis en PDF'}</span>
                 </Button>
               </>
             )}
-            <UserAccountButton variant="inline" />
+            <div className="max-md:hidden">
+              <UserAccountButton variant="inline" />
+            </div>
           </div>
         </div>
       </header>

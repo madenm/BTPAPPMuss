@@ -1,6 +1,7 @@
 import { PageWrapper } from '@/components/PageWrapper';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { UserAccountButton } from '@/components/UserAccountButton';
 import {
   ChevronLeft, ChevronRight, List, CalendarDays, Calendar as CalendarIcon,
@@ -13,6 +14,8 @@ import { toast } from '@/hooks/use-toast';
 import type { Chantier } from '@/context/ChantiersContext';
 import { ChantierEditDialog } from '@/components/ChantierEditDialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PlanningListView } from '@/components/PlanningListView';
 import { PlanningCalendarView } from '@/components/PlanningCalendarView';
 import { PlanningWeekView } from '@/components/PlanningWeekView';
@@ -69,6 +72,7 @@ export default function PlanningPage() {
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [memberFilter, setMemberFilter] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -277,19 +281,19 @@ export default function PlanningPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-black/20  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
+      <header className="bg-black/20  border-b border-white/10 px-3 py-3 sm:px-6 sm:py-4 max-md:rounded-none md:rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
-          <div className="min-w-0 w-full sm:flex-1 pl-20">
+          <div className="min-w-0 w-full sm:flex-1 pl-4 md:pl-20">
             <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">Planning des Projets</h1>
             <p className="text-xs sm:text-sm text-white/70 sm:truncate">Calendrier intégré pour organiser vos interventions</p>
           </div>
-          <div className="flex-shrink-0 w-full sm:w-auto">
+          <div className="flex-shrink-0 w-full sm:w-auto max-md:hidden">
             <UserAccountButton variant="inline" />
           </div>
         </div>
       </header>
 
-      <main className="flex-1 p-2 sm:p-4 space-y-4 sm:space-y-5 overflow-x-hidden">
+      <main className="flex-1 p-3 sm:p-4 space-y-4 sm:space-y-5 overflow-x-hidden">
 
         {/* --- Bandeau Aujourd'hui --- */}
         <Card className="bg-black/30  border border-white/10 text-white overflow-hidden">
@@ -306,7 +310,7 @@ export default function PlanningPage() {
                 </Badge>
               )}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-md:gap-2">
               {/* Chantiers du jour */}
               <div className="space-y-1.5">
                 <span className="text-xs font-medium text-white/60 uppercase tracking-wide">
@@ -364,11 +368,131 @@ export default function PlanningPage() {
         </Card>
 
         {/* --- Contrôles --- */}
-        <Card className="bg-black/20  border border-white/10 text-white min-w-0 overflow-hidden">
-          <CardHeader className="px-4 sm:px-6 pb-3">
-            <div className="flex items-center justify-between flex-wrap gap-3 sm:gap-4 min-w-0">
-              {/* Navigation période */}
-              <div className="flex items-center gap-3">
+        <Card className="bg-black/20 border border-white/10 text-white min-w-0 overflow-hidden">
+          <CardHeader className="px-2 py-2 sm:px-6 sm:pb-3 max-md:overflow-hidden">
+            {/* Mobile: une seule ligne, tout visible sans scroll */}
+            <div className="md:hidden flex items-center gap-1 min-w-0 w-full overflow-hidden">
+              <button type="button" onClick={goToPrevious} className="p-1 rounded-md text-white hover:bg-white/10 shrink-0" aria-label="Mois précédent">
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              {viewMode !== 'week' ? (
+                <Popover open={periodPickerOpen} onOpenChange={(open) => { setPeriodPickerOpen(open); if (open) setPickerYear(year); }}>
+                  <PopoverTrigger asChild>
+                    <button type="button" className="text-xs font-semibold text-white truncate min-w-0 flex-1 px-0.5 max-w-[40%]" aria-label="Changer la période">
+                      {periodLabel}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-56 bg-black/90 border border-white/10 text-white shadow-lg p-3">
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <button type="button" onClick={() => setPickerYear((y) => Math.max(2020, y - 1))} className="p-1 rounded text-white hover:bg-white/10 transition-colors"><ChevronLeft className="h-4 w-4" /></button>
+                      <span className="text-sm font-medium tabular-nums">{pickerYear}</span>
+                      <button type="button" onClick={() => setPickerYear((y) => Math.min(2030, y + 1))} className="p-1 rounded text-white hover:bg-white/10 transition-colors"><ChevronRight className="h-4 w-4" /></button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1">
+                      {monthNames.map((name, i) => (
+                        <button key={name} type="button" onClick={() => { setCurrentDate(new Date(pickerYear, i, 1)); setPeriodPickerOpen(false); }} className={`px-2 py-1.5 rounded text-sm text-left text-white hover:bg-white/10 transition-colors ${i === month && pickerYear === year ? 'bg-white/20' : ''}`}>
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                <span className="text-xs font-semibold text-white truncate flex-1 px-0.5 max-w-[40%]">{periodLabel}</span>
+              )}
+              <button type="button" onClick={goToNext} className="p-1 rounded-md text-white hover:bg-white/10 shrink-0" aria-label="Mois suivant">
+                <ChevronRight className="h-4 w-4" />
+              </button>
+              <div className="w-px h-4 bg-white/20 shrink-0" />
+              {([
+                { mode: 'list' as ViewMode, icon: List, label: 'Liste' },
+                { mode: 'week' as ViewMode, icon: CalendarIcon, label: 'Semaine' },
+                { mode: 'calendar' as ViewMode, icon: CalendarDays, label: 'Mois' },
+              ]).map(({ mode, icon: Icon, label }) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setViewMode(mode)}
+                  title={label}
+                  className={`p-1 rounded-md shrink-0 transition-colors ${viewMode === mode ? 'bg-violet-500 text-white' : 'text-white hover:bg-white/10'}`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                </button>
+              ))}
+              <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+                <SheetTrigger asChild>
+                  <button
+                    type="button"
+                    title="Filtres"
+                    className={`p-1 rounded-md shrink-0 transition-colors relative ${hasActiveFilters ? 'bg-violet-500/20 text-violet-300' : 'text-white hover:bg-white/10'}`}
+                  >
+                    <Filter className="h-3.5 w-3.5" />
+                    {hasActiveFilters && <span className="absolute top-0.5 right-0.5 w-1 h-1 rounded-full bg-violet-400" />}
+                  </button>
+                </SheetTrigger>
+                  <SheetContent side="bottom" className="bg-gray-900 border-white/10 text-white max-h-[85vh] rounded-t-2xl">
+                    <SheetHeader><SheetTitle className="text-white">Filtres planning</SheetTitle></SheetHeader>
+                    <div className="grid gap-4 py-4">
+                      <div>
+                        <label className="text-xs text-white/60 mb-1.5 block">Statut</label>
+                        <Select value={statutFilter} onValueChange={(v) => setStatutFilter(v as StatutFilter)}>
+                          <SelectTrigger className="bg-black/20 border-white/10 text-white"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all" className="text-white">Tous</SelectItem>
+                            <SelectItem value="planifié" className="text-white">Planifié</SelectItem>
+                            <SelectItem value="en cours" className="text-white">En cours</SelectItem>
+                            <SelectItem value="terminé" className="text-white">Terminé</SelectItem>
+                            <SelectItem value="en retard" className="text-white">En retard</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {activeTypes.length > 0 && (
+                        <div>
+                          <label className="text-xs text-white/60 mb-1.5 block">Type</label>
+                          <Select value={typeFilter} onValueChange={setTypeFilter}>
+                            <SelectTrigger className="bg-black/20 border-white/10 text-white"><SelectValue placeholder="Tous" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all" className="text-white">Tous</SelectItem>
+                              {activeTypes.map((t) => (
+                                <SelectItem key={t} value={t} className="text-white">{TYPE_CHANTIER_ICONS[t] ?? ''} {TYPE_CHANTIER_LABELS[t] ?? t}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      {allMembers.length > 0 && (
+                        <div>
+                          <label className="text-xs text-white/60 mb-1.5 block">Équipe</label>
+                          <Select value={memberFilter} onValueChange={setMemberFilter}>
+                            <SelectTrigger className="bg-black/20 border-white/10 text-white"><SelectValue placeholder="Tous" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all" className="text-white">Tous</SelectItem>
+                              {allMembers.map((m) => (
+                                <SelectItem key={m.id} value={m.id} className="text-white">{m.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      {hasActiveFilters && (
+                        <button type="button" onClick={() => { setStatutFilter('all'); setTypeFilter('all'); setMemberFilter('all'); }} className="text-sm text-red-400 hover:text-red-300">
+                          Réinitialiser les filtres
+                        </button>
+                      )}
+                      <Button onClick={() => setMobileFiltersOpen(false)} className="w-full bg-white/20 text-white hover:bg-white/30">
+                        Appliquer
+                      </Button>
+                    </div>
+                  </SheetContent>
+                </Sheet>
+              <button type="button" onClick={goToToday} title="Aujourd'hui" className="p-1 rounded-md shrink-0 text-white hover:bg-white/10" aria-label="Aujourd'hui">
+                <Clock className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {/* Desktop: deux lignes (nav période | vues + filtres + aujourd'hui) */}
+            <div className="hidden md:flex flex-row items-center justify-between flex-wrap gap-3 min-w-0">
+              <div className="flex items-center gap-2 min-w-0 shrink-0">
                 <button type="button" onClick={goToPrevious} className="p-2 rounded-lg text-white hover:bg-white/10 transition-colors" aria-label="Précédent">
                   <ChevronLeft className="h-5 w-5" />
                 </button>
@@ -379,7 +503,7 @@ export default function PlanningPage() {
                         {periodLabel}
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent align="start" className="w-56 bg-black/90  border border-white/10 text-white shadow-lg p-3">
+                    <PopoverContent align="start" className="w-56 bg-black/90 border border-white/10 text-white shadow-lg p-3">
                       <div className="flex items-center justify-between gap-2 mb-3">
                         <button type="button" onClick={() => setPickerYear((y) => Math.max(2020, y - 1))} className="p-1 rounded text-white hover:bg-white/10 transition-colors"><ChevronLeft className="h-4 w-4" /></button>
                         <span className="text-sm font-medium tabular-nums">{pickerYear}</span>
@@ -401,10 +525,8 @@ export default function PlanningPage() {
                   <ChevronRight className="h-5 w-5" />
                 </button>
               </div>
-
-              {/* Vue + filtres + aujourd'hui */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="flex gap-1">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="flex gap-1 shrink-0">
                   {([
                     { mode: 'list' as ViewMode, icon: List, label: 'Liste' },
                     { mode: 'week' as ViewMode, icon: CalendarIcon, label: 'Semaine' },
@@ -418,33 +540,33 @@ export default function PlanningPage() {
                         viewMode === mode ? 'bg-violet-500 text-white' : 'bg-white/10 text-white hover:bg-white/20 border border-white/10'
                       }`}
                     >
-                      <Icon className="h-4 w-4" />
-                      <span className="hidden sm:inline">{label}</span>
+                      <Icon className="h-4 w-4 shrink-0" />
+                      {label}
                     </button>
                   ))}
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowFilters((v) => !v)}
-                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-sm font-medium transition-colors border ${
+                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-sm font-medium transition-colors border shrink-0 ${
                     hasActiveFilters ? 'bg-violet-500/20 text-violet-300 border-violet-400/30' : 'bg-white/10 text-white hover:bg-white/20 border-white/10'
                   }`}
                 >
-                  <Filter className="h-4 w-4" />
-                  <span className="hidden sm:inline">Filtres</span>
+                  <Filter className="h-4 w-4 shrink-0" />
+                  Filtres
                   {hasActiveFilters && <span className="ml-1 w-2 h-2 rounded-full bg-violet-400" />}
                 </button>
-                <button onClick={goToToday} className="px-3 py-1.5 rounded-lg bg-white/10 text-white hover:bg-white/20 border border-white/10 transition-colors text-sm">
+                <button onClick={goToToday} className="px-3 py-1.5 rounded-lg bg-white/10 text-white hover:bg-white/20 border border-white/10 text-sm shrink-0">
                   Aujourd'hui
                 </button>
               </div>
             </div>
 
-            {/* Barre de filtres */}
+            {/* Barre de filtres (desktop) — mobile utilise le Sheet */}
             {showFilters && (
-              <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-white/10 mt-3">
+              <div className="hidden md:flex flex-wrap items-center gap-2 pt-3 border-t border-white/10 mt-3">
                 {/* Statut */}
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap shrink-0">
                   <span className="text-xs text-white/60 font-medium">Statut :</span>
                   {([
                     { val: 'all' as StatutFilter, label: 'Tous', color: 'bg-white/10 text-white' },
@@ -457,7 +579,7 @@ export default function PlanningPage() {
                       key={val}
                       type="button"
                       onClick={() => setStatutFilter(val)}
-                      className={`px-2 py-1 rounded text-xs font-medium transition-colors border ${
+                      className={`px-2 py-2 sm:py-1 rounded text-xs font-medium transition-colors border shrink-0 min-h-[36px] max-md:min-h-[44px] touch-manipulation ${
                         statutFilter === val ? color + ' ring-1 ring-white/30' : 'bg-white/5 text-white/60 border-white/10 hover:bg-white/10'
                       }`}
                     >
@@ -468,15 +590,15 @@ export default function PlanningPage() {
 
                 {/* Type */}
                 {activeTypes.length > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-white/60 font-medium ml-2">
+                  <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                    <span className="text-xs text-white/60 font-medium ml-0 md:ml-2">
                       <Building className="h-3 w-3 inline mr-0.5" />
                       Type :
                     </span>
                     <button
                       type="button"
                       onClick={() => setTypeFilter('all')}
-                      className={`px-2 py-1 rounded text-xs font-medium transition-colors border ${
+                      className={`px-2 py-2 sm:py-1 rounded text-xs font-medium transition-colors border min-h-[36px] max-md:min-h-[44px] touch-manipulation ${
                         typeFilter === 'all' ? 'bg-white/10 text-white ring-1 ring-white/30 border-white/20' : 'bg-white/5 text-white/60 border-white/10 hover:bg-white/10'
                       }`}
                     >
@@ -487,7 +609,7 @@ export default function PlanningPage() {
                         key={t}
                         type="button"
                         onClick={() => setTypeFilter(t)}
-                        className={`px-2 py-1 rounded text-xs font-medium transition-colors border ${
+                        className={`px-2 py-2 sm:py-1 rounded text-xs font-medium transition-colors border shrink-0 min-h-[36px] max-md:min-h-[44px] touch-manipulation ${
                           typeFilter === t ? 'bg-violet-500/20 text-violet-300 ring-1 ring-violet-400/40 border-violet-400/30' : 'bg-white/5 text-white/60 border-white/10 hover:bg-white/10'
                         }`}
                       >
@@ -499,15 +621,15 @@ export default function PlanningPage() {
 
                 {/* Membre */}
                 {allMembers.length > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-white/60 font-medium ml-2">
+                  <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                    <span className="text-xs text-white/60 font-medium ml-0 md:ml-2">
                       <Users className="h-3 w-3 inline mr-0.5" />
                       Équipe :
                     </span>
                     <button
                       type="button"
                       onClick={() => setMemberFilter('all')}
-                      className={`px-2 py-1 rounded text-xs font-medium transition-colors border ${
+                      className={`px-2 py-2 sm:py-1 rounded text-xs font-medium transition-colors border min-h-[36px] max-md:min-h-[44px] touch-manipulation ${
                         memberFilter === 'all' ? 'bg-white/10 text-white ring-1 ring-white/30 border-white/20' : 'bg-white/5 text-white/60 border-white/10 hover:bg-white/10'
                       }`}
                     >
@@ -518,7 +640,7 @@ export default function PlanningPage() {
                         key={m.id}
                         type="button"
                         onClick={() => setMemberFilter(m.id)}
-                        className={`px-2 py-1 rounded text-xs font-medium transition-colors border ${
+                        className={`px-2 py-2 sm:py-1 rounded text-xs font-medium transition-colors border shrink-0 min-h-[36px] max-md:min-h-[44px] touch-manipulation ${
                           memberFilter === m.id ? 'bg-violet-500/20 text-violet-300 ring-1 ring-violet-400/40 border-violet-400/30' : 'bg-white/5 text-white/60 border-white/10 hover:bg-white/10'
                         }`}
                       >

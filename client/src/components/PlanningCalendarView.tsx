@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -240,6 +240,18 @@ export function PlanningCalendarView({
     setDraftNote('');
   }, []);
 
+  const todayIndex = days.findIndex((d) => !d.isPlaceholder && d.isToday);
+  const firstDayIndex = days.findIndex((d) => !d.isPlaceholder);
+  const mobileDefaultIndex = todayIndex >= 0 ? todayIndex : firstDayIndex >= 0 ? firstDayIndex : null;
+  const mobileSelectedIndex = selectedDayIndex ?? mobileDefaultIndex;
+
+  useEffect(() => {
+    if (mobileSelectedIndex != null) {
+      const day = days[mobileSelectedIndex];
+      if (day && !day.isPlaceholder) setDraftNote(notesByDate[toNoteDateKey(day.date)] ?? '');
+    }
+  }, [mobileSelectedIndex, days, notesByDate]);
+
   const handleOpenDayPopover = useCallback((_index: number, date: Date) => {
     const key = toNoteDateKey(date);
     setDraftNote(notesByDate[key] ?? '');
@@ -252,23 +264,128 @@ export function PlanningCalendarView({
     }
   }, [onSaveNote, draftNote, closeDayPopover]);
 
+  const selectedDay = selectedDayIndex != null ? days[selectedDayIndex] : null;
+  const selectedDayChantiers = selectedDay ? getChantiersForDay(selectedDay.date) : [];
+  const selectedNoteKey = selectedDay ? toNoteDateKey(selectedDay.date) : '';
+  const selectedOverloaded = selectedDayChantiers.length >= 3;
+
+  const mobileDetailDay = mobileSelectedIndex != null ? days[mobileSelectedIndex] : null;
+  const mobileDetailChantiers = mobileDetailDay ? getChantiersForDay(mobileDetailDay.date) : [];
+  const mobileDetailNoteKey = mobileDetailDay ? toNoteDateKey(mobileDetailDay.date) : '';
+  const mobileDetailOverloaded = mobileDetailChantiers.length >= 3;
+
   return (
     <Card className="bg-black/20  border border-white/10 text-white shadow-none min-w-0 overflow-hidden">
       <CardContent className="px-2 py-4 sm:p-5">
         {/* Légende */}
-        <div className="flex flex-wrap items-center gap-3 text-xs text-white/70 pb-3 tracking-wide">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-white/70 pb-3 tracking-wide">
           <span className="flex items-center gap-1"><span className="w-3 h-1 rounded bg-blue-400" /> Planifié</span>
           <span className="flex items-center gap-1"><span className="w-3 h-1 rounded bg-amber-400" /> En cours</span>
           <span className="flex items-center gap-1"><span className="w-3 h-1 rounded bg-green-400" /> Terminé</span>
           <span className="flex items-center gap-1"><span className="w-3 h-1 rounded bg-red-500" /> En retard</span>
         </div>
 
-        <div className="md:overflow-x-auto md:-mx-5 md:px-0">
-          <div className="md:min-w-[630px] md:pr-5">
+        {/* Mobile: calendrier type iPhone — grille du mois + détail du jour en dessous */}
+        <div className="md:hidden space-y-4">
+          {/* Grille du mois (7 colonnes, comme iPhone) */}
+          <div className="w-full">
+            <div className="grid grid-cols-7 gap-0.5 text-center text-[11px] font-semibold text-white/70 pb-1">
+              {dayNames.map((d) => (
+                <div key={d} className="py-1">{d}</div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-0.5">
+              {days.map((day, index) => {
+                if (day.isPlaceholder) {
+                  return <div key={index} className="aspect-square min-h-0" aria-hidden />;
+                }
+                const dayChantiers = getChantiersForDay(day.date);
+                const hasEvents = dayChantiers.length > 0;
+                const isSelected = mobileSelectedIndex === index;
+                const isToday = day.isToday && day.isCurrentMonth;
+                return (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => {
+                      setSelectedDayIndex(index);
+                      handleOpenDayPopover(index, day.date);
+                    }}
+                    className={`aspect-square min-h-0 flex flex-col items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+                      !day.isCurrentMonth ? 'text-white/30' : 'text-white'
+                    } ${isSelected ? 'bg-violet-500 text-white' : isToday ? 'bg-white/20' : 'hover:bg-white/10'}`}
+                  >
+                    <span>{day.date.getDate()}</span>
+                    {hasEvents && (
+                      <span className="flex gap-0.5 mt-0.5">
+                        {dayChantiers.slice(0, 3).map((_, i) => (
+                          <span key={i} className={`w-1 h-1 rounded-full ${isSelected ? 'bg-white' : 'bg-violet-400'}`} />
+                        ))}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Détail du jour sélectionné (comme la liste du jour sous le calendrier iPhone) */}
+          {mobileDetailDay && (
+            <div className="border-t border-white/10 pt-4">
+              <h3 className="text-base font-semibold text-white mb-3">
+                {mobileDetailDay.date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </h3>
+              {mobileDetailOverloaded && (
+                <Badge className="mb-3 bg-orange-500/20 text-orange-300 border-orange-400/30 text-xs">
+                  <AlertTriangle className="h-3 w-3 mr-1" /> {mobileDetailChantiers.length} projets — surcharge
+                </Badge>
+              )}
+              {onSaveNote && (
+                <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-400/30">
+                  <label className="text-sm font-medium text-amber-300 flex items-center gap-1.5 mb-2">
+                    <StickyNote className="h-4 w-4 text-amber-400" />
+                    Note du jour
+                  </label>
+                  <Textarea
+                    placeholder="Ex : Romain intervient ; Réunion client 10h"
+                    value={draftNote}
+                    onChange={(e) => setDraftNote(e.target.value)}
+                    className="min-h-[80px] text-sm resize-y bg-black/20 border-white/20 text-white placeholder:text-white/40"
+                    rows={2}
+                  />
+                  <Button type="button" size="sm" className="mt-2 bg-amber-500/30 hover:bg-amber-500/50 text-amber-100 border border-amber-400/30" onClick={() => handleSaveDayNote(mobileDetailNoteKey)}>
+                    Enregistrer
+                  </Button>
+                </div>
+              )}
+              {mobileDetailChantiers.length === 0 ? (
+                <p className="text-sm text-white/60 py-2">Aucun projet ce jour</p>
+              ) : (
+                <div className="space-y-2">
+                  {mobileDetailChantiers.map((chantier) => (
+                    <ChantierBlockModal
+                      key={chantier.id}
+                      chantier={chantier}
+                      members={assignmentsByChantierId[chantier.id] ?? []}
+                      isUpdating={updatingChantierId === chantier.id}
+                      onEditChantier={onEditChantier}
+                      onStatusChange={onStatusChange}
+                      onClosePopover={() => {}}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Desktop: grille calendrier */}
+        <div className="hidden md:block overflow-x-auto -mx-5 px-0">
+          <div className="min-w-[630px] pr-5">
             {/* En-tête des jours */}
-            <div className="grid grid-cols-7 gap-0 border-b border-white/10 bg-white/5 px-1 md:px-5 py-2 md:py-4">
+            <div className="grid grid-cols-7 gap-0 border-b border-white/10 bg-white/5 px-0.5 md:px-5 py-2 md:py-4 min-w-[280px]">
               {dayNames.map((day) => (
-                <div key={day} className="text-center text-[10px] md:text-sm font-semibold text-white/80 tracking-wide border-r border-white/10 last:border-r-0 min-w-0">
+                <div key={day} className="text-center text-[10px] md:text-sm font-semibold text-white/80 tracking-wide border-r border-white/10 last:border-r-0 min-w-0 py-1">
                   {day}
                 </div>
               ))}
@@ -280,7 +397,7 @@ export function PlanningCalendarView({
             if (day.isPlaceholder) {
               const isLastInRow = index % 7 === 6;
               return (
-                <div key={index} className={'relative min-h-[52px] md:min-h-[140px] bg-white/5 border-r border-white/10 ' + (isLastInRow ? 'border-r-0' : '')} aria-hidden />
+                <div key={index} className={'relative min-h-[48px] md:min-h-[140px] bg-white/5 border-r border-white/10 ' + (isLastInRow ? 'border-r-0' : '')} aria-hidden />
               );
             }
 
@@ -294,7 +411,7 @@ export function PlanningCalendarView({
 
             const isLastInRow = index % 7 === 6;
             const cellClass =
-              'relative min-h-[52px] md:min-h-[140px] py-1 md:py-2 px-0.5 md:px-1 transition-all duration-200 cursor-pointer border-r border-white/10 ' +
+              'relative min-h-[48px] md:min-h-[140px] py-2 md:py-2 px-0.5 md:px-1 transition-all duration-200 cursor-pointer border-r border-white/10 touch-manipulation ' +
               (isLastInRow ? 'border-r-0 ' : '') +
               'hover:bg-white/10 ' +
               (day.isCurrentMonth

@@ -27,9 +27,10 @@ import { VoiceInputButton } from '@/components/VoiceInputButton';
 import { fetchInvoicesForUser, createInvoiceFromQuote, type InvoiceWithPayments } from '@/lib/supabaseInvoices';
 import { formatDurationFromDates } from '@/lib/planningUtils';
 import { InvoiceDialog } from '@/components/InvoiceDialog';
-import { Receipt, Check, Trash2, Search } from 'lucide-react';
+import { Receipt, Check, Trash2, Search, Filter } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { DeleteChantierConfirmDialog } from '@/components/DeleteChantierConfirmDialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { ProjectKpiBar } from '@/components/ProjectKpiBar';
 import { ProjectCard, type QuoteCountInfo } from '@/components/ProjectCard';
 import { usePlan } from '@/hooks/usePlan';
@@ -233,6 +234,7 @@ export default function ProjectsPage() {
   const [filterClient, setFilterClient] = useState<string>('tous');
   const [sortBy, setSortBy] = useState<SortOption>('date_desc');
   const [currentPage, setCurrentPage] = useState(1);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [assigneesByChantierId, setAssigneesByChantierId] = useState<Record<string, TeamMember[]>>({});
   const [chantierToDelete, setChantierToDelete] = useState<Chantier | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -833,9 +835,9 @@ export default function ProjectsPage() {
 
   return (
     <PageWrapper>
-      <header className="bg-black/20  border-b border-white/10 px-4 py-3 sm:px-6 sm:py-4 rounded-tl-3xl">
+      <header className="bg-black/20  border-b border-white/10 px-3 py-3 sm:px-6 sm:py-4 max-md:rounded-none md:rounded-tl-3xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:min-w-0">
-          <div className="min-w-0 w-full sm:flex-1 pl-20">
+          <div className="min-w-0 w-full sm:flex-1 pl-4 md:pl-20">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-lg sm:text-2xl font-bold text-white sm:truncate">
                 Mes Projets
@@ -1255,15 +1257,104 @@ export default function ProjectsPage() {
                 </div>
               </DialogContent>
             </Dialog>
-            <UserAccountButton variant="inline" />
+            <div className="max-md:hidden">
+              <UserAccountButton variant="inline" />
+            </div>
           </div>
         </div>
       </header>
 
-      {/* Barre recherche + filtres + tri */}
+      {/* Barre recherche + filtres — mobile: compacte + Sheet */}
       {chantiers.length > 0 && (
         <div className="px-4 sm:px-6 pt-4 pb-2 space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="md:hidden flex gap-2">
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
+              <Input
+                placeholder="Rechercher..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 bg-black/20 border-white/10 text-white placeholder:text-white/50 h-11 w-full"
+              />
+            </div>
+            <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="icon" className="h-11 w-11 shrink-0 bg-black/20 border-white/10 text-white hover:bg-white/10">
+                  <Filter className="h-4 w-4" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="bottom" className="bg-gray-900 border-white/10 text-white max-h-[85vh] rounded-t-2xl">
+                <SheetHeader>
+                  <SheetTitle className="text-white">Filtres & tri</SheetTitle>
+                </SheetHeader>
+                <div className="grid gap-4 py-4">
+                  <div>
+                    <label className="text-xs text-white/60 mb-1.5 block">Statut</label>
+                    <Select value={filterStatut} onValueChange={setFilterStatut}>
+                      <SelectTrigger className="bg-black/20 border-white/10 text-white">
+                        <SelectValue placeholder="Statut" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-gray-900 border-white/10">
+                        <SelectItem value="tous" className="text-white">Tous</SelectItem>
+                        <SelectItem value="planifié" className="text-white">Planifié</SelectItem>
+                        <SelectItem value="en cours" className="text-white">En cours</SelectItem>
+                        <SelectItem value="terminé" className="text-white">Terminé</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-white/60 mb-1.5 block">Type</label>
+                    <Select value={filterType} onValueChange={setFilterType}>
+                      <SelectTrigger className="bg-black/20 border-white/10 text-white">
+                        <SelectValue placeholder="Type" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-gray-900 border-white/10">
+                        <SelectItem value="tous" className="text-white">Tous</SelectItem>
+                        {Object.entries(TYPE_CHANTIER_LABELS).map(([k, v]) => (
+                          <SelectItem key={k} value={k} className="text-white">{v}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-white/60 mb-1.5 block">Client</label>
+                    <Select value={filterClient} onValueChange={setFilterClient}>
+                      <SelectTrigger className="bg-black/20 border-white/10 text-white">
+                        <SelectValue placeholder="Client" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-gray-900 border-white/10">
+                        <SelectItem value="tous" className="text-white">Tous</SelectItem>
+                        {clients.map((c) => (
+                          <SelectItem key={c.id} value={c.id} className="text-white">{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-white/60 mb-1.5 block">Tri</label>
+                    <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+                      <SelectTrigger className="bg-black/20 border-white/10 text-white">
+                        <SelectValue placeholder="Tri" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-gray-900 border-white/10">
+                        <SelectItem value="date_desc" className="text-white">Date récente ↓</SelectItem>
+                        <SelectItem value="date_asc" className="text-white">Date ancienne ↑</SelectItem>
+                        <SelectItem value="montant_desc" className="text-white">Montant ↓</SelectItem>
+                        <SelectItem value="montant_asc" className="text-white">Montant ↑</SelectItem>
+                        <SelectItem value="statut" className="text-white">Statut</SelectItem>
+                        <SelectItem value="nom" className="text-white">Nom A-Z</SelectItem>
+                        <SelectItem value="retard" className="text-white">En retard d'abord</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button onClick={() => setMobileFiltersOpen(false)} className="w-full bg-white/20 text-white hover:bg-white/30">
+                    Appliquer
+                  </Button>
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
+          <div className="hidden md:flex flex-wrap items-center gap-2">
             <div className="relative flex-1 min-w-0 w-full sm:min-w-[200px] sm:max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
               <Input
@@ -2084,25 +2175,66 @@ export default function ProjectsPage() {
           </div>
         ) : (
           <>
-            <ProjectKpiBar chantiers={chantiers} filteredCount={filteredSortedChantiers.length} />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {paginatedChantiers.map((chantier) => (
-                <ProjectCard
-                  key={chantier.id}
-                  chantier={chantier}
-                  enRetard={isChantierEnRetard(chantier)}
-                  assignees={assigneesByChantierId[chantier.id] ?? []}
-                  imageIndex={currentImageIndex[chantier.id] || 0}
-                  quoteCounts={quoteCounts[chantier.id] ?? { total: 0, pending: 0, validated: 0 }}
-                  invoiceCount={invoiceCounts[chantier.id] ?? 0}
-                  onImageIndexChange={(id, idx) => setCurrentImageIndex((prev) => ({ ...prev, [id]: idx }))}
-                  onEdit={(c) => handleEditChantier(c)}
-                  onEditDevis={(c) => handleEditChantier(c, true)}
-                  onDuplicate={handleDuplicateChantier}
-                  onQuickStatusChange={handleQuickStatusChange}
-                  onArchive={handleArchiveChantier}
-                />
-              ))}
+            {/* Mobile: liste compacte */}
+            <div className="md:hidden divide-y divide-white/10">
+              {paginatedChantiers.map((chantier) => {
+                const clientName = clients.find((c) => c.id === chantier.clientId)?.name ?? '—';
+                const enRetard = isChantierEnRetard(chantier);
+                return (
+                  <button
+                    key={chantier.id}
+                    type="button"
+                    onClick={() => handleEditChantier(chantier)}
+                    className="w-full flex items-center gap-3 py-3 px-2 -mx-2 rounded-lg hover:bg-white/5 active:bg-white/10 text-left transition-colors"
+                  >
+                    <div className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${
+                      enRetard ? 'bg-amber-500/80' : chantier.statut === 'terminé' ? 'bg-green-500/80' : chantier.statut === 'en cours' ? 'bg-blue-500/80' : 'bg-gray-500/80'
+                    }`}>
+                      <Building className="h-4 w-4 text-white" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium text-white truncate">{chantier.nom}</div>
+                      <div className="text-sm text-white/70 truncate flex items-center gap-1.5">
+                        <User className="h-3.5 w-3.5 text-white/50 shrink-0" />
+                        {clientName}
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <Badge variant="secondary" className="text-xs bg-white/10 text-white border-0 capitalize">
+                        {chantier.statut}
+                      </Badge>
+                      {chantier.montantDevis != null && (
+                        <div className="text-xs text-white/50 mt-0.5">{formatMontantEuro(chantier.montantDevis)}</div>
+                      )}
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-white/40 shrink-0" />
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Desktop: KPI + grille de cartes */}
+            <div className="hidden md:block">
+              <ProjectKpiBar chantiers={chantiers} filteredCount={filteredSortedChantiers.length} />
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {paginatedChantiers.map((chantier) => (
+                  <ProjectCard
+                    key={chantier.id}
+                    chantier={chantier}
+                    enRetard={isChantierEnRetard(chantier)}
+                    assignees={assigneesByChantierId[chantier.id] ?? []}
+                    imageIndex={currentImageIndex[chantier.id] || 0}
+                    quoteCounts={quoteCounts[chantier.id] ?? { total: 0, pending: 0, validated: 0 }}
+                    invoiceCount={invoiceCounts[chantier.id] ?? 0}
+                    onImageIndexChange={(id, idx) => setCurrentImageIndex((prev) => ({ ...prev, [id]: idx }))}
+                    onEdit={(c) => handleEditChantier(c)}
+                    onEditDevis={(c) => handleEditChantier(c, true)}
+                    onDuplicate={handleDuplicateChantier}
+                    onQuickStatusChange={handleQuickStatusChange}
+                    onArchive={handleArchiveChantier}
+                  />
+                ))}
+              </div>
             </div>
             {totalFiltered > PAGE_SIZE && (
               <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 px-2">
