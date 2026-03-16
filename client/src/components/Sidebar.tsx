@@ -60,17 +60,11 @@ export default function Sidebar() {
   };
 
   const itemVariants = {
-    closed: { x: -50, opacity: 0 },
-    open: (i: number) => ({
-      x: 0,
+    closed: { opacity: 0 },
+    open: {
       opacity: 1,
-      transition: {
-        delay: 0.1 + i * 0.08,
-        type: 'spring',
-        stiffness: 250,
-        damping: 25,
-      },
-    }),
+      transition: { duration: 0.15 },
+    },
   };
 
   const overlayVariants = {
