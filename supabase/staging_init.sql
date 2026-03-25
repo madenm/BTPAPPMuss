@@ -82,6 +82,7 @@ create table if not exists public.chantiers (
   images jsonb default '[]',
   statut text not null check (statut in ('planifié', 'en cours', 'terminé')),
   notes text,
+  -- CHECK type_chantier : appliquer migration chantiers_type_chantier_check_sync.sql (alignée app)
   type_chantier text,
   notes_avancement text,
   montant_devis numeric,

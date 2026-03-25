@@ -424,3 +424,52 @@ ALTER TABLE public.user_profiles
   ADD COLUMN IF NOT EXISTS plan text NOT NULL DEFAULT 'solo'
   CHECK (plan IN ('solo', 'pro'));
 COMMENT ON COLUMN public.user_profiles.plan IS 'Plan utilisateur : solo (limité) ou pro (illimité).';
+
+-- [20] chantiers_type_chantier_check_sync (même liste que l’app ; staging = prod)
+UPDATE public.chantiers
+SET type_chantier = 'autre'
+WHERE type_chantier IS NOT NULL
+  AND trim(type_chantier) <> ''
+  AND lower(trim(type_chantier)) NOT IN (
+    'piscine',
+    'paysage',
+    'menuiserie',
+    'renovation',
+    'plomberie',
+    'maconnerie',
+    'terrasse',
+    'chauffage',
+    'isolation',
+    'electricite',
+    'peinture',
+    'autre'
+  );
+
+ALTER TABLE public.chantiers
+  DROP CONSTRAINT IF EXISTS chantiers_type_chantier_check;
+
+ALTER TABLE public.chantiers
+  ADD CONSTRAINT chantiers_type_chantier_check
+  CHECK (
+    type_chantier IS NULL
+    OR trim(type_chantier) = ''
+    OR lower(trim(type_chantier)) = ANY (
+      ARRAY[
+        'piscine',
+        'paysage',
+        'menuiserie',
+        'renovation',
+        'plomberie',
+        'maconnerie',
+        'terrasse',
+        'chauffage',
+        'isolation',
+        'electricite',
+        'peinture',
+        'autre'
+      ]::text[]
+    )
+  );
+
+COMMENT ON CONSTRAINT chantiers_type_chantier_check ON public.chantiers IS
+  'Types alignés sur l''UI (dashboard/projets, devis). NULL ou chaîne vide acceptés.';
