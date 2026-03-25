@@ -34,6 +34,7 @@ import {
   type ChantierDocument,
   type ChantierDocumentType,
 } from '@/lib/supabaseChantierDocuments';
+import { fetchChantierById } from '@/lib/supabaseChantiers';
 import { formatDurationFromDates } from '@/lib/planningUtils';
 import { InvoiceDialog } from '@/components/InvoiceDialog';
 import { useToast } from '@/hooks/use-toast';
@@ -191,29 +192,81 @@ export default function ProjectDetailPage() {
   const [newDocAmountHt, setNewDocAmountHt] = useState<string>('');
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [docDeletingId, setDocDeletingId] = useState<string | null>(null);
+  const [chantierLoadError, setChantierLoadError] = useState(false);
+  const prevChantierIdRef = useRef<string | undefined>(undefined);
+  const remoteLoadedIdRef = useRef<string | null>(null);
+  const lastFailedIdRef = useRef<string | null>(null);
 
-  // Charger le chantier
+  function applyChantierToForm(found: Chantier) {
+    setChantier(found);
+    setEditChantier({
+      id: found.id,
+      nom: found.nom,
+      clientId: found.clientId,
+      clientName: found.clientName,
+      dateDebut: found.dateDebut,
+      dateFin: found.dateFin ?? '',
+      duree: found.duree,
+      images: [...found.images],
+      statut: found.statut,
+      notes: found.notes || '',
+      notesAvancement: found.notesAvancement || '',
+      typeChantier: found.typeChantier,
+      montantDevis: found.montantDevis,
+    });
+  }
+
+  // Charger le chantier (liste contexte ou fetch direct si absent — ex. lien depuis un devis)
   useEffect(() => {
     if (!chantierId) return;
+    const idChanged = prevChantierIdRef.current !== chantierId;
     const found = chantiers.find((c) => c.id === chantierId);
+
     if (found) {
-      setChantier(found);
-      setEditChantier({
-        id: found.id,
-        nom: found.nom,
-        clientId: found.clientId,
-        clientName: found.clientName,
-        dateDebut: found.dateDebut,
-        dateFin: found.dateFin ?? '',
-        duree: found.duree,
-        images: [...found.images],
-        statut: found.statut,
-        notes: found.notes || '',
-        notesAvancement: found.notesAvancement || '',
-        typeChantier: found.typeChantier,
-        montantDevis: found.montantDevis,
-      });
+      prevChantierIdRef.current = chantierId;
+      lastFailedIdRef.current = null;
+      remoteLoadedIdRef.current = chantierId;
+      setChantierLoadError(false);
+      applyChantierToForm(found);
+      return;
     }
+
+    if (idChanged) {
+      prevChantierIdRef.current = chantierId;
+      remoteLoadedIdRef.current = null;
+      lastFailedIdRef.current = null;
+      setChantierLoadError(false);
+      setChantier(null);
+    }
+
+    if (remoteLoadedIdRef.current === chantierId) return;
+    if (lastFailedIdRef.current === chantierId && !idChanged) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const one = await fetchChantierById(chantierId);
+        if (cancelled) return;
+        if (one) {
+          lastFailedIdRef.current = null;
+          remoteLoadedIdRef.current = chantierId;
+          applyChantierToForm(one);
+        } else {
+          setChantier(null);
+          lastFailedIdRef.current = chantierId;
+          setChantierLoadError(true);
+        }
+      } catch {
+        if (!cancelled) {
+          setChantier(null);
+          lastFailedIdRef.current = chantierId;
+          setChantierLoadError(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [chantierId, chantiers]);
 
   // Charger les membres et affectations
@@ -436,6 +489,25 @@ export default function ProjectDetailPage() {
       checked ? [...prev, memberId] : prev.filter((id) => id !== memberId)
     );
   };
+
+  if (chantierLoadError) {
+    return (
+      <PageWrapper>
+        <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-4">
+          <p className="text-white text-center">
+            Ce projet est introuvable ou vous n&apos;y avez pas accès.
+          </p>
+          <Button
+            type="button"
+            onClick={() => setLocation('/dashboard/projects')}
+            className="bg-violet-500 hover:bg-violet-600 text-white"
+          >
+            Retour aux projets
+          </Button>
+        </div>
+      </PageWrapper>
+    );
+  }
 
   if (!chantier) {
     return (

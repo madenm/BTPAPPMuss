@@ -1026,6 +1026,14 @@ export default function QuotesPage() {
     return result;
   }, [listQuotes, listProjectFilter, listSearchQuery]);
 
+  /** Chantier lié au devis : état local ou id persisté en base (liste), pour le lien « Accéder au chantier ». */
+  const linkedChantierIdForDevis = useMemo(
+    () =>
+      selectedChantierId ??
+      (editingQuoteId ? listQuotes.find((q) => q.id === editingQuoteId)?.chantier_id ?? null : null),
+    [selectedChantierId, editingQuoteId, listQuotes],
+  );
+
   // Fonction helper pour vérifier si le devis peut être sauvegardé
   const canSaveQuote = (): boolean => {
     if (!user?.id || step !== 3) return false;
@@ -2880,11 +2888,11 @@ export default function QuotesPage() {
                     Précédent
                   </Button>
                   <div className="flex items-center gap-2">
-                    {selectedChantierId ? (
+                    {linkedChantierIdForDevis ? (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setLocation(`/dashboard/projects?edit=${selectedChantierId}`)}
+                        onClick={() => setLocation(`/dashboard/projects/${linkedChantierIdForDevis}`)}
                         className="rounded-xl border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 shadow-sm dark:border-gray-600 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
                         type="button"
                       >

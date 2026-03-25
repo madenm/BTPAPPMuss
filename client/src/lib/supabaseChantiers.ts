@@ -155,6 +155,25 @@ export async function fetchChantiersForTeamMember(teamMemberId: string): Promise
   return rawArray.map((row: SupabaseChantier) => mapFromSupabase(row));
 }
 
+/** Charge un chantier par id (RLS). Utile quand la liste en contexte n’est pas encore à jour ou filtrée. */
+export async function fetchChantierById(chantierId: string): Promise<Chantier | null> {
+  const { data, error } = await supabase
+    .from("chantiers")
+    .select("*")
+    .eq("id", chantierId)
+    .maybeSingle();
+
+  if (error) {
+    if (isSupabaseTableMissing(error)) return null;
+    console.error("Error fetching chantier by id:", error);
+    return null;
+  }
+  if (!data) return null;
+  const row = data as SupabaseChantier;
+  if (row.is_deleted === true) return null;
+  return mapFromSupabase(row);
+}
+
 export async function insertChantier(
   userId: string,
   payload: NewChantierPayload,
