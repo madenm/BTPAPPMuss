@@ -108,7 +108,7 @@ export function ProspectCard({
         role="button"
         tabIndex={0}
         onKeyDown={(e) => e.key === 'Enter' && onOpenDetail()}
-        className={`flex items-center gap-3 py-2.5 px-3 bg-black/30 border border-white/10 border-l-2 ${stagnationBorder} rounded-lg hover:bg-white/10 transition-colors text-white min-w-0 cursor-pointer`}
+        className={`flex min-w-0 cursor-pointer items-center gap-3 rounded-lg border border-white/12 border-l-2 bg-slate-900/85 py-2.5 px-3 text-white transition-colors hover:bg-slate-800/90 ${stagnationBorder}`}
       >
         <div className="shrink-0 w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
           <FileText className="h-4 w-4 text-violet-400" />
@@ -174,7 +174,7 @@ export function ProspectCard({
     <motion.div
       draggable={!isMobile}
       onDragStart={isMobile ? undefined : onDragStart}
-      className={`group relative shrink-0 p-3 pr-9 bg-black/30 border border-white/10 border-l-2 ${stagnationBorder} rounded-xl ${isMobile ? "cursor-default" : "cursor-move"} hover:bg-white/10 transition-colors text-white overflow-hidden min-w-0`}
+      className={`group relative min-w-0 shrink-0 overflow-hidden rounded-xl border border-white/12 border-l-2 bg-slate-900/85 p-3 pr-9 text-white transition-colors hover:bg-slate-800/90 ${stagnationBorder} ${isMobile ? "cursor-default" : "cursor-move"}`}
       layout
     >
       <DropdownMenu>
