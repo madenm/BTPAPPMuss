@@ -20,7 +20,8 @@ import {
   type NewInvoicePayload,
 } from '@/lib/supabaseInvoices';
 import { fetchQuoteById } from '@/lib/supabaseQuotes';
-import { downloadInvoicePdf, fetchLogoDataUrl } from '@/lib/invoicePdf';
+import { downloadServerInvoicePdfFromPayload } from '@/lib/invoicePdf';
+import { supabase } from '@/lib/supabaseClient';
 import { useUserSettings } from '@/context/UserSettingsContext';
 import type { SupabaseInvoice } from '@/lib/supabaseInvoices';
 
@@ -81,7 +82,7 @@ export function InvoiceDialog({
   const effectiveUserId = useTeamEffectiveUserId();
   const userId = effectiveUserId ?? user?.id ?? null;
   const { clients, chantiers } = useChantiers();
-  const { logoUrl, profile, themeColor } = useUserSettings();
+  const { profile } = useUserSettings();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
@@ -230,25 +231,30 @@ export function InvoiceDialog({
     };
     setDownloadingPdf(true);
     try {
-      const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : null;
-      downloadInvoicePdf({
-        invoice: draftInvoice,
-        companyName: profile?.company_name || profile?.full_name || '',
-        companyAddress: profile?.company_address || '',
-        companyCityPostal: profile?.company_city_postal || '',
-        companyPhone: profile?.company_phone || '',
-        companyEmail: profile?.company_email || '',
-        companySiret: profile?.company_siret || '',
-        companyLegal: profile?.company_legal || undefined,
-        themeColor: themeColor || undefined,
-        logoDataUrl,
+      let freshSession = (await supabase.auth.getSession()).data.session;
+      if (!freshSession?.access_token?.trim()) {
+        const { data, error } = await supabase.auth.refreshSession();
+        if (!error && data.session?.access_token?.trim()) freshSession = data.session;
+      }
+      const accessToken = freshSession?.access_token?.trim() || null;
+      if (!accessToken) {
+        toast({
+          title: 'Session expirée',
+          description: 'Reconnectez-vous pour télécharger le PDF.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      await downloadServerInvoicePdfFromPayload({
+        accessToken,
+        invoice: { ...draftInvoice } as unknown as Record<string, unknown>,
       });
       toast({ title: 'PDF téléchargé' });
     } catch (error) {
       console.error('Error generating PDF:', error);
       toast({
         title: 'Erreur',
-        description: 'Impossible de générer le PDF',
+        description: error instanceof Error ? error.message : 'Impossible de générer le PDF',
         variant: 'destructive',
       });
     } finally {

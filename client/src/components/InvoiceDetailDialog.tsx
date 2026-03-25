@@ -28,7 +28,10 @@ import {
   deletePayment,
   type InvoiceWithPayments,
 } from '@/lib/supabaseInvoices';
-import { downloadInvoicePdf, fetchLogoDataUrl, buildInvoiceEmailHtml } from '@/lib/invoicePdf';
+import {
+  downloadServerInvoicePdfById,
+  buildInvoiceEmailNotificationHtml,
+} from '@/lib/invoicePdf';
 import { PaymentDialog } from './PaymentDialog';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -81,7 +84,7 @@ export function InvoiceDetailDialog({
   const effectiveUserId = useTeamEffectiveUserId();
   const userId = effectiveUserId ?? user?.id ?? null;
   const { chantiers } = useChantiers();
-  const { logoUrl, profile, themeColor } = useUserSettings();
+  const { profile } = useUserSettings();
   const { toast } = useToast();
   const [invoice, setInvoice] = useState<InvoiceWithPayments>(initialInvoice);
   const [loading, setLoading] = useState(false);
@@ -106,23 +109,33 @@ export function InvoiceDetailDialog({
     if (!userId) return;
 
     try {
-      const logoDataUrl = logoUrl ? await fetchLogoDataUrl(logoUrl) : null;
-      downloadInvoicePdf({
-        invoice,
-        companyName: profile?.company_name || profile?.full_name || '',
-        companyAddress: profile?.company_address || '',
-        companyCityPostal: profile?.company_city_postal || '',
-        companyPhone: profile?.company_phone || '',
-        companyEmail: profile?.company_email || '',
-        companySiret: profile?.company_siret || '',
-        themeColor: themeColor || undefined,
-        logoDataUrl,
+      let freshSession = (await supabase.auth.getSession()).data.session;
+      if (!freshSession?.access_token?.trim()) {
+        const { data, error } = await supabase.auth.refreshSession();
+        if (!error && data.session?.access_token?.trim()) freshSession = data.session;
+      }
+      const accessToken = freshSession?.access_token?.trim() || session?.access_token?.trim() || null;
+      if (!accessToken) {
+        toast({
+          title: 'Session expirée',
+          description: 'Reconnectez-vous pour télécharger le PDF.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      await downloadServerInvoicePdfById({
+        accessToken,
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoice_number,
+        clientName: invoice.client_name,
+        invoiceDate: invoice.invoice_date,
       });
+      toast({ title: 'PDF téléchargé' });
     } catch (error) {
       console.error('Error generating PDF:', error);
       toast({
         title: 'Erreur',
-        description: 'Impossible de générer le PDF',
+        description: error instanceof Error ? error.message : 'Impossible de générer le PDF',
         variant: 'destructive',
       });
     }
@@ -156,30 +169,10 @@ export function InvoiceDetailDialog({
         return;
       }
 
-      const emailHtml = buildInvoiceEmailHtml({
-        clientName: invoice.client_name ?? '',
-        clientEmail: invoice.client_email,
-        clientPhone: invoice.client_phone,
-        clientAddress: invoice.client_address,
+      const emailHtml = buildInvoiceEmailNotificationHtml({
+        clientName: invoice.client_name,
         invoiceNumber: invoice.invoice_number ?? '',
-        items: invoice.items ?? [],
-        subtotalHt: invoice.subtotal_ht ?? 0,
-        tvaAmount: invoice.tva_amount ?? 0,
-        total: invoice.total_ttc ?? 0,
-        dueDate: invoice.due_date ?? new Date().toISOString(),
-        paymentTerms: invoice.payment_terms ?? '',
-        companyName: profile?.company_name || profile?.full_name || undefined,
-        companyAddress: profile?.company_address,
-        companyCityPostal: profile?.company_city_postal,
-        companyPhone: profile?.company_phone,
-        companyEmail: profile?.company_email,
-        contactBlock: {
-          contactName: profile?.full_name,
-          phone: profile?.company_phone,
-          email: profile?.company_email,
-          address: profile?.company_address,
-          cityPostal: profile?.company_city_postal,
-        },
+        companyName: profile?.company_name || profile?.full_name || 'Votre entreprise',
       });
 
       const replyTo = profile?.company_email || user?.email || null;

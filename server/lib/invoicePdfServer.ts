@@ -42,8 +42,12 @@ function formatDate(dateStr: string): string {
   return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-function formatEur(n: number): string {
-  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(n);
+/** Montants pour le PDF : chiffres + espace milliers + virgule décimale + « EUR » (ASCII, évite NBSP / € mal rendus). */
+function formatMoneyPdf(n: number): string {
+  const v = Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+  const [intPart, dec = "00"] = v.toFixed(2).split(".");
+  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return `${grouped},${dec} EUR`;
 }
 
 type InvoiceRow = {
@@ -54,7 +58,7 @@ type InvoiceRow = {
   subItems?: { description?: string | null; quantity?: number; unitPrice?: number; total?: number }[];
 };
 
-type InvoiceForPdf = {
+export type InvoiceForPdf = {
   invoice_number?: string | null;
   invoice_date?: string | null;
   due_date?: string | null;
@@ -72,6 +76,7 @@ type InvoiceForPdf = {
 
 type ProfileForPdf = {
   full_name?: string | null;
+  company_name?: string | null;
   company_address?: string | null;
   company_city_postal?: string | null;
   company_phone?: string | null;
@@ -124,7 +129,10 @@ export async function generateInvoicePdfBuffer(
   const page = doc.addPage([PAGE_W, PAGE_H]);
   let y = PAGE_H - MARGIN;
 
-  const companyName = profile?.full_name ?? "Nom de l'entreprise";
+  const companyName =
+    (profile?.company_name && String(profile.company_name).trim()) ||
+    (profile?.full_name && String(profile.full_name).trim()) ||
+    "Nom de l'entreprise";
   const companyAddr = profile?.company_address ?? "";
   const companyCity = profile?.company_city_postal ?? "";
   const companySiret = profile?.company_siret ?? "";
@@ -167,6 +175,8 @@ export async function generateInvoicePdfBuffer(
     y -= LINE * 0.85;
   }
 
+  const yAfterLeftColumn = y;
+
   y = blockY;
   page.drawText(toWinAnsiSafe("Facturé à"), { x: colRightStart, y, size: FONT_SIZE, font: fontBold });
   y -= LINE;
@@ -187,9 +197,12 @@ export async function generateInvoicePdfBuffer(
     y -= LINE * 0.85;
   }
 
-  y -= LINE;
+  const yAfterRightColumn = y;
+
+  // Reprendre sous le bloc le plus bas (évite chevauchement avec l’émetteur / le client)
+  y = Math.min(yAfterLeftColumn, yAfterRightColumn) - LINE * 1.2;
   drawHLine(page, y, MARGIN, PAGE_W - MARGIN);
-  y -= LINE;
+  y -= LINE * 1.2;
 
   // ----- Dates et conditions -----
   page.drawText(toWinAnsiSafe(`Date d'échéance : ${formatDate(invoice.due_date ?? "")}`), { x: MARGIN, y, size: FONT_SIZE, font });
@@ -243,8 +256,8 @@ export async function generateInvoicePdfBuffer(
       const descLines = wrapText(item.description ?? "—", 42);
       for (let i = 0; i < descLines.length; i++) {
         page.drawText(descLines[i], { x: MARGIN, y, size: FONT_SIZE_SM, font });
-        const wMontant = font.widthOfTextAtSize(toWinAnsiSafe(formatEur(mainTotal)), FONT_SIZE_SM);
-        page.drawText(toWinAnsiSafe(formatEur(mainTotal)), { x: COL_MONTANT_END - wMontant, y, size: FONT_SIZE_SM, font });
+        const wMontant = font.widthOfTextAtSize(toWinAnsiSafe(formatMoneyPdf(mainTotal)), FONT_SIZE_SM);
+        page.drawText(toWinAnsiSafe(formatMoneyPdf(mainTotal)), { x: COL_MONTANT_END - wMontant, y, size: FONT_SIZE_SM, font });
         y -= subRowHeight;
       }
       for (const sub of subItems) {
@@ -253,26 +266,26 @@ export async function generateInvoicePdfBuffer(
         const subPu = sub.unitPrice ?? 0;
         const subTotal = sub.total ?? 0;
         const wQty = font.widthOfTextAtSize(String(subQty), FONT_SIZE_SM);
-        const wPu = font.widthOfTextAtSize(toWinAnsiSafe(formatEur(subPu)), FONT_SIZE_SM);
-        const wTot = font.widthOfTextAtSize(toWinAnsiSafe(formatEur(subTotal)), FONT_SIZE_SM);
+        const wPu = font.widthOfTextAtSize(toWinAnsiSafe(formatMoneyPdf(subPu)), FONT_SIZE_SM);
+        const wTot = font.widthOfTextAtSize(toWinAnsiSafe(formatMoneyPdf(subTotal)), FONT_SIZE_SM);
         page.drawText(toWinAnsiSafe(subDesc.slice(0, 45)), { x: MARGIN, y, size: FONT_SIZE_SM, font });
         page.drawText(String(subQty), { x: COL_QTY_END - wQty, y, size: FONT_SIZE_SM, font });
-        page.drawText(toWinAnsiSafe(formatEur(subPu)), { x: COL_PU_END - wPu, y, size: FONT_SIZE_SM, font });
-        page.drawText(toWinAnsiSafe(formatEur(subTotal)), { x: COL_MONTANT_END - wTot, y, size: FONT_SIZE_SM, font });
+        page.drawText(toWinAnsiSafe(formatMoneyPdf(subPu)), { x: COL_PU_END - wPu, y, size: FONT_SIZE_SM, font });
+        page.drawText(toWinAnsiSafe(formatMoneyPdf(subTotal)), { x: COL_MONTANT_END - wTot, y, size: FONT_SIZE_SM, font });
         y -= subRowHeight;
       }
     } else {
       const descLines = wrapText(item.description ?? "—", 42);
       const wQty = font.widthOfTextAtSize(String(qty), FONT_SIZE_SM);
-      const wPu = font.widthOfTextAtSize(toWinAnsiSafe(formatEur(pu)), FONT_SIZE_SM);
-      const wTot = font.widthOfTextAtSize(toWinAnsiSafe(formatEur(total)), FONT_SIZE_SM);
+      const wPu = font.widthOfTextAtSize(toWinAnsiSafe(formatMoneyPdf(pu)), FONT_SIZE_SM);
+      const wTot = font.widthOfTextAtSize(toWinAnsiSafe(formatMoneyPdf(total)), FONT_SIZE_SM);
       for (let i = 0; i < descLines.length; i++) {
         page.drawText(descLines[i], { x: MARGIN, y, size: FONT_SIZE_SM, font });
         const showAmount = i === 0;
         if (showAmount) {
           page.drawText(String(qty), { x: COL_QTY_END - wQty, y, size: FONT_SIZE_SM, font });
-          page.drawText(toWinAnsiSafe(formatEur(pu)), { x: COL_PU_END - wPu, y, size: FONT_SIZE_SM, font });
-          page.drawText(toWinAnsiSafe(formatEur(total)), { x: COL_MONTANT_END - wTot, y, size: FONT_SIZE_SM, font });
+          page.drawText(toWinAnsiSafe(formatMoneyPdf(pu)), { x: COL_PU_END - wPu, y, size: FONT_SIZE_SM, font });
+          page.drawText(toWinAnsiSafe(formatMoneyPdf(total)), { x: COL_MONTANT_END - wTot, y, size: FONT_SIZE_SM, font });
         }
         y -= subRowHeight;
       }
@@ -286,16 +299,16 @@ export async function generateInvoicePdfBuffer(
   // ----- Totaux -----
   const totalBoxLeft = PAGE_W - MARGIN - 160;
   page.drawText(toWinAnsiSafe("Total HT"), { x: totalBoxLeft, y, size: FONT_SIZE, font });
-  const wSub = font.widthOfTextAtSize(toWinAnsiSafe(formatEur(invoice.subtotal_ht ?? 0)), FONT_SIZE);
-  page.drawText(toWinAnsiSafe(formatEur(invoice.subtotal_ht ?? 0)), { x: COL_MONTANT_END - wSub, y, size: FONT_SIZE, font });
+  const wSub = font.widthOfTextAtSize(toWinAnsiSafe(formatMoneyPdf(invoice.subtotal_ht ?? 0)), FONT_SIZE);
+  page.drawText(toWinAnsiSafe(formatMoneyPdf(invoice.subtotal_ht ?? 0)), { x: COL_MONTANT_END - wSub, y, size: FONT_SIZE, font });
   y -= LINE;
   page.drawText(toWinAnsiSafe("TVA 20 %"), { x: totalBoxLeft, y, size: FONT_SIZE, font });
-  const wTva = font.widthOfTextAtSize(toWinAnsiSafe(formatEur(invoice.tva_amount ?? 0)), FONT_SIZE);
-  page.drawText(toWinAnsiSafe(formatEur(invoice.tva_amount ?? 0)), { x: COL_MONTANT_END - wTva, y, size: FONT_SIZE, font });
+  const wTva = font.widthOfTextAtSize(toWinAnsiSafe(formatMoneyPdf(invoice.tva_amount ?? 0)), FONT_SIZE);
+  page.drawText(toWinAnsiSafe(formatMoneyPdf(invoice.tva_amount ?? 0)), { x: COL_MONTANT_END - wTva, y, size: FONT_SIZE, font });
   y -= LINE;
   page.drawText(toWinAnsiSafe("Total TTC"), { x: totalBoxLeft, y, size: FONT_SIZE + 1, font: fontBold });
-  const wTtc = fontBold.widthOfTextAtSize(toWinAnsiSafe(formatEur(invoice.total_ttc ?? 0)), FONT_SIZE + 1);
-  page.drawText(toWinAnsiSafe(formatEur(invoice.total_ttc ?? 0)), { x: COL_MONTANT_END - wTtc, y, size: FONT_SIZE + 1, font: fontBold });
+  const wTtc = fontBold.widthOfTextAtSize(toWinAnsiSafe(formatMoneyPdf(invoice.total_ttc ?? 0)), FONT_SIZE + 1);
+  page.drawText(toWinAnsiSafe(formatMoneyPdf(invoice.total_ttc ?? 0)), { x: COL_MONTANT_END - wTtc, y, size: FONT_SIZE + 1, font: fontBold });
   y -= LINE * 1.5;
 
   // ----- Notes -----
@@ -311,15 +324,16 @@ export async function generateInvoicePdfBuffer(
   }
 
   // ----- Pied de page -----
-  y = MARGIN + 30;
-  drawHLine(page, y, MARGIN, PAGE_W - MARGIN, 0.3);
-  y -= LINE * 0.8;
+  let footY = MARGIN + 30;
+  drawHLine(page, footY, MARGIN, PAGE_W - MARGIN, 0.3);
+  footY -= LINE * 0.85;
   if (companySiret) {
-    page.drawText(toWinAnsiSafe(`SIRET : ${companySiret}`), { x: MARGIN, y, size: FONT_SIZE_SM, font });
+    page.drawText(toWinAnsiSafe(`SIRET : ${companySiret}`), { x: MARGIN, y: footY, size: FONT_SIZE_SM, font });
+    footY -= LINE * 0.85;
   }
   page.drawText(
     toWinAnsiSafe("TVA sur les débits - Paiement par virement, chèque ou espèces selon conditions."),
-    { x: MARGIN, y: MARGIN + 10, size: 7, font }
+    { x: MARGIN, y: footY, size: 7, font }
   );
 
   const pdfBytes = await doc.save();

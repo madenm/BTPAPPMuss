@@ -5,7 +5,7 @@ import { join, resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { storage } from "./storage";
 
-import { generateInvoicePdfBuffer } from "./lib/invoicePdfServer";
+import { generateInvoicePdfBuffer, type InvoiceForPdf } from "./lib/invoicePdfServer";
 import { getArtiprixForMetier } from "./lib/artiprixCatalog";
 import { getAiUsage, incrementAiUsage, getDailyLimit } from "./lib/aiUsage";
 import { getCacheKey, getCached, setCached } from "./lib/aiCache";
@@ -2638,11 +2638,10 @@ Règles :
     }
     const userIdVal = authResult.userId;
     const { id } = req.params;
-    const { to, subject, message, pdfBase64, replyTo } = req.body as {
+    const { to, subject, message, replyTo } = req.body as {
       to?: string;
       subject?: string;
       message?: string;
-      pdfBase64?: string;
       replyTo?: string | null;
     };
 
@@ -2665,18 +2664,18 @@ Règles :
       }
 
       let pdfBuffer: Buffer;
-      if (pdfBase64 && typeof pdfBase64 === "string") {
-        pdfBuffer = Buffer.from(pdfBase64, "base64");
-      } else {
-        try {
-          const { data: profile } = await supabase.from("user_profiles").select("full_name, company_address, company_city_postal, company_phone, company_email, company_siret").eq("id", userIdVal).single();
-          pdfBuffer = await generateInvoicePdfBuffer(invoice, profile ?? null);
-        } catch (pdfErr: unknown) {
-          const pdfMsg = pdfErr instanceof Error ? pdfErr.message : "Erreur génération PDF";
-          console.error("[send-email] generateInvoicePdfBuffer:", pdfErr);
-          res.status(500).json({ message: `Génération du PDF: ${pdfMsg}` });
-          return;
-        }
+      try {
+        const { data: profile } = await supabase
+          .from("user_profiles")
+          .select("full_name, company_name, company_address, company_city_postal, company_phone, company_email, company_siret")
+          .eq("id", userIdVal)
+          .single();
+        pdfBuffer = await generateInvoicePdfBuffer(invoice, profile ?? null);
+      } catch (pdfErr: unknown) {
+        const pdfMsg = pdfErr instanceof Error ? pdfErr.message : "Erreur génération PDF";
+        console.error("[send-email] generateInvoicePdfBuffer:", pdfErr);
+        res.status(500).json({ message: `Génération du PDF: ${pdfMsg}` });
+        return;
       }
 
       const resendApiKey = process.env.RESEND_API_KEY;
@@ -2717,7 +2716,43 @@ Règles :
     }
   });
 
-  // GET /api/invoices/:id/pdf - Générer PDF (retourne base64)
+  // POST /api/invoices/pdf — PDF identique à l’envoi mail (brouillon / prévisualisation)
+  app.post("/api/invoices/pdf", async (req: Request, res: Response) => {
+    if (!process.env.SUPABASE_URL && !process.env.VITE_SUPABASE_URL) {
+      res.status(503).json({ message: "Config manquante: définir SUPABASE_URL pour l'environnement Production dans Vercel (Settings → Environment Variables)." });
+      return;
+    }
+    const authResult = await getSupabaseAndUserWithError(req);
+    if ("error" in authResult) {
+      res.status(401).json({ message: "Non autorisé.", detail: authResult.error });
+      return;
+    }
+    const userId = authResult.userId;
+    const body = req.body as { invoice?: InvoiceForPdf };
+    if (!body.invoice || typeof body.invoice !== "object") {
+      res.status(400).json({ message: "Body invalide : champ « invoice » (objet facture) requis." });
+      return;
+    }
+    try {
+      const supabase = getSupabaseClient();
+      const { data: profile } = await supabase
+        .from("user_profiles")
+        .select("full_name, company_name, company_address, company_city_postal, company_phone, company_email, company_siret")
+        .eq("id", userId)
+        .single();
+      const pdfBuffer = await generateInvoicePdfBuffer(body.invoice, profile ?? null);
+      const num = String(body.invoice.invoice_number ?? "facture").replace(/[^\w.-]+/g, "_");
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="facture-${num}.pdf"`);
+      res.send(pdfBuffer);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur génération PDF";
+      console.error("[POST /api/invoices/pdf]", err);
+      res.status(500).json({ message });
+    }
+  });
+
+  // GET /api/invoices/:id/pdf — même PDF que l’email (téléchargement)
   app.get("/api/invoices/:id/pdf", async (req: Request, res: Response) => {
     if (!process.env.SUPABASE_URL && !process.env.VITE_SUPABASE_URL) {
       res.status(503).json({ message: "Config manquante: définir SUPABASE_URL pour l'environnement Production dans Vercel (Settings → Environment Variables)." });
@@ -2740,21 +2775,20 @@ Règles :
         return;
       }
 
-      // Récupérer les infos entreprise depuis user_profiles
       const { data: profile } = await supabase
         .from("user_profiles")
-        .select("company_address, company_city, company_phone, company_email, company_siret")
+        .select("full_name, company_name, company_address, company_city_postal, company_phone, company_email, company_siret")
         .eq("id", userId)
         .single();
 
-      // Le PDF sera généré côté client, cette route peut servir de proxy si nécessaire
-      // Pour l'instant, on retourne juste les données nécessaires
-      res.json({
-        invoice,
-        companyInfo: profile || {},
-      });
+      const pdfBuffer = await generateInvoicePdfBuffer(invoice as InvoiceForPdf, profile ?? null);
+      const num = String(invoice.invoice_number ?? "facture").replace(/[^\w.-]+/g, "_");
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="facture-${num}.pdf"`);
+      res.send(pdfBuffer);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Erreur serveur";
+      console.error("[GET /api/invoices/:id/pdf]", err);
       res.status(500).json({ message });
     }
   });
