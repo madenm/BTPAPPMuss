@@ -2264,7 +2264,7 @@ export default function QuotesPage() {
                               ? "Remplissez la « Description du projet » ci‑dessus puis cliquez sur Suivant pour que l'IA préremplisse le devis."
                               : "Si la coche est décochée, le devis ne sera pas prérempli : vous pourrez saisir les lignes manuellement à l'étape 3."}
                           </p>
-                          {!aiUsage.loading && (
+                          {plan === 'solo' && !aiUsage.loading && (
                             <p className={`text-xs ${aiUsage.remaining === 0 ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
                               {aiUsage.remaining === 0
                                 ? "Vous avez consommé votre utilisation journalière d'IA. Réessayez demain."

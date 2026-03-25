@@ -60,6 +60,45 @@ function extractJsonFromResponse(text: string): string {
   return trimmed;
 }
 
+/** Plusieurs stratégies pour récupérer un objet JSON depuis une réponse IA parfois bruitée. */
+function tryParseJsonObject(raw: string): Record<string, unknown> | null {
+  if (!raw || typeof raw !== "string") return null;
+  const candidates: string[] = [];
+  const extracted = extractJsonFromResponse(raw);
+  candidates.push(extracted);
+  const t = raw.trim();
+  if (t !== extracted) candidates.push(t);
+  const first = raw.indexOf("{");
+  const last = raw.lastIndexOf("}");
+  if (first >= 0 && last > first) {
+    const slice = raw.slice(first, last + 1);
+    if (!candidates.includes(slice)) candidates.push(slice);
+  }
+  for (const s of candidates) {
+    try {
+      const o = JSON.parse(s) as unknown;
+      if (o && typeof o === "object" && !Array.isArray(o)) return o as Record<string, unknown>;
+    } catch {
+      /* suivant */
+    }
+  }
+  return null;
+}
+
+const ESTIMATE_JSON_RETRY_SUFFIX =
+  "\n\nCONTRAINTE ABSOLUE (nouvelle tentative): ta réponse doit être UN SEUL objet JSON valide (RFC 8259), sans markdown, sans ```, sans texte avant ou après. Guillemets doubles pour les clés. Pas de virgule en trop avant } ou ].";
+
+function geminiErrorStatus(err: unknown): number | undefined {
+  return err && typeof (err as { status?: number }).status === "number" ? (err as { status: number }).status : undefined;
+}
+
+function isTransientGeminiError(err: unknown): boolean {
+  const s = geminiErrorStatus(err);
+  if (s === 429 || s === 503 || s === 500 || s === 502) return true;
+  const msg = err instanceof Error ? err.message.toLowerCase() : String(err ?? "").toLowerCase();
+  return msg.includes("timeout") || msg.includes("econnreset") || msg.includes("fetch failed") || msg.includes("temporarily");
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // put application routes here
   // prefix all routes with /api
@@ -829,7 +868,8 @@ CHAMPS OBLIGATOIRES:
 - confiance_explication: string courte
 - hypotheses: tableau de strings (hypothèses utilisées)
 
-Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marché estimés. Ne renvoie jamais de tableaux vides ni coutTotal à 0.`;
+Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marché estimés. Ne renvoie jamais de tableaux vides ni coutTotal à 0.
+Ne produis aucun texte, explication ou markdown en dehors de l'objet JSON.`;
 
     const geminiClient = getGeminiClient();
     if (!geminiClient) {
@@ -840,35 +880,70 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
       return;
     }
     try {
+      const gClient = geminiClient;
       const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash"] as const;
-      let raw = "";
-      let lastErr: unknown = null;
-      for (const model of modelsToTry) {
+      const MAX_ESTIMATE_ATTEMPTS = 3;
+
+      const generateEstimateRawOnce = async (contents: string): Promise<string> => {
+        let raw = "";
+        let lastErr: unknown = null;
+        for (const model of modelsToTry) {
+          try {
+            const response = await gClient.models.generateContent({
+              model,
+              contents,
+              config: {
+                systemInstruction,
+                responseMimeType: "application/json",
+              },
+            });
+            raw = response.text ?? "";
+            if (raw) return raw;
+          } catch (e) {
+            lastErr = e;
+            const status = geminiErrorStatus(e);
+            if (status === 404) continue;
+            throw e;
+          }
+        }
+        if (!raw && lastErr) throw lastErr;
+        return raw;
+      };
+
+      let parsedObj: Record<string, unknown> | null = null;
+      let usedHeuristicFallback = false;
+
+      for (let attempt = 0; attempt < MAX_ESTIMATE_ATTEMPTS; attempt++) {
+        const contents =
+          attempt === 0
+            ? userMessage
+            : userMessage + ESTIMATE_JSON_RETRY_SUFFIX + `\n(Tentative ${attempt + 1}/${MAX_ESTIMATE_ATTEMPTS})`;
         try {
-          const response = await geminiClient.models.generateContent({
-            model,
-            contents: userMessage,
-            config: {
-              systemInstruction,
-              responseMimeType: "application/json",
-            },
-          });
-          raw = response.text ?? "";
-          if (raw) break;
+          const raw = await generateEstimateRawOnce(contents);
+          if (raw && typeof raw === "string") {
+            parsedObj = tryParseJsonObject(raw);
+            if (parsedObj) break;
+          }
         } catch (e) {
-          lastErr = e;
-          const status = e && typeof (e as { status?: number }).status === "number" ? (e as { status: number }).status : undefined;
-          if (status === 404) continue;
+          if (attempt < MAX_ESTIMATE_ATTEMPTS - 1 && isTransientGeminiError(e)) {
+            await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+            continue;
+          }
           throw e;
         }
+        if (attempt < MAX_ESTIMATE_ATTEMPTS - 1) {
+          await new Promise((r) => setTimeout(r, 400));
+        }
       }
-      if (!raw && lastErr) throw lastErr;
-      raw = raw || "";
-      if (!raw || typeof raw !== "string") {
-        res.status(502).json({ message: "Réponse vide de l'IA." });
-        return;
+
+      if (!parsedObj) {
+        usedHeuristicFallback = true;
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[estimate-chantier] JSON non parsable après", MAX_ESTIMATE_ATTEMPTS, "tentatives — heuristiques");
+        }
+        parsedObj = {};
       }
-      const jsonStr = extractJsonFromResponse(raw);
+
       type MatRaw = { nom?: string; quantite?: string; prix?: number; prixUnitaire?: number; notes?: string };
       type RepRaw = { transport?: number; mainOeuvre?: number; materiaux?: number; autres?: number };
       type OutilLouer = { nom?: string; duree?: string; coutLocation?: number };
@@ -891,13 +966,7 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
         confiance?: number;
         confiance_explication?: string;
       };
-      let parsed: EstimateRaw;
-      try {
-        parsed = JSON.parse(jsonStr) as EstimateRaw;
-      } catch (parseErr) {
-        res.status(502).json({ message: "Réponse IA invalide (JSON)." });
-        return;
-      }
+      const parsed = parsedObj as EstimateRaw;
       const tempsRaw = parsed.tempsRealisation;
       let tempsRealisation = "Non estimé";
       let tempsRealisationDecomposition: { preparation?: string; travauxPrincipaux?: string; finitions?: string; imprevu?: string } | undefined;
@@ -1007,6 +1076,7 @@ Priorité des prix: 1) tarifs de l'artisan, 2) barème Artiprix, 3) prix du marc
       if (hypotheses?.length) analysisResults.hypotheses = hypotheses;
       if (confiance != null) analysisResults.confiance = confiance;
       if (confiance_explication) analysisResults.confiance_explication = confiance_explication;
+      if (usedHeuristicFallback) analysisResults.estimationHeuristique = true;
       await incrementAiUsage(auth.supabase, auth.userId);
       await setCached(auth.supabase, cacheKey, "estimation", analysisResults);
       const usageAfter = await getAiUsage(auth.supabase, auth.userId);

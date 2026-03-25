@@ -1009,7 +1009,7 @@ export default function EstimationPage() {
                     <div className="p-3 rounded-xl bg-red-500/15 border border-red-400/25 text-red-200 text-sm">{estimateError}</div>
                   )}
 
-                  {!aiUsage.loading && (
+                  {plan === 'solo' && !aiUsage.loading && (
                     <p className={`text-xs mt-2 ${aiUsage.remaining === 0 ? 'text-amber-300 font-medium' : 'text-white/60'}`}>
                       {aiUsage.remaining === 0
                         ? "Vous avez consommé votre utilisation journalière d'IA. Réessayez demain."
