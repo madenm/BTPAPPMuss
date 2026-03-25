@@ -54,8 +54,8 @@ export function QuoteModal({
   if (!open || !prospect) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-white/15 bg-slate-950 text-white shadow-2xl backdrop-blur-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <Card className="bg-black/20  border border-white/10 w-full max-w-2xl max-h-[90vh] overflow-y-auto text-white">
         <CardHeader>
           <CardTitle>Visualisation du Devis</CardTitle>
         </CardHeader>
@@ -86,7 +86,7 @@ export function QuoteModal({
                 />
                 <div
                   className={`mt-1 rounded-lg border-2 border-dashed p-4 text-center text-sm transition-colors ${
-                    dragOver ? "border-white/40 bg-white/10" : "border-white/20 bg-slate-900/70"
+                    dragOver ? "border-white/40 bg-white/10" : "border-white/20 bg-black/20"
                   }`}
                   onDragOver={(e) => { e.preventDefault(); onDragOverChange(true) }}
                   onDragLeave={() => onDragOverChange(false)}
@@ -123,7 +123,7 @@ export function QuoteModal({
                 ) : quotes.length === 0 ? (
                   <p className="text-sm text-white/60 mt-2">Aucun devis. Créez-en un depuis le Générateur de Devis.</p>
                 ) : (
-                  <div className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-white/12 bg-slate-900/70 p-2">
+                  <div className="mt-2 max-h-40 overflow-y-auto space-y-1 rounded-lg border border-white/10 bg-black/20 p-2">
                     {quotes.map((q) => (
                       <button
                         key={q.id}
@@ -156,12 +156,12 @@ export function QuoteModal({
               onChange={(e) => onCustomMessageChange(e.target.value)}
               onBlur={onCustomMessageBlur}
               placeholder={defaultMessage}
-              className="mt-1 min-h-[100px] resize-y border-white/15 bg-slate-900 text-white placeholder:text-white/40"
+              className="mt-1 min-h-[100px] bg-black/20 border-white/20 text-white placeholder:text-white/40 resize-y"
               rows={4}
             />
           </div>
 
-          <div className="rounded-lg border border-white/12 bg-slate-900/70 p-4">
+          <div className="border border-white/10 rounded-lg p-4 bg-black/20 ">
             <p className="text-sm font-medium mb-2">Aperçu</p>
             {pdfFile ? (
               <p className="text-sm text-white/70">Fichier : {pdfFile.name}</p>
@@ -228,8 +228,8 @@ export function InvoiceModal({
   if (!open || !prospect) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-white/15 bg-slate-950 text-white shadow-2xl backdrop-blur-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <Card className="bg-black/20  border border-white/10 w-full max-w-2xl max-h-[90vh] overflow-y-auto text-white">
         <CardHeader>
           <CardTitle>Envoi de la facture</CardTitle>
         </CardHeader>
@@ -245,7 +245,7 @@ export function InvoiceModal({
             ) : invoices.length === 0 ? (
               <p className="text-sm text-white/60 mt-2">Aucune facture. Créez-en une depuis la page Factures.</p>
             ) : (
-              <div className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-white/12 bg-slate-900/70 p-2">
+              <div className="mt-2 max-h-40 overflow-y-auto space-y-1 rounded-lg border border-white/10 bg-black/20 p-2">
                 {invoices.map((inv) => (
                   <button
                     key={inv.id}
@@ -275,7 +275,7 @@ export function InvoiceModal({
               onChange={(e) => onCustomMessageChange(e.target.value)}
               onBlur={onCustomMessageBlur}
               placeholder={defaultMessage}
-              className="mt-1 min-h-[100px] resize-y border-white/15 bg-slate-900 text-white placeholder:text-white/40"
+              className="mt-1 min-h-[100px] bg-black/20 border-white/20 text-white placeholder:text-white/40 resize-y"
               rows={4}
             />
           </div>
@@ -339,7 +339,7 @@ export function FollowupModal({
             <textarea
               id="followup-message"
               name="followupMessage"
-              className="min-h-[150px] w-full rounded-md border border-white/15 bg-slate-900 px-3 py-2 text-white placeholder:text-white/50"
+              className="w-full px-3 py-2 rounded-md border bg-black/20  border-white/10 text-white placeholder:text-white/50 min-h-[150px]"
               value={message}
               onChange={(e) => onMessageChange(e.target.value)}
               onBlur={onMessageBlur}

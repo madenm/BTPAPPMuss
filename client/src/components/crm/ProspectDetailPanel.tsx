@@ -127,7 +127,7 @@ export function ProspectDetailPanel({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="border border-white/15 bg-slate-950 text-white shadow-2xl max-w-lg max-h-[90vh] flex flex-col backdrop-blur-xl">
+      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col border border-white/10 bg-slate-950 text-white shadow-2xl">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             {prospect.stage === 'won' && <Trophy className="h-5 w-5 text-green-400" />}
@@ -175,19 +175,19 @@ export function ProspectDetailPanel({
               <div className="space-y-3">
                 <div>
                   <Label className="text-white/80 text-xs">Nom</Label>
-                  <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className="border-white/15 bg-slate-900 text-white" />
+                  <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className="bg-black/30 border-white/10 text-white" />
                 </div>
                 <div>
                   <Label className="text-white/80 text-xs">Email</Label>
-                  <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} className="border-white/15 bg-slate-900 text-white" />
+                  <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} className="bg-black/30 border-white/10 text-white" />
                 </div>
                 <div>
                   <Label className="text-white/80 text-xs">Téléphone</Label>
-                  <Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} className="border-white/15 bg-slate-900 text-white" />
+                  <Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} className="bg-black/30 border-white/10 text-white" />
                 </div>
                 <div>
                   <Label className="text-white/80 text-xs">Entreprise</Label>
-                  <Input value={form.company} onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))} className="border-white/15 bg-slate-900 text-white" />
+                  <Input value={form.company} onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))} className="bg-black/30 border-white/10 text-white" />
                 </div>
               </div>
             ) : (
@@ -245,11 +245,11 @@ export function ProspectDetailPanel({
                 value={form.notes}
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
                 rows={4}
-                className="border-white/15 bg-slate-900 text-white placeholder:text-white/40 resize-y"
+                className="bg-black/30 border-white/10 text-white placeholder:text-white/40 resize-y"
                 placeholder="Notes sur ce prospect..."
               />
             ) : (
-              <div className="min-h-[60px] rounded-lg border border-white/12 bg-slate-900/80 p-3">
+              <div className="p-3 rounded-lg bg-black/20 border border-white/10 min-h-[60px]">
                 {prospect.notes ? (
                   <p className="text-sm text-white/80 whitespace-pre-wrap">{prospect.notes}</p>
                 ) : (

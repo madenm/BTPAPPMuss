@@ -84,7 +84,7 @@ export function PipelineColumn({
 
   return (
     <Card
-      className={`bg-slate-950/90 backdrop-blur-md border ${borderColor} text-white shadow-xl shadow-black/40 ring-1 ring-white/10 w-full min-w-0 md:w-80 md:min-w-[20rem] md:h-[calc(100vh-12rem)] max-md:min-h-[280px] flex-shrink-0 snap-start overflow-hidden flex flex-col`}
+      className={`bg-black/20  border ${borderColor} text-white w-full min-w-0 md:w-80 md:min-w-[20rem] md:h-[calc(100vh-12rem)] max-md:min-h-[280px] flex-shrink-0 snap-start overflow-hidden flex flex-col`}
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
