@@ -1,8 +1,72 @@
 import { supabase, isSupabaseTableMissing } from "./supabaseClient";
 import type { Chantier } from "@/context/ChantiersContext";
 
-// Types de chantier (alignés sur les types de projet des devis)
+// Types de chantier (alignés sur les types de projet des devis + contrainte SQL chantiers_type_chantier_check)
 export type TypeChantier = "piscine" | "paysage" | "menuiserie" | "renovation" | "plomberie" | "maconnerie" | "terrasse" | "chauffage" | "isolation" | "electricite" | "peinture" | "autre";
+
+const CHANTIER_TYPE_SLUGS: TypeChantier[] = [
+  "piscine",
+  "paysage",
+  "menuiserie",
+  "renovation",
+  "plomberie",
+  "maconnerie",
+  "terrasse",
+  "chauffage",
+  "isolation",
+  "electricite",
+  "peinture",
+  "autre",
+];
+
+/** Libellés UI (même ordre que Projets / Devis) — sert à reconnaître un type stocké en texte libre. */
+const CHANTIER_TYPE_LABELS: Record<TypeChantier, string> = {
+  piscine: "Piscine & Spa",
+  paysage: "Aménagement Paysager",
+  menuiserie: "Menuiserie Sur-Mesure",
+  renovation: "Rénovation",
+  plomberie: "Plomberie",
+  maconnerie: "Maçonnerie",
+  terrasse: "Terrasse & Patio",
+  chauffage: "Chauffage & Climatisation",
+  isolation: "Isolation de la charpente",
+  electricite: "Électricité",
+  peinture: "Peinture & Revêtements",
+  autre: "Autre",
+};
+
+function foldAccents(s: string): string {
+  return s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+}
+
+/**
+ * Convertit tout libellé ou variante (ex. "Terrasse & Patio", "terrasse", typo "Terrasse & Potio")
+ * en slug autorisé par la base. Chaîne vide → null.
+ */
+export function normalizeTypeChantierForDb(raw: string | null | undefined): TypeChantier | null {
+  if (raw === undefined || raw === null) return null;
+  const t = raw.trim();
+  if (!t) return null;
+  const lower = t.toLowerCase();
+  if ((CHANTIER_TYPE_SLUGS as readonly string[]).includes(lower)) {
+    return lower as TypeChantier;
+  }
+  const folded = foldAccents(t);
+  for (const slug of CHANTIER_TYPE_SLUGS) {
+    if (foldAccents(CHANTIER_TYPE_LABELS[slug]) === folded) {
+      return slug;
+    }
+  }
+  const head = folded.split(/[&—\-]/)[0].trim();
+  if (head && (CHANTIER_TYPE_SLUGS as readonly string[]).includes(head)) {
+    return head as TypeChantier;
+  }
+  const firstWord = head.split(/\s+/)[0] ?? "";
+  if (firstWord && (CHANTIER_TYPE_SLUGS as readonly string[]).includes(firstWord)) {
+    return firstWord as TypeChantier;
+  }
+  return "autre";
+}
 
 // Représentation telle qu'enregistrée dans Supabase
 export interface SupabaseChantier {
@@ -139,7 +203,7 @@ export async function insertChantier(
     insertData.notes = payload.notes?.trim() || null;
   }
   if (payload.typeChantier !== undefined) {
-    insertData.type_chantier = payload.typeChantier?.trim() || null;
+    insertData.type_chantier = normalizeTypeChantierForDb(payload.typeChantier);
   }
   if (payload.notesAvancement !== undefined) {
     insertData.notes_avancement = payload.notesAvancement?.trim() || null;
@@ -189,7 +253,9 @@ export async function updateChantierRemote(
     updateData.notes = updates.notes || null;
   }
   if (updates.typeChantier !== undefined) {
-    updateData.type_chantier = updates.typeChantier || null;
+    updateData.type_chantier = normalizeTypeChantierForDb(
+      typeof updates.typeChantier === "string" ? updates.typeChantier : String(updates.typeChantier ?? ""),
+    );
   }
   if (updates.notesAvancement !== undefined) {
     updateData.notes_avancement = updates.notesAvancement || null;
