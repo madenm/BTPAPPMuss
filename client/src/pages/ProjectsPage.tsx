@@ -886,7 +886,7 @@ export default function ProjectsPage() {
                 <span className="hidden sm:inline">Ajouter un Projet</span>
                 <span className="sm:hidden">Ajouter</span>
               </Button>
-              <DialogContent className="bg-black/20  border border-white/10 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogContent className="max-w-2xl border border-white/10 bg-black/20 text-white">
                 <DialogHeader>
 <DialogTitle className="text-white">Nouveau Projet</DialogTitle>
             <DialogDescription className="text-white/70">
@@ -1426,7 +1426,7 @@ export default function ProjectsPage() {
           setIsEditDialogOpen(open);
         }}
       >
-        <DialogContent className="bg-black/20  border border-white/10 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl border border-white/10 bg-black/20 text-white">
           <DialogHeader>
             <DialogTitle className="text-white">Modifier le projet</DialogTitle>
             <DialogDescription className="text-white/70">
@@ -2104,7 +2104,7 @@ export default function ProjectsPage() {
           setSelectedQuoteForPreview(null);
         }
       }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+        <DialogContent className="flex max-h-[min(90vh,calc(100dvh-2rem))] min-h-0 max-w-2xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
           <DialogHeader>
             <DialogTitle className="text-xl font-semibold text-gray-900 dark:text-white">
               Aperçu du devis

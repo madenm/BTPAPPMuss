@@ -127,7 +127,7 @@ export function ProspectDetailPanel({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col border border-white/10 bg-slate-950 text-white shadow-2xl">
+      <DialogContent className="max-h-[min(90vh,calc(100dvh-2rem))] min-h-0 max-w-lg flex flex-col overflow-hidden border border-white/10 bg-slate-950 text-white shadow-2xl">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             {prospect.stage === 'won' && <Trophy className="h-5 w-5 text-green-400" />}
@@ -136,7 +136,7 @@ export function ProspectDetailPanel({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="overflow-y-auto flex-1 space-y-5 pr-1">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
           {/* Stage & Timeline */}
           <div className="flex flex-wrap items-center gap-2">
             {editing ? (

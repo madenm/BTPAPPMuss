@@ -268,17 +268,37 @@ function buildQuoteDoc(params: QuotePdfParams): jsPDF {
   const lastTable = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable;
   const finalY = lastTable?.finalY ?? y + 20;
 
+  /** finalY est sur la dernière page du tableau ; aligner la page courante (évite totaux hors page en prod). */
+  const tableEndPage = doc.getNumberOfPages();
+  doc.setPage(tableEndPage);
+
   const pageH = doc.internal.pageSize.getHeight();
   const totalsBoxHeight = 30;
   const signatureRectH = 20;
-  /** Du haut du bloc totaux au bas du cadre signature, + marge avant le pied (ligne à pageH - 10) */
-  /** totalsTop → bas du cadre signature : +30 (bloc) +6 +12 (offset) +20 (hauteur) = +68 */
-  const HEIGHT_TOTALS_TO_SIGNATURE_BOTTOM = totalsBoxHeight + 6 + 12 + signatureRectH;
-  const FOOTER_CLEARANCE_MM = 12;
-  const RESERVED_BELOW_TOTALS_TOP = HEIGHT_TOTALS_TO_SIGNATURE_BOTTOM + FOOTER_CLEARANCE_MM;
+  /** Du haut du bloc totaux au bas du cadre signature (aligné sur le tracé, sans marge fantôme). */
+  const FROM_TOTALS_TOP_TO_SIG_BOTTOM = totalsBoxHeight + 6 + 12 + signatureRectH;
+  const LAYOUT_BUFFER_MM = 4;
+
+  const siretStr = companySiret?.trim() ? `N° Siret : ${companySiret.trim()}` : "N° Siret : …";
+  const footerStr =
+    companyLegal?.trim() || `Société au capital de … € — ${siretStr} — RCS — N° TVA : …`;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  const footerLines = doc.splitTextToSize(footerStr, PAGE_W - 2 * MARGIN);
+  const FOOTER_LINE_H = 4;
+  const footerBlockH = Math.max(FOOTER_LINE_H, footerLines.length * FOOTER_LINE_H);
+  const GAP_SIG_TO_FOOTER = 12;
+  const PAGE_BOTTOM_SAFE = 6;
 
   const totalsTopIfSamePage = finalY + 6;
-  const needsFooterPage = totalsTopIfSamePage + RESERVED_BELOW_TOTALS_TOP > pageH - MARGIN;
+  const requiredBelowTotalsTop =
+    FROM_TOTALS_TOP_TO_SIG_BOTTOM + LAYOUT_BUFFER_MM + GAP_SIG_TO_FOOTER + footerBlockH + PAGE_BOTTOM_SAFE;
+  const projectedSigBottomSamePage = totalsTopIfSamePage + FROM_TOTALS_TOP_TO_SIG_BOTTOM;
+  const minLastFooterBaselineIfSamePage =
+    projectedSigBottomSamePage + GAP_SIG_TO_FOOTER + (footerLines.length - 1) * FOOTER_LINE_H;
+  const needsFooterPage =
+    totalsTopIfSamePage + requiredBelowTotalsTop > pageH ||
+    minLastFooterBaselineIfSamePage > pageH - PAGE_BOTTOM_SAFE;
 
   let totalsTop: number;
   let modalitiesTitleY: number;
@@ -354,14 +374,21 @@ function buildQuoteDoc(params: QuotePdfParams): jsPDF {
     height: signatureRectH,
   });
 
-  // ----- Footer (bas de page ; le saut de page ci-dessus évite tout chevauchement avec la signature) -----
-  const footerY = pageH - 10;
+  // ----- Footer : sous la signature, plusieurs lignes si texte légal long (évite chevauchement) -----
+  const signatureBottom = signatureRectY + signatureRectH;
+  const lastFooterBaselineMax = pageH - PAGE_BOTTOM_SAFE;
+  const firstFooterBaselineMin = signatureBottom + GAP_SIG_TO_FOOTER;
+  let firstFooterBaseline = lastFooterBaselineMax - (footerLines.length - 1) * FOOTER_LINE_H;
+  firstFooterBaseline = Math.max(firstFooterBaselineMin, firstFooterBaseline);
+  const lastFooterBaseline = firstFooterBaseline + (footerLines.length - 1) * FOOTER_LINE_H;
+  if (lastFooterBaseline > lastFooterBaselineMax) {
+    firstFooterBaseline = lastFooterBaselineMax - (footerLines.length - 1) * FOOTER_LINE_H;
+    firstFooterBaseline = Math.max(firstFooterBaselineMin, firstFooterBaseline);
+  }
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.setTextColor(100, 116, 139);
-  const siretStr = companySiret?.trim() ? `N° Siret : ${companySiret.trim()}` : "N° Siret : …";
-  const footerStr = companyLegal?.trim() || `Société au capital de … € — ${siretStr} — RCS — N° TVA : …`;
-  doc.text(footerStr, PAGE_W / 2, footerY, { align: "center" });
+  doc.text(footerLines, PAGE_W / 2, firstFooterBaseline, { align: "center" });
   doc.setTextColor(0, 0, 0);
 
   return doc;

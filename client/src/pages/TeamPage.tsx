@@ -393,7 +393,8 @@ export default function TeamPage() {
 
   const chantierById = (id: string) => chantiers.find((c) => c.id === id);
 
-  const modalStyles = 'bg-gray-900 border border-white/20 text-white rounded-2xl max-h-[90vh] overflow-y-auto shadow-xl backdrop-blur-sm';
+  const modalStyles =
+    'bg-gray-900 border border-white/20 text-white rounded-2xl max-h-[min(90vh,calc(100dvh-2rem))] min-h-0 overflow-hidden shadow-xl backdrop-blur-sm';
   const inputStyles = 'bg-black/10 border-white/10 text-white';
 
   return (
@@ -438,7 +439,7 @@ export default function TeamPage() {
                     Renseignez les informations et les permissions du membre
                   </DialogDescription>
                 </DialogHeader>
-                <div className="grid gap-4 py-4 flex-1 overflow-y-auto">
+                <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto py-4">
                   <div className="space-y-2">
                     <Label className="text-white">📝 Infos personnelles</Label>
                     <div className="grid gap-2">
@@ -925,13 +926,13 @@ export default function TeamPage() {
             </DialogDescription>
           </DialogHeader>
           {editingMember && (
-            <Tabs value={editTab} onValueChange={setEditTab} className="flex-1 overflow-hidden flex flex-col">
+            <Tabs value={editTab} onValueChange={setEditTab} className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <TabsList className="bg-black/10 border border-white/10 w-full grid grid-cols-3">
                 <TabsTrigger value="infos" className="data-[state=active]:bg-white/20">ℹ️ Infos</TabsTrigger>
                 <TabsTrigger value="chantiers" className="data-[state=active]:bg-white/20">👥 Projets</TabsTrigger>
                 <TabsTrigger value="permissions" className="data-[state=active]:bg-white/20">🔐 Permissions</TabsTrigger>
               </TabsList>
-              <TabsContent value="infos" className="mt-4 space-y-4 flex-1 overflow-y-auto">
+              <TabsContent value="infos" className="mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto">
                 <div className="grid gap-2">
                   <Label>Nom</Label>
                   <Input
@@ -1016,7 +1017,7 @@ export default function TeamPage() {
                   </Select>
                 </div>
               </TabsContent>
-              <TabsContent value="chantiers" className="mt-4 flex-1 overflow-y-auto">
+              <TabsContent value="chantiers" className="mt-4 min-h-0 flex-1 overflow-y-auto">
                 <div className="flex gap-2 mb-2">
                   <Button
                     variant="outline"
@@ -1060,7 +1061,7 @@ export default function TeamPage() {
                   </div>
                 )}
               </TabsContent>
-              <TabsContent value="permissions" className="mt-4 flex-1 overflow-y-auto">
+              <TabsContent value="permissions" className="mt-4 min-h-0 flex-1 overflow-y-auto">
                 <div className="space-y-2">
                   {PERMISSION_LABELS.map(({ key, label }) => (
                     <label key={key} className="flex items-center gap-2 cursor-pointer text-sm">
@@ -1097,11 +1098,11 @@ export default function TeamPage() {
           if (!open) setInviteModalMember(null);
         }}
       >
-        <DialogContent className={modalStyles}>
+        <DialogContent className={modalStyles + ' flex flex-col'}>
           <DialogHeader>
             <DialogTitle>Inviter {inviteModalMember?.name ?? ''}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
             <div>
               <Label className="text-white">Code de connexion</Label>
               <div className="flex gap-2 mt-1">

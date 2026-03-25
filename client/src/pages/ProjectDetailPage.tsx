@@ -1166,7 +1166,7 @@ export default function ProjectDetailPage() {
 
       {/* Dialog de prévisualisation de devis */}
       <Dialog open={isQuotePreviewOpen} onOpenChange={setIsQuotePreviewOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] bg-black/20  border border-white/10">
+        <DialogContent className="max-w-2xl border border-white/10 bg-black/20">
           <DialogHeader>
             <DialogTitle className="text-white">Aperçu du devis</DialogTitle>
           </DialogHeader>

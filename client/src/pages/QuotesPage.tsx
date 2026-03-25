@@ -1743,42 +1743,44 @@ export default function QuotesPage() {
       </header>
 
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+        <DialogContent className="flex max-h-[min(90vh,calc(100dvh-2rem))] min-h-0 max-w-2xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
           <DialogHeader>
             <DialogTitle className="text-xl font-semibold text-gray-900 dark:text-white">
               Aperçu du Devis
             </DialogTitle>
           </DialogHeader>
-          <QuotePreview
-            quote={{
-              client_name: clientInfo.name || null,
-              client_email: clientInfo.email || null,
-              client_phone: clientInfo.phone || null,
-              client_address: clientInfo.address || null,
-              project_type: projectType || null,
-              project_description: projectDescription || null,
-              validity_days: parseInt(validityDays, 10) || 30,
-              items,
-              total_ht: subtotalAfterDiscount,
-              total_ttc: total,
-            }}
-            accentColor={accentColor}
-            logoUrl={logoUrl}
-          />
-          {(editingQuoteStatus === 'accepté' || editingQuoteStatus === 'validé') && (
-            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <Button
-                onClick={() => {
-                  setPreviewOpen(false);
-                  setIsInvoiceDialogOpen(true);
-                }}
-                className="w-full bg-violet-500 hover:bg-violet-600 text-white"
-              >
-                <Receipt className="h-4 w-4 mr-2" />
-                Créer une facture depuis ce devis
-              </Button>
-            </div>
-          )}
+          <div className="min-h-0 flex-1 overflow-y-auto pr-2">
+            <QuotePreview
+              quote={{
+                client_name: clientInfo.name || null,
+                client_email: clientInfo.email || null,
+                client_phone: clientInfo.phone || null,
+                client_address: clientInfo.address || null,
+                project_type: projectType || null,
+                project_description: projectDescription || null,
+                validity_days: parseInt(validityDays, 10) || 30,
+                items,
+                total_ht: subtotalAfterDiscount,
+                total_ttc: total,
+              }}
+              accentColor={accentColor}
+              logoUrl={logoUrl}
+            />
+            {(editingQuoteStatus === 'accepté' || editingQuoteStatus === 'validé') && (
+              <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
+                <Button
+                  onClick={() => {
+                    setPreviewOpen(false);
+                    setIsInvoiceDialogOpen(true);
+                  }}
+                  className="w-full bg-violet-500 text-white hover:bg-violet-600"
+                >
+                  <Receipt className="mr-2 h-4 w-4" />
+                  Créer une facture depuis ce devis
+                </Button>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1800,24 +1802,24 @@ export default function QuotesPage() {
         setSelectClientOpen(open);
         if (!open) setClientSearchQuery('');
       }}>
-        <DialogContent className="max-w-2xl rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+        <DialogContent className="flex max-h-[min(90vh,calc(100dvh-2rem))] min-h-0 max-w-2xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
           <DialogHeader>
             <DialogTitle className="text-xl font-semibold text-gray-900 dark:text-white">
               Choisir un client
             </DialogTitle>
           </DialogHeader>
           {clients.length > 0 && (
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <div className="relative shrink-0">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <Input
                 placeholder="Rechercher un client (nom, email, téléphone)..."
                 value={clientSearchQuery}
                 onChange={(e) => setClientSearchQuery(e.target.value)}
-                className="pl-9 rounded-xl border-gray-200 dark:border-gray-700"
+                className="rounded-xl border-gray-200 pl-9 dark:border-gray-700"
               />
             </div>
           )}
-          <div className="overflow-y-auto max-h-[60vh] pr-2">
+          <div className="min-h-0 flex-1 overflow-y-auto pr-2">
             {clients.length === 0 ? (
               <p className="text-sm text-gray-600 dark:text-gray-400 py-4">
                 Aucun client enregistré. Ajoutez des clients depuis la page Clients.
@@ -1887,13 +1889,13 @@ export default function QuotesPage() {
           : [];
         return (
           <Dialog open={selectChantierOpen} onOpenChange={setSelectChantierOpen}>
-            <DialogContent className="max-w-2xl rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+            <DialogContent className="flex max-h-[min(90vh,calc(100dvh-2rem))] min-h-0 max-w-2xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
               <DialogHeader>
                 <DialogTitle className="text-xl font-semibold text-gray-900 dark:text-white">
                   Choisir un chantier
                 </DialogTitle>
               </DialogHeader>
-              <div className="overflow-y-auto max-h-[60vh] pr-2">
+              <div className="min-h-0 flex-1 overflow-y-auto pr-2">
                 {chantiersForClient.length === 0 ? (
                   <p className="text-sm text-gray-600 dark:text-gray-400 py-4">
                     {selectedClientId

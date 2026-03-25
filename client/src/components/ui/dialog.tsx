@@ -46,8 +46,9 @@ function DialogContentInner(
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
-          "max-md:inset-0 max-md:left-0 max-md:top-0 max-md:right-0 max-md:bottom-0 max-md:translate-x-0 max-md:translate-y-0 max-md:max-w-none max-md:w-full max-md:max-h-full max-md:rounded-none max-md:overflow-y-auto",
+          "fixed left-[50%] top-[50%] z-50 flex w-full max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-4 border bg-background px-6 pt-6 pb-8 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
+          "max-h-[calc(100dvh-2rem)] min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain",
+          "max-md:inset-0 max-md:left-0 max-md:top-0 max-md:right-0 max-md:bottom-0 max-md:max-h-full max-md:w-full max-md:max-w-none max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none",
           className
         )}
         {...ariaProps}
@@ -72,7 +73,7 @@ const DialogHeader = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col space-y-1.5 text-center sm:text-left",
+      "flex shrink-0 flex-col space-y-1.5 text-center sm:text-left",
       className
     )}
     {...props}
@@ -86,7 +87,7 @@ const DialogFooter = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
+      "flex shrink-0 flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:space-x-2 sm:gap-0",
       className
     )}
     {...props}

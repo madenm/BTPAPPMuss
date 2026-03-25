@@ -270,7 +270,7 @@ export function ChantierEditDialog({ chantier, open, onOpenChange, onSaved }: Ch
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-black/20  border border-white/10 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl border border-white/10 bg-black/20 text-white">
         <DialogHeader>
           <DialogTitle className="text-white">Modifier le projet</DialogTitle>
           <DialogDescription className="text-white/70">

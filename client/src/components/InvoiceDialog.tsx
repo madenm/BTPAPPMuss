@@ -333,7 +333,7 @@ export function InvoiceDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-black/90  border-white/10 text-white">
+      <DialogContent className="max-w-4xl border border-white/10 bg-black/90 text-white">
         <DialogHeader>
           <DialogTitle className="text-white">
             {invoice ? 'Modifier la facture' : 'Nouvelle facture'}
