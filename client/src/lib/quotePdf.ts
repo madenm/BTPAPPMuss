@@ -266,8 +266,31 @@ function buildQuoteDoc(params: QuotePdfParams): jsPDF {
   });
 
   const lastTable = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable;
-  let finalY = lastTable?.finalY ?? y + 20;
-  y = finalY + 10;
+  const finalY = lastTable?.finalY ?? y + 20;
+
+  const pageH = doc.internal.pageSize.getHeight();
+  const totalsBoxHeight = 30;
+  const signatureRectH = 20;
+  /** Du haut du bloc totaux au bas du cadre signature, + marge avant le pied (ligne à pageH - 10) */
+  /** totalsTop → bas du cadre signature : +30 (bloc) +6 +12 (offset) +20 (hauteur) = +68 */
+  const HEIGHT_TOTALS_TO_SIGNATURE_BOTTOM = totalsBoxHeight + 6 + 12 + signatureRectH;
+  const FOOTER_CLEARANCE_MM = 12;
+  const RESERVED_BELOW_TOTALS_TOP = HEIGHT_TOTALS_TO_SIGNATURE_BOTTOM + FOOTER_CLEARANCE_MM;
+
+  const totalsTopIfSamePage = finalY + 6;
+  const needsFooterPage = totalsTopIfSamePage + RESERVED_BELOW_TOTALS_TOP > pageH - MARGIN;
+
+  let totalsTop: number;
+  let modalitiesTitleY: number;
+
+  if (needsFooterPage) {
+    doc.addPage();
+    totalsTop = MARGIN + 8;
+    modalitiesTitleY = MARGIN + 8;
+  } else {
+    totalsTop = totalsTopIfSamePage;
+    modalitiesTitleY = finalY + 10;
+  }
 
   // ----- Bottom: Left = Modalités / Right = Totals + Validité + Signature -----
   const totalsX = PAGE_W - MARGIN - 52;
@@ -275,36 +298,33 @@ function buildQuoteDoc(params: QuotePdfParams): jsPDF {
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
-  doc.text("Modalités et conditions de règlement", MARGIN, y);
-  y += LINE_HEIGHT;
+  doc.text("Modalités et conditions de règlement", MARGIN, modalitiesTitleY);
+  let modalY = modalitiesTitleY + LINE_HEIGHT;
   doc.setDrawColor(BORDER_GRAY[0], BORDER_GRAY[1], BORDER_GRAY[2]);
-  doc.rect(MARGIN, y - 2, 88, 24);
+  doc.rect(MARGIN, modalY - 2, 88, 24);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   const modalitesText =
     "Paiement à 30 jours par chèque ou virement. En cas de retard, pénalités de retard et indemnité forfaitaire selon art. L441-6 du code de commerce.";
   const modalitesLines = doc.splitTextToSize(modalitesText, 84);
-  doc.text(modalitesLines.slice(0, 4), MARGIN + 2, y + 3);
+  doc.text(modalitesLines.slice(0, 4), MARGIN + 2, modalY + 3);
 
-  // Bloc totaux (encadré) : hauteur limitée aux 3 lignes pour ne pas chevaucher la zone signature
   const totalsBoxX = totalsX - 3;
   const totalsBoxW = PAGE_W - MARGIN - totalsBoxX;
-  const totalsBoxHeight = 30;
   doc.setDrawColor(BORDER_GRAY[0], BORDER_GRAY[1], BORDER_GRAY[2]);
-  doc.rect(totalsBoxX, finalY + 6, totalsBoxW, totalsBoxHeight);
+  doc.rect(totalsBoxX, totalsTop, totalsBoxW, totalsBoxHeight);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.text("Total HT", totalsX, finalY + 14);
-  doc.text(`${subtotal.toFixed(2)} €`, PAGE_W - MARGIN - 3, finalY + 14, { align: "right" });
-  doc.text("TVA 20 %", totalsX, finalY + 23);
-  doc.text(`${tva.toFixed(2)} €`, PAGE_W - MARGIN - 3, finalY + 23, { align: "right" });
+  doc.text("Total HT", totalsX, totalsTop + 8);
+  doc.text(`${subtotal.toFixed(2)} €`, PAGE_W - MARGIN - 3, totalsTop + 8, { align: "right" });
+  doc.text("TVA 20 %", totalsX, totalsTop + 17);
+  doc.text(`${tva.toFixed(2)} €`, PAGE_W - MARGIN - 3, totalsTop + 17, { align: "right" });
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.text("Total TTC", totalsX, finalY + 32);
-  doc.text(`${total.toFixed(2)} €`, PAGE_W - MARGIN - 3, finalY + 32, { align: "right" });
+  doc.text("Total TTC", totalsX, totalsTop + 26);
+  doc.text(`${total.toFixed(2)} €`, PAGE_W - MARGIN - 3, totalsTop + 26, { align: "right" });
 
-  // Validité et signature : sous le bloc totaux, sans chevauchement
-  const rightColY = finalY + 6 + totalsBoxHeight + 6;
+  const rightColY = totalsTop + totalsBoxHeight + 6;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(71, 85, 105);
@@ -313,14 +333,12 @@ function buildQuoteDoc(params: QuotePdfParams): jsPDF {
   doc.setFontSize(9);
   doc.text("Bon pour accord", totalsX, rightColY + 10);
   doc.setDrawColor(BORDER_GRAY[0], BORDER_GRAY[1], BORDER_GRAY[2]);
-  
-  // Rectangle "Bon pour accord" - stocker les coordonnées pour la signature
+
   const signatureRectX = totalsX;
   const signatureRectY = rightColY + 12;
   const signatureRectW = 48;
-  const signatureRectH = 20;
   doc.rect(signatureRectX, signatureRectY, signatureRectW, signatureRectH);
-  
+
   if (signatureImageDataUrl) {
     try {
       doc.addImage(signatureImageDataUrl, "PNG", signatureRectX, signatureRectY, signatureRectW, signatureRectH);
@@ -328,8 +346,7 @@ function buildQuoteDoc(params: QuotePdfParams): jsPDF {
       // ignore invalid image
     }
   }
-  
-  // Stocker les coordonnées dans la variable globale pour getSignatureRectangleCoordinates
+
   setLastSignatureRectCoords({
     x: signatureRectX,
     y: signatureRectY,
@@ -337,8 +354,8 @@ function buildQuoteDoc(params: QuotePdfParams): jsPDF {
     height: signatureRectH,
   });
 
-  // ----- Footer -----
-  const footerY = doc.getPageHeight() - 10;
+  // ----- Footer (bas de page ; le saut de page ci-dessus évite tout chevauchement avec la signature) -----
+  const footerY = pageH - 10;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.setTextColor(100, 116, 139);
