@@ -50,7 +50,7 @@ import {
   type NewUserTariffPayload,
   type TariffCategory,
 } from "@/lib/supabaseTariffs";
-import { Plus, Pencil, Trash2, Upload, Download, Loader2, Search, MoreVertical, Copy, Tag, FileText, FileSpreadsheet, ChevronDown, Filter, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Trash2, Upload, Download, Loader2, Search, MoreVertical, Copy, Tag, FileText, FileSpreadsheet, ChevronDown, Filter, ChevronLeft, ChevronRight } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import * as XLSX from "xlsx";
 
@@ -333,6 +333,8 @@ const CATEGORY_BADGE: Record<TariffCategory, { label: string; className: string 
   "autre": { label: "Autre", className: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300" },
 };
 
+const TARIFS_PAGE_SIZE = 10;
+
 export default function TarifsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -350,6 +352,7 @@ export default function TarifsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [tariffsPage, setTariffsPage] = useState(1);
 
   const filteredTariffs = useMemo(() => {
     let result = tariffs;
@@ -362,6 +365,30 @@ export default function TarifsPage() {
     }
     return result;
   }, [tariffs, categoryFilter, searchQuery]);
+
+  const tariffsTotalPages = useMemo(
+    () => Math.max(1, Math.ceil(filteredTariffs.length / TARIFS_PAGE_SIZE)),
+    [filteredTariffs.length]
+  );
+
+  const paginatedTariffs = useMemo(
+    () =>
+      filteredTariffs.slice(
+        (tariffsPage - 1) * TARIFS_PAGE_SIZE,
+        tariffsPage * TARIFS_PAGE_SIZE
+      ),
+    [filteredTariffs, tariffsPage]
+  );
+
+  useEffect(() => {
+    setTariffsPage(1);
+  }, [searchQuery, categoryFilter]);
+
+  useEffect(() => {
+    if (tariffsPage > tariffsTotalPages) {
+      setTariffsPage(tariffsTotalPages);
+    }
+  }, [tariffsPage, tariffsTotalPages]);
 
   const loadTariffs = useCallback(async () => {
     if (!user?.id) return;
@@ -681,7 +708,7 @@ export default function TarifsPage() {
                 <>
                   {/* Liste mobile */}
                   <div className="md:hidden divide-y divide-gray-200 dark:divide-gray-700">
-                    {filteredTariffs.map((t) => (
+                    {paginatedTariffs.map((t) => (
                       <div key={t.id} className="flex items-center gap-3 py-3 px-2">
                         <button
                           type="button"
@@ -740,7 +767,7 @@ export default function TarifsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredTariffs.map((t) => (
+                        {paginatedTariffs.map((t) => (
                           <TableRow key={t.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                             <TableCell className="font-medium text-gray-900 dark:text-white">{t.label}</TableCell>
                             <TableCell>
@@ -774,6 +801,40 @@ export default function TarifsPage() {
                         ))}
                       </TableBody>
                     </Table>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-900/40 rounded-b-xl">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {(tariffsPage - 1) * TARIFS_PAGE_SIZE + 1}–{Math.min(tariffsPage * TARIFS_PAGE_SIZE, filteredTariffs.length)} sur {filteredTariffs.length}{" "}
+                      {filteredTariffs.length === 1 ? "tarif" : "tarifs"}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="rounded-xl"
+                        onClick={() => setTariffsPage((p) => Math.max(1, p - 1))}
+                        disabled={tariffsPage <= 1}
+                      >
+                        <ChevronLeft className="h-4 w-4 mr-1" />
+                        Précédent
+                      </Button>
+                      <span className="text-sm text-gray-600 dark:text-gray-400 px-2 tabular-nums">
+                        Page {tariffsPage} sur {tariffsTotalPages}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="rounded-xl"
+                        onClick={() => setTariffsPage((p) => Math.min(tariffsTotalPages, p + 1))}
+                        disabled={tariffsPage >= tariffsTotalPages}
+                      >
+                        Suivant
+                        <ChevronRight className="h-4 w-4 ml-1" />
+                      </Button>
+                    </div>
                   </div>
                 </>
               )}
